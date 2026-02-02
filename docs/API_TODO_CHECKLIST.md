@@ -124,6 +124,55 @@ Phases for replacing mock data with real Laravel (or other) backend APIs.
 
 ---
 
+## Phase 3.7: Favorites, Notifications, Orders, Cart (Empty-State Screens → API)
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/favorites` | List user's favorite products. |
+| POST | `/api/favorites` | Add or remove favorite (payload: `product_id`, `action`: add/remove). |
+| GET | `/api/notifications` | List user's notifications. |
+| DELETE | `/api/notifications` | Clear all notifications. |
+| GET | `/api/orders` | List user's orders. |
+| GET | `/api/cart` | List cart items. |
+| POST | `/api/cart/items` | Add item via link or manual entry (see Phase 3.6). |
+
+---
+
+## Phase 3.8: Settings, Notification Preferences, Orders List, Checkout Review & Pay
+
+Screens: Settings & Preferences, Advanced Notification Control, Orders list, Review & Pay. Mock data in app; replace with API below.
+
+### Settings & Preferences
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/me/settings` | User settings (language, currency, warehouse, smart_consolidation, auto_insurance, notification_summary, server_region). |
+| PATCH | `/api/me/settings` | Update settings (toggles, selected currency, warehouse). |
+
+### Notification Preferences
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/me/notification-preferences` | Notification channels (push, email, order_updates, shipment_updates, customs_compliance, payment_reminders, promotions) and quiet_hours (from, to). |
+| PATCH | `/api/me/notification-preferences` | Save preferences (same shape). |
+
+### Orders List
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/orders` | List user orders. Query: `?status=all|in_progress|delivered|cancelled`. Response: array of order objects (id, origin, status, order_number, placed_date, delivered_on, total_amount, refund_status, estimated_delivery, etc.). |
+
+### Checkout Review & Confirm
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/checkout/review` | Review payload: shipping_address, consolidation_savings, shipments (origin_label, items with name, price, quantity, eta), wallet_balance, price_breakdown (subtotal, shipping, insurance), total. |
+| POST | `/api/checkout/confirm` | Confirm & pay. Payload: use_wallet_balance, promo_code (optional). Response: success or error. |
+
+---
+
 ## Phase 4: Stores / WebView & Import Pipeline
 
 - [ ] **`GET /api/home`** — Home dashboard (promos, markets, popular_stores). **`GET /api/stores`** — Stores list. **`GET /api/stores/{id}`** — Store landing. **Stores list:** e.g. `GET /api/stores` for Home “Markets / Stores”.

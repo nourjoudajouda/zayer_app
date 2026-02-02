@@ -169,7 +169,124 @@ Admin-controlled store metadata and PDP detection rules.
 | Per store: `categories` | array | Categories list for "What you can shop" (e.g. ["Electronics", "Fashion"]). |
 | Per store: `pdp_rules` | object | PDP detection rules: `{ "url_patterns": ["/dp/", "/gp/product/"], "exclude_patterns": ["/s?", "/gp/bestsellers"] }`. |
 
-### 2.11 Account / Profile Remote Config (optional)
+### 2.11 Empty-State Screens (Favorites, Notifications, Orders, Cart)
+
+Configurable strings and illustration URLs for empty-state screens. Can live in bootstrap-config or a separate endpoint.
+
+**Favorites empty:**
+
+| Field | Fallback | Description |
+|-------|----------|-------------|
+| `favorites_empty_title` | "No favorites yet" | Title. |
+| `favorites_empty_subtitle` | "Save products from any store and we'll track prices and stock for you." | Subtitle. |
+| `favorites_empty_image_url` | `""` | Illustration URL. Empty → placeholder icon. |
+| `favorites_empty_primary_cta_text` | "Browse Stores" | Primary button. |
+
+**Notifications empty:**
+
+| Field | Fallback | Description |
+|-------|----------|-------------|
+| `notifications_empty_title` | "You're all caught up 🎉" | Title. |
+| `notifications_empty_subtitle` | "We'll notify you about your orders, shipments, payments, and support updates." | Subtitle. |
+| `notifications_empty_image_url` | `""` | Illustration URL. Empty → placeholder. |
+| `notifications_empty_primary_cta_text` | "Track My Orders" | Primary button. |
+
+**Orders empty:**
+
+| Field | Fallback | Description |
+|-------|----------|-------------|
+| `orders_empty_title` | "You don't have any orders yet." | Title. |
+| `orders_empty_subtitle` | "Explore global markets and start shopping from international stores." | Subtitle. |
+| `orders_empty_image_url` | `""` | Illustration URL. Empty → placeholder. |
+| `orders_empty_primary_cta_text` | "Start Shopping" | Primary button. |
+
+**Cart empty:**
+
+| Field | Fallback | Description |
+|-------|----------|-------------|
+| `cart_empty_title` | "Your cart is empty" | Title. |
+| `cart_empty_subtitle` | "Start adding products from global stores by pasting their links." | Subtitle. |
+| `cart_empty_image_url` | `""` | Illustration URL. Empty → ZAYER placeholder. |
+| `cart_empty_primary_cta_text` | "Add Product via Link" | Primary button. |
+| `cart_empty_secondary_cta_text` | "Browse Stores" | Secondary button. |
+
+**Note:** All app copy is English by default; Arabic is enabled only via in-app language toggle later (no mixed text).
+
+### 2.12 Settings & Preferences, Notification Settings, Orders List, Review & Pay
+
+Configurable labels, defaults, and options for the four screens. Can live in bootstrap-config or a separate endpoint.
+
+**Settings & Preferences:**
+
+| Field | Fallback | Description |
+|-------|----------|-------------|
+| `settings_section_general` | "GENERAL" | Section header. |
+| `settings_section_shipping` | "SHIPPING & LOGISTICS" | Section header. |
+| `settings_section_communication` | "COMMUNICATION" | Section header. |
+| `settings_section_support` | "SUPPORT & PRIVACY" | Section header. |
+| `settings_app_language` | "App Language" | Row label. |
+| `settings_display_currency` | "Display Currency" | Row label. |
+| `settings_currency_warning` | (info box text) | Warning when changing currency. |
+| `settings_warehouse_list` | array | List of warehouses: `{ "id", "label" }` (e.g. Delaware US). |
+| `settings_currencies` | array | Supported currencies: `{ "code", "symbol" }` (e.g. USD, \$). |
+| `settings_smart_consolidation_default` | true | Default for Smart Consolidation toggle. |
+| `settings_auto_insurance_default` | false | Default for Auto-Insurance toggle (can be disabled by admin). |
+| `settings_footer_server` | "Server: Region-West-1" | Footer server label. |
+| `settings_sign_out` | "Sign Out" | Button label. |
+| `settings_delete_account` | "Delete Account" | Destructive card title/label. |
+
+**Notification Settings:**
+
+| Field | Fallback | Description |
+|-------|----------|-------------|
+| `notification_settings_title` | "Notification Settings" | AppBar title. |
+| `notification_section_global` | "GLOBAL CHANNELS" | Section header. |
+| `notification_section_order` | "ORDER & SHIPMENT" | Section header. |
+| `notification_section_customs` | "CUSTOMS & COMPLIANCE" | Section header. |
+| `notification_section_payments` | "PAYMENTS" | Section header. |
+| `notification_section_promotions` | "PROMOTIONS" | Section header. |
+| `notification_section_quiet` | "QUIET HOURS" | Section header. |
+| `notification_customs_info` | (info box text) | Customs & compliance info. |
+| `notification_quiet_hours_default_from` | "22:00" | Default quiet hours start (24h). |
+| `notification_quiet_hours_default_to` | "07:00" | Default quiet hours end (24h). |
+| `notification_save_button` | "Save Preferences" | Sticky button label. |
+| Toggle defaults | (per channel) | push_enabled, email_enabled, order_updates, etc. |
+
+**Orders List:**
+
+| Field | Fallback | Description |
+|-------|----------|-------------|
+| `orders_tab_all` | "All" | Tab label. |
+| `orders_tab_in_progress` | "In Progress" | Tab label. |
+| `orders_tab_delivered` | "Delivered" | Tab label. |
+| `orders_tab_cancelled` | "Cancelled" | Tab label. |
+| `orders_status_in_transit` | "IN TRANSIT" | Status pill text. |
+| `orders_status_delivered` | "DELIVERED" | Status pill text. |
+| `orders_status_cancelled` | "CANCELLED" | Status pill text. |
+| `orders_track_button` | "Track Order" | Button label. |
+| `orders_buy_again_button` | "Buy Again" | Button label. |
+| `orders_view_details_button` | "View Details" | Button label. |
+
+**Review & Pay (Checkout):**
+
+| Field | Fallback | Description |
+|-------|----------|-------------|
+| `checkout_title` | "Review & Pay" | AppBar title. |
+| `checkout_shipping_to` | "Shipping to" | Label. |
+| `checkout_change` | "Change" | Link label. |
+| `checkout_consolidation_message` | "You saved {amount} with consolidation." | Consolidation benefit text. |
+| `checkout_wallet_balance` | "Wallet balance" | Label. |
+| `checkout_price_details` | "Price Details" | Section title. |
+| `checkout_subtotal` | "Subtotal" | Row label. |
+| `checkout_shipping` | "Shipping" | Row label. |
+| `checkout_insurance` | "Insurance" | Row label. |
+| `checkout_promo_placeholder` | "Promo Code" | Input placeholder. |
+| `checkout_apply` | "Apply" | Button label. |
+| `checkout_confirm_button` | "Confirm & Pay {total}" | Sticky button label. |
+| `checkout_secure_caption` | "Secure payment" | Caption under button. |
+| `checkout_fee_labels` | (subtotal, shipping, insurance, etc.) | Admin can override fee line labels. |
+
+### 2.13 Account / Profile Remote Config (optional)
 
 Admin-controlled UI for Profile & Compliance screen. Can live in bootstrap-config or a separate endpoint.
 

@@ -205,6 +205,12 @@ class _ProfileContent extends ConsumerWidget {
           ProfileSectionHeader(title: 'PREFERENCES'),
           const SizedBox(height: AppSpacing.sm),
           ZayerTile(
+            icon: Icons.favorite_border,
+            title: 'Favorites',
+            onTap: () => context.push(AppRoutes.favorites),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ZayerTile(
             icon: Icons.notifications_outlined,
             title: l10n.notifications,
             onTap: () => context.push(AppRoutes.notifications),

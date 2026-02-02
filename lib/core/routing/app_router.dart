@@ -7,10 +7,14 @@ import '../../features/auth/register_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/onboarding/splash_screen.dart';
-import '../../features/placeholders/cart_screen.dart';
-import '../../features/placeholders/coming_soon_screen.dart';
+import '../../features/cart/cart_empty_screen.dart';
+import '../../features/favorites/favorites_empty_screen.dart';
 import '../../features/markets/markets_screen.dart';
-import '../../features/placeholders/orders_screen.dart';
+import '../../features/checkout/review_pay_screen.dart';
+import '../../features/notifications/notification_settings_screen.dart';
+import '../../features/notifications/notifications_empty_screen.dart';
+import '../../features/orders/orders_list_screen.dart';
+import '../../features/placeholders/coming_soon_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/shell/main_shell.dart';
@@ -29,6 +33,7 @@ class AppRoutes {
   static const String forgotPassword = '/forgot-password';
   static const String home = '/home';
   static const String markets = '/markets';
+  static const String favorites = '/favorites';
   static const String cart = '/cart';
   static const String orders = '/orders';
   static const String account = '/account';
@@ -40,6 +45,8 @@ class AppRoutes {
   static const String settings = '/settings';
   static const String security = '/security';
   static const String notifications = '/notifications';
+  static const String notificationSettings = '/notification-settings';
+  static const String reviewPay = '/review-pay';
   static const String paymentMethods = '/payment-methods';
 }
 
@@ -109,7 +116,7 @@ GoRouter _createAppRouter() {
               GoRoute(
                 path: AppRoutes.cart,
                 pageBuilder: (context, state) => const NoTransitionPage(
-                  child: CartScreen(),
+                  child: CartEmptyScreen(),
                 ),
               ),
             ],
@@ -119,7 +126,7 @@ GoRouter _createAppRouter() {
               GoRoute(
                 path: AppRoutes.orders,
                 pageBuilder: (context, state) => const NoTransitionPage(
-                  child: OrdersScreen(),
+                  child: OrdersListScreen(),
                 ),
               ),
             ],
@@ -183,9 +190,19 @@ GoRouter _createAppRouter() {
       ),
       GoRoute(
         path: AppRoutes.notifications,
-        builder: (context, state) => ComingSoonScreen(
-          title: 'Notifications',
-        ),
+        builder: (context, state) => const NotificationsEmptyScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.favorites,
+        builder: (context, state) => const FavoritesEmptyScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.notificationSettings,
+        builder: (context, state) => const NotificationSettingsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.reviewPay,
+        builder: (context, state) => const ReviewPayScreen(),
       ),
       GoRoute(
         path: AppRoutes.paymentMethods,
