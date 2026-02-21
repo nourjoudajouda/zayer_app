@@ -11,6 +11,7 @@ class ZayerTile extends StatelessWidget {
     required this.title,
     this.value,
     this.subtitle,
+    this.valueColor,
     required this.onTap,
   });
 
@@ -18,6 +19,7 @@ class ZayerTile extends StatelessWidget {
   final String title;
   final String? value;
   final String? subtitle;
+  final Color? valueColor;
   final VoidCallback onTap;
 
   @override
@@ -57,7 +59,7 @@ class ZayerTile extends StatelessWidget {
                         value!,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
                               fontWeight: FontWeight.w500,
-                              color: AppConfig.textColor,
+                              color: valueColor ?? AppConfig.textColor,
                             ),
                       ),
                     if (!hasValue) ...[

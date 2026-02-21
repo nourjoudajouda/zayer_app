@@ -4,13 +4,48 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/routing/app_router.dart';
+import '../../features/security/sign_out_confirmation.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../features/profile/widgets/profile_section_header.dart';
 import '../../features/profile/widgets/zayer_tile.dart';
 import 'providers/settings_providers.dart';
 
-/// Settings & Preferences screen. Route: /settings.
+void _showLanguageSheet(BuildContext context, WidgetRef ref, String currentCode) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: AppConfig.backgroundColor,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(AppConfig.radiusMedium)),
+    ),
+    builder: (ctx) => _LanguageSheet(
+      currentCode: currentCode,
+      onSelect: (code, label) {
+        ref.read(settingsOverridesProvider.notifier).setLanguage(code, label);
+        Navigator.of(ctx).pop();
+      },
+    ),
+  );
+}
+
+void _showCurrencySheet(BuildContext context, WidgetRef ref, String currentCode) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: AppConfig.backgroundColor,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(AppConfig.radiusMedium)),
+    ),
+    builder: (ctx) => _CurrencySheet(
+      currentCode: currentCode,
+      onSelect: (code, symbol) {
+        ref.read(settingsOverridesProvider.notifier).setCurrency(code, symbol);
+        Navigator.of(ctx).pop();
+      },
+    ),
+  );
+}
+
+/// Settings screen. Route: /settings.
 /// API will plug in: GET/PATCH /api/me/settings for toggles, currency, warehouse.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -22,7 +57,7 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
       appBar: AppBar(
-        title: const Text('Settings & Preferences'),
+        title: const Text('Settings'),
         centerTitle: true,
         backgroundColor: AppConfig.backgroundColor,
         foregroundColor: AppConfig.textColor,
@@ -40,14 +75,14 @@ class SettingsScreen extends ConsumerWidget {
                 icon: Icons.language,
                 title: 'App Language',
                 value: 'Currently: ${settings.languageLabel}',
-                onTap: () {},
+                onTap: () => _showLanguageSheet(context, ref, settings.languageCode),
               ),
               const SizedBox(height: AppSpacing.sm),
               ZayerTile(
                 icon: Icons.attach_money,
                 title: 'Display Currency',
                 value: '${settings.currencyCode} ${settings.currencySymbol}',
-                onTap: () {},
+                onTap: () => _showCurrencySheet(context, ref, settings.currencyCode),
               ),
               const SizedBox(height: AppSpacing.sm),
               _InfoBox(
@@ -61,7 +96,7 @@ class SettingsScreen extends ConsumerWidget {
                 icon: Icons.warehouse_outlined,
                 title: 'Default Warehouse',
                 value: settings.defaultWarehouseLabel,
-                onTap: () {},
+                onTap: () => context.push(AppRoutes.defaultWarehouse),
               ),
               const SizedBox(height: AppSpacing.sm),
               _SettingsSwitchTile(
@@ -76,8 +111,9 @@ class SettingsScreen extends ConsumerWidget {
                 icon: Icons.shield_outlined,
                 title: 'Auto-Insurance',
                 value: settings.autoInsuranceEnabled,
-                onChanged: null,
-                enabled: false,
+                onChanged: (v) =>
+                    ref.read(settingsOverridesProvider.notifier).setAutoInsurance(v),
+                enabled: true,
               ),
               const SizedBox(height: AppSpacing.md),
               const ProfileSectionHeader(title: 'COMMUNICATION'),
@@ -94,18 +130,18 @@ class SettingsScreen extends ConsumerWidget {
               ZayerTile(
                 icon: Icons.help_outline,
                 title: 'Help & Support Center',
-                onTap: () {},
+                onTap: () => context.push(AppRoutes.supportInbox),
               ),
               const SizedBox(height: AppSpacing.sm),
               ZayerTile(
                 icon: Icons.privacy_tip_outlined,
                 title: 'Privacy Policy',
                 subtitle: 'How we collect, use and protect your data.',
-                onTap: () {},
+                onTap: () => context.push(AppRoutes.privacyPolicy),
               ),
               const SizedBox(height: AppSpacing.xl),
               OutlinedButton(
-                onPressed: () => context.go(AppRoutes.login),
+                onPressed: () => showSignOutConfirmation(context),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   foregroundColor: AppConfig.textColor,
@@ -202,6 +238,143 @@ class _SettingsSwitchTile extends StatelessWidget {
             onChanged: enabled ? onChanged : null,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _LanguageSheet extends StatelessWidget {
+  const _LanguageSheet({required this.currentCode, required this.onSelect});
+
+  final String currentCode;
+  final void Function(String code, String label) onSelect;
+
+  static const List<Map<String, String>> _options = [
+    {'code': 'en', 'label': 'English (US)'},
+    {'code': 'ar', 'label': 'العربية'},
+    {'code': 'tr', 'label': 'Türkçe'},
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'App Language',
+              style: AppTextStyles.titleMedium(AppConfig.textColor),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            ..._options.map((o) {
+              final code = o['code']!;
+              final label = o['label']!;
+              final selected = currentCode == code;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                child: Material(
+                  color: AppConfig.cardColor,
+                  borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                  child: InkWell(
+                    onTap: () => onSelect(code, label),
+                    borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.sm,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: selected ? AppConfig.primaryColor : AppConfig.borderColor,
+                        ),
+                        borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(child: Text(label, style: AppTextStyles.bodyLarge(AppConfig.textColor))),
+                          if (selected) const Icon(Icons.check_circle, color: AppConfig.primaryColor),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CurrencySheet extends StatelessWidget {
+  const _CurrencySheet({required this.currentCode, required this.onSelect});
+
+  final String currentCode;
+  final void Function(String code, String symbol) onSelect;
+
+  static const List<Map<String, String>> _options = [
+    {'code': 'USD', 'symbol': '\$'},
+    {'code': 'EUR', 'symbol': '€'},
+    {'code': 'GBP', 'symbol': '£'},
+    {'code': 'TRY', 'symbol': '₺'},
+    {'code': 'SAR', 'symbol': 'ر.س'},
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Display Currency',
+              style: AppTextStyles.titleMedium(AppConfig.textColor),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            ..._options.map((o) {
+              final code = o['code']!;
+              final symbol = o['symbol']!;
+              final selected = currentCode == code;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                child: Material(
+                  color: AppConfig.cardColor,
+                  borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                  child: InkWell(
+                    onTap: () => onSelect(code, symbol),
+                    borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.sm,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: selected ? AppConfig.primaryColor : AppConfig.borderColor,
+                        ),
+                        borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                      ),
+                      child: Row(
+                        children: [
+                          Text('$code $symbol', style: AppTextStyles.bodyLarge(AppConfig.textColor)),
+                          const Spacer(),
+                          if (selected) const Icon(Icons.check_circle, color: AppConfig.primaryColor),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
       ),
     );
   }

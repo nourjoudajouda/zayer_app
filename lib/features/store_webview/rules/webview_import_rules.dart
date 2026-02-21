@@ -46,6 +46,45 @@ class WebViewImportRules {
       }
     }
 
+    // Walmart: /ip/{product-name}
+    if (normalized.storeKey == 'walmart') {
+      if (_isWalmartPdp(url)) {
+        return PdpDetectionResult(
+          isPdp: true,
+          product: DetectedProduct.mockWalmart(
+            normalized.canonicalUrl,
+            productId: normalized.productId,
+          ),
+        );
+      }
+    }
+
+    // Etsy: /listing/{id}
+    if (normalized.storeKey == 'etsy') {
+      if (_isEtsyPdp(url)) {
+        return PdpDetectionResult(
+          isPdp: true,
+          product: DetectedProduct.mockEtsy(
+            normalized.canonicalUrl,
+            listingId: normalized.productId,
+          ),
+        );
+      }
+    }
+
+    // AliExpress: /item/{id}.html
+    if (normalized.storeKey == 'aliexpress') {
+      if (_isAliExpressPdp(url)) {
+        return PdpDetectionResult(
+          isPdp: true,
+          product: DetectedProduct.mockAliExpress(
+            normalized.canonicalUrl,
+            itemId: normalized.productId,
+          ),
+        );
+      }
+    }
+
     return PdpDetectionResult.notPdp;
   }
 
@@ -72,8 +111,25 @@ class WebViewImportRules {
     return lower.contains('/itm/');
   }
 
-  /// Future stores can be added here:
-  /// - Walmart: /ip/
-  /// - Etsy: /listing/
-  /// - AliExpress: /item/
+  /// Walmart PDP pattern: /ip/
+  static bool _isWalmartPdp(String url) {
+    final lower = url.toLowerCase();
+    // Exclude search pages and category pages
+    if (lower.contains('/search/') || lower.contains('/browse/')) {
+      return false;
+    }
+    return lower.contains('/ip/');
+  }
+
+  /// Etsy PDP pattern: /listing/
+  static bool _isEtsyPdp(String url) {
+    final lower = url.toLowerCase();
+    return lower.contains('/listing/');
+  }
+
+  /// AliExpress PDP pattern: /item/
+  static bool _isAliExpressPdp(String url) {
+    final lower = url.toLowerCase();
+    return lower.contains('/item/') && lower.contains('.html');
+  }
 }

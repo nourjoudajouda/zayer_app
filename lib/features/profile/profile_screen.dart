@@ -29,7 +29,9 @@ class ProfileScreen extends ConsumerWidget {
     final locale = ref.watch(appLocaleProvider);
     final profileAsync = ref.watch(userProfileProvider);
     final complianceAsync = ref.watch(complianceStatusProvider);
-    final avatarFile = ref.watch(avatarImageProvider);
+    final avatarState = ref.watch(avatarImageProvider);
+    final avatarFile = avatarState.$1;
+    final avatarVersion = avatarState.$2;
 
     return Directionality(
       textDirection: locale.isRtl ? TextDirection.rtl : TextDirection.ltr,
@@ -67,6 +69,7 @@ class ProfileScreen extends ConsumerWidget {
                 profile: profile,
                 compliance: compliance,
                 avatarFile: avatarFile,
+                avatarVersion: avatarVersion,
               ),
             ),
           ),
@@ -81,11 +84,13 @@ class _ProfileContent extends ConsumerWidget {
     required this.profile,
     required this.compliance,
     this.avatarFile,
+    this.avatarVersion = 0,
   });
 
   final UserProfile profile;
   final ComplianceStatus compliance;
   final File? avatarFile;
+  final int avatarVersion;
 
   void _showAvatarPicker(BuildContext context, WidgetRef ref) {
     showModalBottomSheet(
@@ -112,7 +117,15 @@ class _ProfileContent extends ConsumerWidget {
                 final picker = ImagePicker();
                 final x = await picker.pickImage(source: ImageSource.gallery);
                 if (x != null && context.mounted) {
-                  ref.read(avatarImageProvider.notifier).state = File(x.path);
+                  final file = File(x.path);
+                  final prev = ref.read(avatarImageProvider);
+                  ref.read(avatarImageProvider.notifier).state = (file, prev.$2 + 1);
+                  await ref.read(profileRepositoryProvider).uploadAvatar(file);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Photo saved')),
+                    );
+                  }
                 }
               },
             ),
@@ -124,7 +137,15 @@ class _ProfileContent extends ConsumerWidget {
                 final picker = ImagePicker();
                 final x = await picker.pickImage(source: ImageSource.camera);
                 if (x != null && context.mounted) {
-                  ref.read(avatarImageProvider.notifier).state = File(x.path);
+                  final file = File(x.path);
+                  final prev = ref.read(avatarImageProvider);
+                  ref.read(avatarImageProvider.notifier).state = (file, prev.$2 + 1);
+                  await ref.read(profileRepositoryProvider).uploadAvatar(file);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Photo saved')),
+                    );
+                  }
                 }
               },
             ),
@@ -146,6 +167,7 @@ class _ProfileContent extends ConsumerWidget {
           _ProfileHeader(
             profile: profile,
             avatarFile: avatarFile,
+            avatarVersion: avatarVersion,
             onCameraTap: () => _showAvatarPicker(context, ref),
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -168,18 +190,32 @@ class _ProfileContent extends ConsumerWidget {
             icon: Icons.person_outline,
             title: l10n.fullLegalName,
             value: profile.fullLegalName,
-            onTap: () {},
+            onTap: () => context.push(
+              AppRoutes.editProfileName,
+              extra: <String, dynamic>{
+                'fullLegalName': profile.fullLegalName,
+                'displayName': profile.displayName,
+              },
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
           ZayerTile(
             icon: Icons.cake_outlined,
             title: l10n.dateOfBirth,
             value: profile.dateOfBirth ?? '—',
-            onTap: () {},
+            onTap: () => context.push(
+              AppRoutes.editDateOfBirth,
+              extra: <String, dynamic>{'dateOfBirth': profile.dateOfBirth},
+            ),
           ),
           ProfileSectionHeader(title: 'PRIMARY SHIPPING ADDRESS'),
           const SizedBox(height: AppSpacing.sm),
-          _AddressCard(profile: profile),
+          ZayerTile(
+            icon: Icons.location_on_outlined,
+            title: profile.primaryAddressCountry ?? l10n.primaryShippingAddress,
+            subtitle: profile.primaryAddress,
+            onTap: () => context.push(AppRoutes.myAddresses),
+          ),
           const SizedBox(height: AppSpacing.sm),
           Container(
             padding: const EdgeInsets.all(AppSpacing.md),
@@ -220,6 +256,13 @@ class _ProfileContent extends ConsumerWidget {
             icon: Icons.payment_outlined,
             title: l10n.paymentMethods,
             onTap: () => context.push(AppRoutes.paymentMethods),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ZayerTile(
+            icon: Icons.account_balance_wallet_outlined,
+            title: 'Wallet',
+            subtitle: 'Top up balance',
+            onTap: () => context.push(AppRoutes.topUpWallet),
           ),
           const SizedBox(height: AppSpacing.xl),
           OutlinedButton(
@@ -271,11 +314,13 @@ class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader({
     required this.profile,
     this.avatarFile,
+    this.avatarVersion = 0,
     required this.onCameraTap,
   });
 
   final UserProfile profile;
   final File? avatarFile;
+  final int avatarVersion;
   final VoidCallback onCameraTap;
 
   @override
@@ -288,6 +333,7 @@ class _ProfileHeader extends StatelessWidget {
           Stack(
             children: [
               CircleAvatar(
+                key: ValueKey<int>(avatarVersion),
                 radius: 55,
                 backgroundColor: AppConfig.borderColor,
                 backgroundImage: avatarFile != null ? FileImage(avatarFile!) : null,
@@ -361,27 +407,48 @@ class _IdentityCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Icon(Icons.badge_outlined, color: AppConfig.primaryColor, size: 24),
               const SizedBox(width: AppSpacing.sm),
-              Text(
-                l10n.identityVerification,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppConfig.textColor,
-                    ),
+              Expanded(
+                child: Text(
+                  l10n.identityVerification,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppConfig.textColor,
+                      ),
+                ),
               ),
               if (compliance.actionRequired) ...[
                 const SizedBox(width: 8),
-                BadgePill(
-                  label: l10n.actionRequired,
-                  color: Colors.orange,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.shade300),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange.shade800),
+                      const SizedBox(width: 6),
+                      Text(
+                        l10n.actionRequired,
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              color: Colors.orange.shade800,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ],
           ),
           if (compliance.expiryDate != null) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Text(
               compliance.expiryDate!,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(

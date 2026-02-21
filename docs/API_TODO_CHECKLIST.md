@@ -118,9 +118,10 @@ Phases for replacing mock data with real Laravel (or other) backend APIs.
 
 ## Phase 3.6: Paste Product Link / Product Import
 
-- [ ] **`POST /api/product-import/preview`** — Accept product URL, return metadata (name, price, store, image, weight, dimensions). Request: `{ "url": "https://..." }`. Response: `{ "name", "price", "store_name", "country", "image_url", "weight", "dimensions", "canonical_url" }` or error. Backend should normalize URLs and return `canonical_url` in the preview response.
-- [ ] **`GET /api/stores/supported`** — List supported stores for Paste Link (whitelist).
-- [ ] **`POST /api/cart/items`** — Add item to cart (from auto-filled or manual entry). Request: `{ "url", "name", "price", "quantity", "store_id", "image_url?", "weight?", "dimensions?" }`.
+- [ ] **`POST /api/product-import/preview`** — Accept product URL, return metadata (name, price, store, image, weight, dimensions). Request: `{ "url": "https://..." }`. Response: `{ "name", "price", "currency", "store_name", "store_key", "country", "image_url", "weight", "dimensions", "canonical_url", "product_id" }` or error. Backend should normalize URLs and return `canonical_url` in the preview response.
+- [ ] **`GET /api/stores/supported`** — List supported stores for Paste Link (whitelist). Response should include store keys: `["amazon", "ebay", "walmart", "etsy", "aliexpress"]`.
+- [ ] **`POST /api/cart/items`** — Add item to cart (from auto-filled or manual entry). Request: `{ "url", "canonical_url", "name", "price", "currency", "quantity", "store_id", "store_key", "image_url?", "product_id?", "weight?", "dimensions?" }`.
+- [ ] **`GET /api/exchange-rates`** — Get current exchange rates for currency conversion. Response: `{ "rates": { "USD": 1.0, "EUR": 1.08, "GBP": 1.27, "ILS": 0.27, ... }, "last_updated": "2026-02-20T10:00:00Z" }`. Used for converting non-USD prices to USD for calculations.
 
 ---
 
@@ -173,10 +174,19 @@ Screens: Settings & Preferences, Advanced Notification Control, Orders list, Rev
 
 ---
 
-## Phase 4: Stores / WebView & Import Pipeline
+## Phase 4: Stores / WebView & Import Pipeline ✅ PARTIALLY IMPLEMENTED
 
-- [ ] **`GET /api/home`** — Home dashboard (promos, markets, popular_stores). **`GET /api/stores`** — Stores list. **`GET /api/stores/{id}`** — Store landing. **Stores list:** e.g. `GET /api/stores` for Home “Markets / Stores”.
-- [ ] **WebView rules:** See `docs/WEBVIEW_IMPORT_RULES.md` for planned store URL rules, PDP detection, and “Add to Zayer Cart” import pipeline (high level).
+- [ ] **`GET /api/home`** — Home dashboard (promos, markets, popular_stores). **`GET /api/stores`** — Stores list. **`GET /api/stores/{id}`** — Store landing. **Stores list:** e.g. `GET /api/stores` for Home "Markets / Stores".
+- ✅ **WebView rules:** See `docs/WEBVIEW_IMPORT_RULES.md` and `docs/PRODUCT_EXTRACTION_IMPLEMENTATION.md` for implemented store URL rules, PDP detection, and product extraction.
+- [ ] **`POST /api/products/import`** — Import product from WebView extraction. Request: `{ "store_key": "amazon", "product_url": "https://...", "canonical_url": "https://...", "title": "...", "price": 99.99, "currency": "USD", "image_url": "...", "product_id": "B08XYZ" }`. Response: `{ "success": true, "product_id": "zayer_product_123", "cart_item_id": "cart_item_456" }`.
+- [ ] **`GET /api/stores/{id}/pdp-rules`** — Get PDP detection rules for a store. Response: `{ "url_patterns": ["/dp/", "/gp/product/"], "exclude_patterns": ["/s?", "/gp/bestsellers"] }`.
+- [ ] **`GET /api/exchange-rates`** — Get current exchange rates for currency conversion. Response: `{ "rates": { "USD": 1.0, "EUR": 1.08, "GBP": 1.27, "ILS": 0.27, "AED": 0.27, "SAR": 0.27, "EGP": 0.032 }, "last_updated": "2026-02-20T10:00:00Z" }`. Used for converting non-USD prices to USD for calculations. **Priority: HIGH** - Currently using estimated rates.
+
+**Current Status:**
+- ✅ Client-side product extraction implemented and working
+- ✅ Multi-store support (Amazon, eBay, Walmart, Etsy, AliExpress)
+- ✅ Currency detection and conversion (estimated rates)
+- ⏳ Backend API endpoints pending
 
 ---
 
@@ -191,3 +201,4 @@ Screens: Settings & Preferences, Advanced Notification Control, Orders list, Rev
 
 - Keep **snake_case** in API JSON to match Laravel and existing models.
 - All admin-controlled content (splash, onboarding, theme) must remain config-driven; no hardcoded marketing copy in the app except fallbacks on API failure.
+- **Product Extraction:** Client-side extraction is implemented; backend should validate and sanitize all product data before saving.

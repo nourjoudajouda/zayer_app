@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -8,6 +11,7 @@ import '../../core/platform/webview_supported.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../generated/l10n/app_localizations.dart';
+import 'extractors/product_data_extractor.dart';
 import 'models/detected_product.dart';
 import 'rules/webview_import_rules.dart';
 import 'widgets/detected_product_overlay.dart';
@@ -28,6 +32,8 @@ class _StoreWebViewScreenState extends State<StoreWebViewScreen> {
   WebViewController? _controller;
   bool _isLoading = true;
   DetectedProduct? _detectedProduct;
+  bool _isExtractingProduct = false;
+  bool _showExtractionLoader = false;
 
   String get _resolvedUrl =>
       widget.initialUrl.trim().isNotEmpty
@@ -40,15 +46,31 @@ class _StoreWebViewScreenState extends State<StoreWebViewScreen> {
     if (isWebViewSupported) {
       _controller = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..addJavaScriptChannel(
+          'ProductExtractor',
+          onMessageReceived: (JavaScriptMessage message) {
+            _handleProductData(message.message);
+          },
+        )
         ..setNavigationDelegate(
           NavigationDelegate(
             onPageStarted: (url) {
-              setState(() => _isLoading = true);
-              _checkPdp(url);
+              setState(() {
+                _isLoading = true;
+                _detectedProduct = null;
+                _showExtractionLoader = false;
+                _isExtractingProduct = false;
+              });
+              // Don't check PDP on page start, wait for page to finish
             },
             onPageFinished: (url) {
               setState(() => _isLoading = false);
-              _checkPdp(url);
+              // Wait a bit for page to fully render before detecting PDP
+              Future.delayed(const Duration(milliseconds: 500), () {
+                if (mounted) {
+                  _checkPdp(url);
+                }
+              });
             },
             onNavigationRequest: (request) {
               _checkPdp(request.url);
@@ -60,17 +82,246 @@ class _StoreWebViewScreenState extends State<StoreWebViewScreen> {
     }
   }
 
-  void _checkPdp(String url) {
+  void _checkPdp(String url) async {
+    if (!mounted) return;
+    
+    debugPrint('🔍 Checking PDP for URL: $url');
     final result = WebViewImportRules.detectPdp(url);
-    setState(() {
-      _detectedProduct = result.isPdp ? result.product : null;
-    });
+    
+    if (result.isPdp && result.product != null) {
+      debugPrint('✅ PDP detected: ${result.product!.storeKey}');
+      
+      // Show overlay immediately with detected product (will show loader)
+      if (mounted) {
+        setState(() {
+          _detectedProduct = result.product;
+          _showExtractionLoader = true; // Show loader immediately
+          _isExtractingProduct = true;
+        });
+      }
+      
+      // Small delay to ensure overlay is rendered
+      await Future.delayed(const Duration(milliseconds: 200));
+      
+      if (!mounted) {
+        debugPrint('⚠️ Widget unmounted during PDP check delay');
+        _hideLoader();
+        return;
+      }
+      
+      // Try to extract real product data if extraction script is available
+      final storeKey = result.product!.storeKey;
+      final extractionScript = ProductDataExtractor.getExtractionScript(storeKey);
+      
+      if (extractionScript != null && _controller != null) {
+        debugPrint('📝 Extraction script found for $storeKey, starting extraction...');
+        await _extractProductData(result.product!, extractionScript);
+      } else {
+        debugPrint('⚠️ No extraction script for $storeKey, using detected product as-is');
+        // For stores without extraction script, hide loader and use detected product as-is
+        if (mounted) {
+          setState(() {
+            _showExtractionLoader = false;
+            _isExtractingProduct = false;
+          });
+        }
+      }
+    } else {
+      debugPrint('❌ Not a PDP or product is null');
+      if (mounted) {
+        setState(() {
+          _detectedProduct = null;
+          _showExtractionLoader = false;
+          _isExtractingProduct = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _extractProductData(DetectedProduct detectedProduct, String extractionScript) async {
+    if (_controller == null || !mounted) {
+      _hideLoader();
+      return;
+    }
+    
+    // Reset extraction state to allow retry
+    if (_isExtractingProduct) {
+      debugPrint('Previous extraction still in progress, resetting...');
+      _hideLoader();
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+    
+    if (!mounted) {
+      _hideLoader();
+      return;
+    }
+    
+    // Ensure loader is shown before starting extraction
+    if (mounted) {
+      setState(() {
+        _isExtractingProduct = true;
+        _showExtractionLoader = true;
+      });
+    }
+
+    try {
+      debugPrint('Starting product data extraction for ${detectedProduct.storeKey}');
+      
+      // Wait a bit to ensure DOM is ready
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      if (!mounted || _controller == null) {
+        debugPrint('Widget unmounted or controller null after delay');
+        _hideLoader();
+        return;
+      }
+      
+      // Add timeout to prevent infinite loading
+      debugPrint('Executing JavaScript extraction script...');
+      final result = await _controller!
+          .runJavaScriptReturningResult(extractionScript)
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              debugPrint('⚠️ JavaScript extraction timeout after 5 seconds');
+              return '';
+            },
+          );
+      
+      if (!mounted) {
+        debugPrint('Widget unmounted after JavaScript execution');
+        _hideLoader();
+        return;
+      }
+      
+      final resultString = result.toString().trim();
+      debugPrint('✅ Extraction result received: ${resultString.length > 100 ? "${resultString.substring(0, 100)}..." : resultString}');
+      
+      if (resultString.isNotEmpty && resultString != 'null' && resultString != 'undefined') {
+        final productData = _parseProductData(resultString);
+        
+        if (productData != null && productData['success'] == true) {
+          debugPrint('✅ Product data parsed successfully');
+          
+          // Convert price to double if it's a number
+          double? price;
+          final priceValue = productData['price'];
+          if (priceValue != null) {
+            if (priceValue is double) {
+              price = priceValue;
+            } else if (priceValue is int) {
+              price = priceValue.toDouble();
+            } else if (priceValue is String) {
+              price = double.tryParse(priceValue);
+            }
+          }
+          
+          // Update detected product with real data
+          final updatedProduct = DetectedProduct(
+            storeKey: detectedProduct.storeKey,
+            storeName: detectedProduct.storeName,
+            productUrl: detectedProduct.productUrl,
+            title: productData['title'] as String?,
+            price: price,
+            currency: productData['currency'] as String? ?? 'USD',
+            imageUrl: productData['imageUrl'] as String?,
+            productId: productData['productId'] as String? ?? detectedProduct.productId,
+          );
+          
+          if (mounted) {
+            debugPrint('✅ Hiding loader and updating product data');
+            setState(() {
+              _detectedProduct = updatedProduct;
+              _isExtractingProduct = false;
+              _showExtractionLoader = false; // Hide loader when data is ready
+            });
+          }
+          return;
+        } else {
+          debugPrint('❌ Product data parsing failed or success=false');
+          debugPrint('Parsed data: $productData');
+          // Even if parsing fails, hide loader and show detected product
+          _hideLoader();
+          return;
+        }
+      } else {
+        debugPrint('❌ Empty or null result from JavaScript extraction: "$resultString"');
+        // Empty result - hide loader and show detected product
+        _hideLoader();
+        return;
+      }
+    } catch (e, stackTrace) {
+      // If extraction fails, fall back to detected product
+      debugPrint('❌ Exception during product extraction: $e');
+      debugPrint('Stack trace: $stackTrace');
+      // Always hide loader on error
+      _hideLoader();
+    }
+  }
+
+  void _hideLoader() {
+    if (mounted) {
+      debugPrint('🔄 Hiding extraction loader');
+      setState(() {
+        _isExtractingProduct = false;
+        _showExtractionLoader = false;
+      });
+    } else {
+      debugPrint('⚠️ Cannot hide loader - widget not mounted');
+    }
+  }
+
+  Map<String, dynamic>? _parseProductData(String jsonString) {
+    try {
+      String cleaned = jsonString.trim();
+      
+      // Handle null or empty
+      if (cleaned.isEmpty || cleaned == 'null' || cleaned == 'undefined') {
+        return null;
+      }
+      
+      // Remove surrounding quotes if present
+      if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+        cleaned = cleaned.substring(1, cleaned.length - 1);
+        // Unescape JSON string
+        cleaned = cleaned.replaceAll('\\"', '"');
+        cleaned = cleaned.replaceAll('\\n', '\n');
+        cleaned = cleaned.replaceAll('\\r', '\r');
+        cleaned = cleaned.replaceAll('\\t', '\t');
+        cleaned = cleaned.replaceAll('\\\\', '\\');
+      }
+      
+      // Try to parse as JSON
+      final decoded = json.decode(cleaned) as Map<String, dynamic>;
+      return decoded;
+    } catch (e) {
+      debugPrint('Failed to parse product data: $e');
+      debugPrint('Raw string: $jsonString');
+      return null;
+    }
+  }
+
+  void _handleProductData(String message) {
+    // Handle message from JavaScript channel if needed
+    debugPrint('Product data received: $message');
   }
 
   void _handleAddToCart() {
     if (_detectedProduct != null) {
+      // Encode product data as JSON and pass it to ConfirmProductScreen
+      final productJson = jsonEncode({
+        'storeKey': _detectedProduct!.storeKey,
+        'storeName': _detectedProduct!.storeName,
+        'productUrl': _detectedProduct!.productUrl,
+        'title': _detectedProduct!.title,
+        'price': _detectedProduct!.price,
+        'currency': _detectedProduct!.currency,
+        'imageUrl': _detectedProduct!.imageUrl,
+        'productId': _detectedProduct!.productId,
+      });
+      
       context.push(
-        '${AppRoutes.confirmProduct}?url=${Uri.encodeComponent(_detectedProduct!.productUrl)}',
+        '${AppRoutes.confirmProduct}?url=${Uri.encodeComponent(_detectedProduct!.productUrl)}&product=${Uri.encodeComponent(productJson)}',
       );
     }
   }
@@ -190,7 +441,7 @@ class _StoreWebViewScreenState extends State<StoreWebViewScreen> {
           const Center(
             child: CircularProgressIndicator(),
           ),
-        if (_detectedProduct == null && !_isLoading)
+        if (_detectedProduct == null && !_isLoading && !_showExtractionLoader)
           Positioned(
             left: 0,
             right: 0,
@@ -206,6 +457,7 @@ class _StoreWebViewScreenState extends State<StoreWebViewScreen> {
               product: _detectedProduct!,
               onAddToCart: _handleAddToCart,
               onFavorite: _handleFavorite,
+              isExtracting: _showExtractionLoader,
             ),
           ),
       ],
@@ -299,11 +551,32 @@ class _SaveFavoriteSheetState extends State<_SaveFavoriteSheet> {
                     color: AppConfig.borderColor.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
                   ),
-                  child: const Icon(
-                    Icons.image_outlined,
-                    color: AppConfig.subtitleColor,
-                    size: 32,
-                  ),
+                  child: widget.product.imageUrl != null && widget.product.imageUrl!.isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                          child: CachedNetworkImage(
+                            imageUrl: widget.product.imageUrl!,
+                            width: 64,
+                            height: 64,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: AppConfig.borderColor.withValues(alpha: 0.3),
+                              child: const Center(
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => const Icon(
+                              Icons.image_outlined,
+                              color: AppConfig.subtitleColor,
+                              size: 32,
+                            ),
+                          ),
+                        )
+                      : const Icon(
+                          Icons.image_outlined,
+                          color: AppConfig.subtitleColor,
+                          size: 32,
+                        ),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(

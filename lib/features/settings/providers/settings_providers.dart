@@ -48,6 +48,13 @@ class SettingsOverridesNotifier extends StateNotifier<AppSettingsModel?> {
     );
   }
 
+  void setLanguage(String code, String label) {
+    state = (state ?? const AppSettingsModel()).copyWith(
+      languageCode: code,
+      languageLabel: label,
+    );
+  }
+
   void clear() {
     state = null;
   }

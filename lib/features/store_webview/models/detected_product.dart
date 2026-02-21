@@ -46,4 +46,46 @@ class DetectedProduct {
       imageUrl: null,
     );
   }
+
+  /// Mock factory for Walmart products.
+  factory DetectedProduct.mockWalmart(String url, {String? productId}) {
+    return DetectedProduct(
+      storeKey: 'walmart',
+      storeName: 'Walmart US',
+      productUrl: url,
+      title: 'Product (Mock)',
+      price: 29.99,
+      currency: 'USD',
+      imageUrl: null,
+      productId: productId,
+    );
+  }
+
+  /// Mock factory for Etsy products.
+  factory DetectedProduct.mockEtsy(String url, {String? listingId}) {
+    return DetectedProduct(
+      storeKey: 'etsy',
+      storeName: 'Etsy',
+      productUrl: url,
+      title: 'Handmade Item (Mock)',
+      price: 45.00,
+      currency: 'USD',
+      imageUrl: null,
+      productId: listingId,
+    );
+  }
+
+  /// Mock factory for AliExpress products.
+  factory DetectedProduct.mockAliExpress(String url, {String? itemId}) {
+    return DetectedProduct(
+      storeKey: 'aliexpress',
+      storeName: 'AliExpress',
+      productUrl: url,
+      title: 'Product (Mock)',
+      price: 15.99,
+      currency: 'USD',
+      imageUrl: null,
+      productId: itemId,
+    );
+  }
 }

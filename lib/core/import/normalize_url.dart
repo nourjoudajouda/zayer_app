@@ -11,7 +11,7 @@ class NormalizedUrlResult {
   /// Canonical URL to use for fetching (e.g. https://www.amazon.com/dp/ASIN).
   final String canonicalUrl;
 
-  /// Store identifier: "amazon", "ebay", or "unknown".
+  /// Store identifier: "amazon", "ebay", "walmart", "etsy", "aliexpress", or "unknown".
   final String storeKey;
 
   /// Product ID when extractable (e.g. ASIN for Amazon, item id for eBay).
@@ -91,6 +91,39 @@ NormalizedUrlResult normalizeProductUrl(String input) {
     );
   }
 
+  // Walmart: /ip/{product-name}
+  if (host.contains('walmart.')) {
+    final productId = _extractWalmartProductId(uri);
+    return NormalizedUrlResult(
+      canonicalUrl: url,
+      storeKey: 'walmart',
+      productId: productId,
+      wasModified: wasModified,
+    );
+  }
+
+  // Etsy: /listing/{id}
+  if (host.contains('etsy.')) {
+    final listingId = _extractEtsyListingId(uri);
+    return NormalizedUrlResult(
+      canonicalUrl: url,
+      storeKey: 'etsy',
+      productId: listingId,
+      wasModified: wasModified,
+    );
+  }
+
+  // AliExpress: /item/{id}.html
+  if (host.contains('aliexpress.')) {
+    final itemId = _extractAliExpressItemId(uri);
+    return NormalizedUrlResult(
+      canonicalUrl: url,
+      storeKey: 'aliexpress',
+      productId: itemId,
+      wasModified: wasModified,
+    );
+  }
+
   return NormalizedUrlResult(
     canonicalUrl: url,
     storeKey: 'unknown',
@@ -140,4 +173,39 @@ String? _extractEbayItemId(Uri uri) {
     }
   }
   return uri.queryParameters['item'];
+}
+
+/// Extract Walmart product ID from path /ip/{product-name}
+String? _extractWalmartProductId(Uri uri) {
+  final pathSegments = uri.pathSegments;
+  for (int i = 0; i < pathSegments.length; i++) {
+    if (pathSegments[i].toLowerCase() == 'ip' && i + 1 < pathSegments.length) {
+      return pathSegments[i + 1];
+    }
+  }
+  return null;
+}
+
+/// Extract Etsy listing ID from path /listing/{id}
+String? _extractEtsyListingId(Uri uri) {
+  final pathSegments = uri.pathSegments;
+  for (int i = 0; i < pathSegments.length; i++) {
+    if (pathSegments[i].toLowerCase() == 'listing' && i + 1 < pathSegments.length) {
+      return pathSegments[i + 1];
+    }
+  }
+  return null;
+}
+
+/// Extract AliExpress item ID from path /item/{id}.html
+String? _extractAliExpressItemId(Uri uri) {
+  final pathSegments = uri.pathSegments;
+  for (int i = 0; i < pathSegments.length; i++) {
+    if (pathSegments[i].toLowerCase() == 'item' && i + 1 < pathSegments.length) {
+      final itemSegment = pathSegments[i + 1];
+      // Remove .html if present
+      return itemSegment.replaceAll('.html', '');
+    }
+  }
+  return null;
 }

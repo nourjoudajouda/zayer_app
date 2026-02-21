@@ -160,14 +160,19 @@ Admin-controlled store metadata and PDP detection rules.
 | Field | Type | Description |
 |-------|------|-------------|
 | `stores` | array | List of supported stores for Markets and WebView. |
-| Per store: `id` | string | Unique store key (e.g. "amazon_us"). |
+| Per store: `id` | string | Unique store key (e.g. "amazon_us"). Must match store keys used in app: `"amazon"`, `"ebay"`, `"walmart"`, `"etsy"`, `"aliexpress"`. |
 | Per store: `name` | string | Display name (e.g. "Amazon US"). |
+| Per store: `name_ar` | string | Arabic display name (optional). |
 | Per store: `logo_url` | string | Store logo image URL. |
 | Per store: `country` | string | Store country (e.g. "USA"). |
 | Per store: `store_url` | string | Base store URL (e.g. "https://www.amazon.com"). |
 | Per store: `badges` | object | Badges to display: `{ "official": true, "secure": true, "verified": true }`. |
 | Per store: `categories` | array | Categories list for "What you can shop" (e.g. ["Electronics", "Fashion"]). |
 | Per store: `pdp_rules` | object | PDP detection rules: `{ "url_patterns": ["/dp/", "/gp/product/"], "exclude_patterns": ["/s?", "/gp/bestsellers"] }`. |
+| Per store: `extraction_enabled` | bool | Whether product extraction is enabled for this store (default: true). |
+| Per store: `supported_currencies` | array | Supported currencies for this store: `["USD", "EUR", "GBP", "ILS"]`. |
+
+**Note:** Product extraction is currently implemented client-side using JavaScript injection. Backend can provide extraction rules or fallback to server-side extraction if client-side fails.
 
 ### 2.11 Empty-State Screens (Favorites, Notifications, Orders, Cart)
 
@@ -389,6 +394,54 @@ The following can be exposed in bootstrap-config or a separate remote-config end
   - `bootstrapConfigProvider` (AsyncValue<AppBootstrapConfig>), `bootstrapConfigRefresh(ref)`.
 - **Theme:** `lib/core/theme/app_theme.dart`  
   - `AppTheme.fromConfig(ThemeConfig)` builds Material 3 theme from config; default primary `#1E66F5` when config is loading or missing.
+
+## 7. Product Extraction & WebView Implementation
+
+**Status:** ✅ IMPLEMENTED - See `PRODUCT_EXTRACTION_IMPLEMENTATION.md` for detailed documentation.
+
+**Key Files:**
+- `lib/features/store_webview/store_webview_screen.dart` - Main WebView screen with product detection
+- `lib/features/store_webview/extractors/product_data_extractor.dart` - JavaScript extraction scripts per store
+- `lib/features/store_webview/rules/webview_import_rules.dart` - PDP detection rules
+- `lib/features/store_webview/models/detected_product.dart` - Product data model
+- `lib/core/import/normalize_url.dart` - URL normalization and store detection
+- `lib/features/product_import/confirm_product_screen.dart` - Product confirmation screen
+
+**Supported Stores:**
+- Amazon (`amazon`) - `/dp/{ASIN}`, `/gp/product/{ASIN}`
+- eBay (`ebay`) - `/itm/{id}`
+- Walmart (`walmart`) - `/ip/{product-name}`
+- Etsy (`etsy`) - `/listing/{id}`
+- AliExpress (`aliexpress`) - `/item/{id}.html`
+
+**Supported Currencies:**
+- USD, EUR, GBP, ILS (Israeli Shekel), AED, SAR, EGP
+- Automatic conversion to USD for calculations
+- Exchange rates currently estimated (backend should provide real-time rates via API)
+
+## 7. Product Extraction & WebView Implementation
+
+**Status:** ✅ IMPLEMENTED - See `PRODUCT_EXTRACTION_IMPLEMENTATION.md` for detailed documentation.
+
+**Key Files:**
+- `lib/features/store_webview/store_webview_screen.dart` - Main WebView screen with product detection
+- `lib/features/store_webview/extractors/product_data_extractor.dart` - JavaScript extraction scripts per store
+- `lib/features/store_webview/rules/webview_import_rules.dart` - PDP detection rules
+- `lib/features/store_webview/models/detected_product.dart` - Product data model
+- `lib/core/import/normalize_url.dart` - URL normalization and store detection
+- `lib/features/product_import/confirm_product_screen.dart` - Product confirmation screen
+
+**Supported Stores:**
+- Amazon (`amazon`) - `/dp/{ASIN}`, `/gp/product/{ASIN}`
+- eBay (`ebay`) - `/itm/{id}`
+- Walmart (`walmart`) - `/ip/{product-name}`
+- Etsy (`etsy`) - `/listing/{id}`
+- AliExpress (`aliexpress`) - `/item/{id}.html`
+
+**Supported Currencies:**
+- USD, EUR, GBP, ILS (Israeli Shekel), AED, SAR, EGP
+- Automatic conversion to USD for calculations
+- Exchange rates currently estimated (backend should provide real-time rates via API)
 
 ---
 

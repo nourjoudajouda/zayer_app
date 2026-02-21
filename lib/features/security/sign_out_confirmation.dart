@@ -1,0 +1,82 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../core/config/app_config.dart';
+import '../../core/routing/app_router.dart';
+import '../../core/theme/app_spacing.dart';
+
+/// Shows "Sign out from this device?" bottom sheet. On confirm, navigates to login.
+void showSignOutConfirmation(BuildContext context) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: Theme.of(ctx).scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+              decoration: BoxDecoration(
+                color: AppConfig.borderColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Icon(Icons.logout, size: 48, color: AppConfig.errorRed),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Sign out from this device?',
+              style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'This device will no longer have access to your account. You can sign back in at any time.',
+              style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                    color: AppConfig.subtitleColor,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  context.go(AppRoutes.login);
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppConfig.errorRed,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: const Text('Sign Out'),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppConfig.textColor,
+                  side: const BorderSide(color: AppConfig.borderColor),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: const Text('Cancel'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}

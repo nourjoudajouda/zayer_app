@@ -12,11 +12,13 @@ class DetectedProductOverlay extends StatefulWidget {
     required this.product,
     required this.onAddToCart,
     required this.onFavorite,
+    this.isExtracting = false,
   });
 
   final DetectedProduct product;
   final VoidCallback onAddToCart;
   final VoidCallback onFavorite;
+  final bool isExtracting;
 
   @override
   State<DetectedProductOverlay> createState() => _DetectedProductOverlayState();
@@ -138,6 +140,110 @@ class _DetectedProductOverlayState extends State<DetectedProductOverlay>
   }
 
   Widget _buildContent() {
+    // Show loader if extracting product data
+    if (widget.isExtracting) {
+      return Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Loading thumbnail placeholder with spinner
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: AppConfig.borderColor.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+              ),
+              child: const Center(
+                child: SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    valueColor: AlwaysStoppedAnimation<Color>(AppConfig.primaryColor),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            // Loading content with skeleton and spinner
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Skeleton for product title
+                  Container(
+                    height: 18,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: AppConfig.borderColor.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  // Skeleton for second line of title
+                  Container(
+                    height: 18,
+                    width: 180,
+                    decoration: BoxDecoration(
+                      color: AppConfig.borderColor.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  // Skeleton for price
+                  Container(
+                    height: 24,
+                    width: 100,
+                    decoration: BoxDecoration(
+                      color: AppConfig.borderColor.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  // Skeleton for shipping text
+                  Container(
+                    height: 14,
+                    width: 200,
+                    decoration: BoxDecoration(
+                      color: AppConfig.borderColor.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  // Loading indicator with text
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: const AlwaysStoppedAnimation<Color>(AppConfig.primaryColor),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          'Extracting product details...',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppConfig.primaryColor,
+                                fontWeight: FontWeight.w500,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Show actual product data when extraction is complete
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Row(
@@ -151,11 +257,45 @@ class _DetectedProductOverlayState extends State<DetectedProductOverlay>
               color: AppConfig.borderColor.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
             ),
-            child: const Icon(
-              Icons.image_outlined,
-              color: AppConfig.subtitleColor,
-              size: 32,
-            ),
+            child: widget.product.imageUrl != null && widget.product.imageUrl!.isNotEmpty
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                    child: Image.network(
+                      widget.product.imageUrl!,
+                      width: 72,
+                      height: 72,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                  : null,
+                              valueColor: const AlwaysStoppedAnimation<Color>(AppConfig.primaryColor),
+                            ),
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(
+                          Icons.image_outlined,
+                          color: AppConfig.subtitleColor,
+                          size: 32,
+                        );
+                      },
+                    ),
+                  )
+                : const Icon(
+                    Icons.image_outlined,
+                    color: AppConfig.subtitleColor,
+                    size: 32,
+                  ),
           ),
           const SizedBox(width: AppSpacing.md),
           // Product info + CTAs

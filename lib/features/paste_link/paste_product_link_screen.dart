@@ -1,14 +1,20 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
+import '../cart/models/cart_item_model.dart';
+import '../cart/providers/cart_providers.dart';
+import '../cart/repositories/cart_repository.dart';
 import 'models/product_import_result.dart';
 import 'providers/paste_link_providers.dart';
 
@@ -36,11 +42,14 @@ class PasteProductLinkScreen extends ConsumerStatefulWidget {
 class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen> {
   final _urlController = TextEditingController();
   final _nameController = TextEditingController();
-  final _priceController = TextEditingController();
-  final _imageUrlController = TextEditingController();
+  final _unitPriceController = TextEditingController(); // Price per unit (user edits)
   final _weightController = TextEditingController();
-  final _dimensionsController = TextEditingController();
+  final _lengthController = TextEditingController();
+  final _widthController = TextEditingController();
+  final _heightController = TextEditingController();
   final _nameFocusNode = FocusNode();
+  final ImagePicker _imagePicker = ImagePicker();
+  List<XFile> _selectedImages = []; // For manual mode image uploads
 
   _PasteLinkState _state = _PasteLinkState.idle;
   ProductImportResult? _result;
@@ -49,6 +58,10 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
   int _requestId = 0;
   Timer? _debounceTimer;
   bool _showNormalizedHint = false;
+  bool _isUpdatingFromCanonical = false; // Flag to prevent re-fetch when updating URL
+  double? _unitPrice; // Store unit price (from fetch or from _unitPriceController)
+  String _weightUnit = 'lb'; // 'lb' = pounds, 'g' = grams
+  String _dimensionUnit = 'in'; // 'in' = inches, 'cm' = cm
 
   @override
   void initState() {
@@ -62,10 +75,11 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
     _urlController.removeListener(_onUrlChanged);
     _urlController.dispose();
     _nameController.dispose();
-    _priceController.dispose();
-    _imageUrlController.dispose();
+    _unitPriceController.dispose();
     _weightController.dispose();
-    _dimensionsController.dispose();
+    _lengthController.dispose();
+    _widthController.dispose();
+    _heightController.dispose();
     _nameFocusNode.dispose();
     super.dispose();
   }
@@ -82,6 +96,11 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
   }
 
   void _onUrlChanged() {
+    // Don't trigger fetch if we're updating URL from canonical normalization
+    if (_isUpdatingFromCanonical) {
+      return;
+    }
+
     _debounceTimer?.cancel();
     final url = _urlController.text.trim();
 
@@ -139,18 +158,21 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
       if (canonical != null &&
           canonical.isNotEmpty &&
           canonical != _urlController.text.trim()) {
+        _isUpdatingFromCanonical = true;
         _urlController.text = canonical;
         _urlController.selection = TextSelection.fromPosition(
           TextPosition(offset: canonical.length),
         );
         _showNormalizedHint = true;
+        _isUpdatingFromCanonical = false;
       }
 
       setState(() {
         _state = _PasteLinkState.success;
         _result = result;
         _nameController.text = result.name;
-        _priceController.text = result.price.toStringAsFixed(2);
+        _unitPrice = result.price;
+        _unitPriceController.text = result.price.toStringAsFixed(2);
       });
     } on InvalidLinkException catch (e) {
       if (!mounted) return;
@@ -164,8 +186,10 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
       if (currentRequestId != _requestId) return;
       setState(() {
         _state = _PasteLinkState.manual;
+        _unitPrice = null;
+        _quantity = 1;
         _nameController.clear();
-        _priceController.clear();
+        _unitPriceController.clear();
         _showNormalizedHint = false;
       });
     }
@@ -178,22 +202,87 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
       return false;
     }
     final name = _nameController.text.trim();
-    final priceStr = _priceController.text.trim();
-    if (name.isEmpty) {
-      return false;
-    }
-    final price = double.tryParse(priceStr);
-    return price != null && price > 0;
+    if (name.isEmpty) return false;
+    final unitPrice = double.tryParse(_unitPriceController.text.trim());
+    return unitPrice != null && unitPrice > 0;
   }
 
-  void _addToCart() {
+  Future<void> _addToCart() async {
     if (!_canAddToCart) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Added to cart (mock)')),
+
+    final unitPrice = double.tryParse(_unitPriceController.text.trim());
+    if (unitPrice == null || unitPrice <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid price'),
+          backgroundColor: AppConfig.errorRed,
+        ),
+      );
+      return;
+    }
+
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter product name'),
+          backgroundColor: AppConfig.errorRed,
+        ),
+      );
+      return;
+    }
+
+    final productUrl = _urlController.text.trim();
+    if (productUrl.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter product URL'),
+          backgroundColor: AppConfig.errorRed,
+        ),
+      );
+      return;
+    }
+
+    // Build cart item from form data
+    final cartItem = CartItem(
+      id: generateCartItemId(),
+      productUrl: productUrl,
+      name: name,
+      unitPrice: unitPrice,
+      quantity: _quantity,
+      currency: 'USD', // Default to USD for manual entry
+      imageUrl: _result?.imageUrl, // Use extracted image if available
+      storeKey: _result?.storeName != null ? _result!.storeName.toLowerCase().replaceAll(' ', '_') : null,
+      storeName: _result?.storeName,
+      productId: null,
+      country: _result?.country,
+      weight: double.tryParse(_weightController.text.trim()),
+      weightUnit: _weightController.text.trim().isNotEmpty ? _weightUnit : null,
+      length: double.tryParse(_lengthController.text.trim()),
+      width: double.tryParse(_widthController.text.trim()),
+      height: double.tryParse(_heightController.text.trim()),
+      dimensionUnit: (_lengthController.text.trim().isNotEmpty ||
+              _widthController.text.trim().isNotEmpty ||
+              _heightController.text.trim().isNotEmpty)
+          ? _dimensionUnit
+          : null,
+      source: 'paste_link',
     );
-    context.pop();
+
+    final cartNotifier = ref.read(cartItemsProvider.notifier);
+    await cartNotifier.addItem(cartItem);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Added to cart'),
+          backgroundColor: AppConfig.successGreen,
+        ),
+      );
+      context.pop();
+    }
   }
 
   @override
@@ -259,6 +348,90 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
     }
   }
 
+  void _clearUrl() {
+    _debounceTimer?.cancel();
+    _isUpdatingFromCanonical = true;
+    _urlController.clear();
+    _isUpdatingFromCanonical = false;
+    setState(() {
+      _state = _PasteLinkState.idle;
+      _invalidError = null;
+      _result = null;
+      _showNormalizedHint = false;
+      _unitPrice = null;
+      _quantity = 1;
+      _nameController.clear();
+      _unitPriceController.clear();
+      _weightController.clear();
+      _lengthController.clear();
+      _widthController.clear();
+      _heightController.clear();
+      _selectedImages.clear();
+    });
+  }
+
+  Future<void> _pickImages() async {
+    try {
+      final List<XFile> images = await _imagePicker.pickMultiImage();
+      if (images.isNotEmpty) {
+        setState(() {
+          _selectedImages = images;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error picking images: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to pick images: $e'),
+            backgroundColor: AppConfig.errorRed,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickImageFromCamera() async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(source: ImageSource.camera);
+      if (image != null) {
+        setState(() {
+          _selectedImages = [image];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error picking image from camera: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to pick image: $e'),
+            backgroundColor: AppConfig.errorRed,
+          ),
+        );
+      }
+    }
+  }
+
+  void _removeImage(int index) {
+    setState(() {
+      _selectedImages.removeAt(index);
+    });
+  }
+
+  void _updateTotalPrice() {
+    final unitPrice = double.tryParse(_unitPriceController.text.trim());
+    if (unitPrice != null) {
+      _unitPrice = unitPrice;
+    }
+    setState(() {}); // Refresh total display
+  }
+
+  double? get _displayTotalPrice {
+    final unitPrice = _unitPrice ?? double.tryParse(_unitPriceController.text.trim());
+    if (unitPrice == null) return null;
+    return unitPrice * _quantity;
+  }
+
   Widget _buildUrlInput() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -271,12 +444,29 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
               borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            suffixIcon: Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: TextButton(
-                onPressed: _pasteFromClipboard,
-                child: const Text('PASTE'),
-              ),
+            suffixIcon: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _urlController,
+              builder: (context, value, child) {
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (value.text.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.clear, size: 20),
+                        onPressed: _clearUrl,
+                        tooltip: 'Clear',
+                        color: AppConfig.subtitleColor,
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: TextButton(
+                        onPressed: _pasteFromClipboard,
+                        child: const Text('PASTE'),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
           keyboardType: TextInputType.url,
@@ -439,6 +629,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
 
   Widget _buildProductDetails() {
     final showManualFields = _state == _PasteLinkState.manual;
+    final hasImage = _result?.imageUrl != null && _result!.imageUrl!.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -459,6 +650,132 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
                   ),
             ),
           ),
+        // Product Image - Show extracted image in success mode
+        if (hasImage && _state == _PasteLinkState.success)
+          Container(
+            margin: const EdgeInsets.only(bottom: AppSpacing.md),
+            height: 200,
+            decoration: BoxDecoration(
+              color: AppConfig.borderColor.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
+              border: Border.all(color: AppConfig.borderColor),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
+              child: CachedNetworkImage(
+                imageUrl: _result!.imageUrl!,
+                fit: BoxFit.contain,
+                placeholder: (context, url) => Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppConfig.primaryColor,
+                  ),
+                ),
+                errorWidget: (context, url, error) => Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.image_not_supported,
+                        color: AppConfig.subtitleColor,
+                        size: 48,
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        'Failed to load image',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppConfig.subtitleColor,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        // Image Upload Section - Only in manual mode
+        if (showManualFields) ...[
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Product Images (optional)',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                  color: AppConfig.textColor,
+                ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _fieldsEnabled ? _pickImages : null,
+                  icon: const Icon(Icons.photo_library, size: 20),
+                  label: const Text('Pick from Gallery'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _fieldsEnabled ? _pickImageFromCamera : null,
+                  icon: const Icon(Icons.camera_alt, size: 20),
+                  label: const Text('Take Photo'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_selectedImages.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              height: 120,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _selectedImages.length,
+                itemBuilder: (context, index) {
+                  return Container(
+                    width: 120,
+                    margin: const EdgeInsets.only(right: AppSpacing.sm),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                      border: Border.all(color: AppConfig.borderColor),
+                    ),
+                    child: Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                          child: Image.file(
+                            File(_selectedImages[index].path),
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                          ),
+                        ),
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: IconButton(
+                            icon: const Icon(Icons.close, size: 20),
+                            color: Colors.white,
+                            style: IconButton.styleFrom(
+                              backgroundColor: Colors.black54,
+                              padding: const EdgeInsets.all(4),
+                            ),
+                            onPressed: () => _removeImage(index),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ],
         // "Edit if needed" helper text (right-aligned)
         Align(
           alignment: Alignment.centerRight,
@@ -508,7 +825,12 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
               children: [
                 IconButton.filled(
                   onPressed: _fieldsEnabled
-                      ? () => setState(() => _quantity = math.max(1, _quantity - 1))
+                      ? () {
+                          setState(() {
+                            _quantity = math.max(1, _quantity - 1);
+                            _updateTotalPrice();
+                          });
+                        }
                       : null,
                   icon: const Icon(Icons.remove, size: 20),
                   style: IconButton.styleFrom(
@@ -530,7 +852,12 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
                 ),
                 IconButton.filled(
                   onPressed: _fieldsEnabled
-                      ? () => setState(() => _quantity++)
+                      ? () {
+                          setState(() {
+                            _quantity++;
+                            _updateTotalPrice();
+                          });
+                        }
                       : null,
                   icon: const Icon(Icons.add, size: 20),
                   style: IconButton.styleFrom(
@@ -546,34 +873,140 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
         ),
         const SizedBox(height: AppSpacing.md),
         TextField(
-          controller: _priceController,
-          decoration: _inputDecoration('Price (USD)'),
+          controller: _unitPriceController,
+          decoration: _inputDecoration('Unit Price (USD)'),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           enabled: _fieldsEnabled,
+          onChanged: (_) => _updateTotalPrice(),
         ),
-        if (showManualFields) ...[
-          const SizedBox(height: AppSpacing.md),
-          TextField(
-            controller: _imageUrlController,
-            decoration: _inputDecoration('Image URL (optional)'),
-            keyboardType: TextInputType.url,
-            enabled: _fieldsEnabled,
+        const SizedBox(height: AppSpacing.sm),
+        // Total price (read-only display)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppConfig.borderColor.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+            border: Border.all(color: AppConfig.borderColor),
           ),
-          const SizedBox(height: AppSpacing.md),
-          TextField(
-            controller: _weightController,
-            decoration: _inputDecoration('Weight (optional)'),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            enabled: _fieldsEnabled,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Total (USD)',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppConfig.subtitleColor,
+                    ),
+              ),
+              Text(
+                _displayTotalPrice != null
+                    ? _displayTotalPrice!.toStringAsFixed(2)
+                    : '—',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppConfig.textColor,
+                    ),
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.md),
-          TextField(
-            controller: _dimensionsController,
-            decoration: _inputDecoration('Dimensions (optional)'),
-            keyboardType: TextInputType.text,
-            enabled: _fieldsEnabled,
-          ),
-        ],
+        ),
+        // Weight - optional, with unit (lb / g)
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          'Weight (optional)',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+                color: _fieldsEnabled ? AppConfig.textColor : AppConfig.subtitleColor,
+              ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 2,
+              child: TextField(
+                controller: _weightController,
+                decoration: _inputDecoration('Value'),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                enabled: _fieldsEnabled,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                value: _weightUnit,
+                decoration: _inputDecoration('Unit'),
+                items: const [
+                  DropdownMenuItem(value: 'lb', child: Text('lb')),
+                  DropdownMenuItem(value: 'g', child: Text('g')),
+                ],
+                onChanged: _fieldsEnabled
+                    ? (value) {
+                        if (value != null) setState(() => _weightUnit = value);
+                      }
+                    : null,
+              ),
+            ),
+          ],
+        ),
+        // Dimensions - 3 fields (L x W x H) with unit (in / cm)
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          'Dimensions (optional)',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+                color: _fieldsEnabled ? AppConfig.textColor : AppConfig.subtitleColor,
+              ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _lengthController,
+                decoration: _inputDecoration('L'),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                enabled: _fieldsEnabled,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: TextField(
+                controller: _widthController,
+                decoration: _inputDecoration('W'),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                enabled: _fieldsEnabled,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: TextField(
+                controller: _heightController,
+                decoration: _inputDecoration('H'),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                enabled: _fieldsEnabled,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            SizedBox(
+              width: 72,
+              child: DropdownButtonFormField<String>(
+                value: _dimensionUnit,
+                decoration: _inputDecoration('Unit'),
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: 'in', child: Text('in')),
+                  DropdownMenuItem(value: 'cm', child: Text('cm')),
+                ],
+                onChanged: _fieldsEnabled
+                    ? (value) {
+                        if (value != null) setState(() => _dimensionUnit = value);
+                      }
+                    : null,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: AppSpacing.lg),
         Container(
           padding: const EdgeInsets.all(AppSpacing.md),

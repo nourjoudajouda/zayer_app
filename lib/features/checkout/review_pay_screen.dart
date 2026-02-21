@@ -1,11 +1,97 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import 'models/checkout_review_model.dart';
 import 'providers/checkout_review_providers.dart';
+
+/// Opens My Addresses first. When user returns after saving/editing address, shows recalculation warning.
+void _openMyAddressesAndMaybeWarn(BuildContext context) async {
+  final addressChanged = await context.push<bool>(AppRoutes.myAddresses);
+  if (context.mounted && addressChanged == true) {
+    _showRecalculationWarning(context);
+  }
+}
+
+/// Shows the "Change Address? Recalculate" warning (only after user actually changed address).
+void _showRecalculationWarning(BuildContext context) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: Theme.of(ctx).scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+              decoration: BoxDecoration(
+                color: AppConfig.borderColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Icon(
+              Icons.location_off_rounded,
+              size: 48,
+              color: AppConfig.errorRed,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Change Address?',
+              style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Shipping costs were calculated based on your previous address. '
+              'Your new address will recalculate all prices, taxes, and delivery estimates for your order.',
+              style: AppTextStyles.bodyMedium(AppConfig.subtitleColor),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppConfig.primaryColor,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: const Text('Recalculate'),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppConfig.textColor,
+                  side: const BorderSide(color: AppConfig.borderColor),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: const Text('Keep Current Calculation'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
 /// Review & Pay (consolidated checkout). Route: /review-pay.
 /// API will plug in: GET /api/checkout/review, POST /api/checkout/confirm later.
@@ -14,23 +100,23 @@ class ReviewPayScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final reviewAsync = ref.watch(checkoutReviewProvider);
+    final review = ref.watch(checkoutReviewProvider);
     final walletEnabled = ref.watch(checkoutWalletEnabledProvider);
 
-    return reviewAsync.when(
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
-      error: (e, _) => Scaffold(
+    if (review.shipments.isEmpty) {
+      return Scaffold(
         appBar: AppBar(title: const Text('Review & Pay')),
-        body: Center(child: Text('Error: $e')),
-      ),
-      data: (review) => _ReviewPayContent(
-        review: review,
-        walletEnabled: walletEnabled,
-        onWalletToggle: (v) =>
-            ref.read(checkoutWalletEnabledProvider.notifier).state = v,
-      ),
+        body: const Center(
+          child: Text('Your cart is empty. Add items from the cart.'),
+        ),
+      );
+    }
+
+    return _ReviewPayContent(
+      review: review,
+      walletEnabled: walletEnabled,
+      onWalletToggle: (v) =>
+          ref.read(checkoutWalletEnabledProvider.notifier).state = v,
     );
   }
 }
@@ -68,7 +154,7 @@ class _ReviewPayContent extends StatelessWidget {
                   children: [
                     _ShippingCard(
                       address: review.shippingAddressShort,
-                      onChangeTap: () {},
+                      onChangeTap: () => _openMyAddressesAndMaybeWarn(context),
                     ),
                     const SizedBox(height: AppSpacing.md),
                     _ConsolidationBenefitCard(
@@ -201,10 +287,7 @@ class _ShipmentSection extends StatelessWidget {
             style: AppTextStyles.titleMedium(AppConfig.textColor),
           ),
           const SizedBox(height: AppSpacing.sm),
-          ...shipment.items.map((item) => _ShipmentItemRow(
-                item: item,
-                showReviewed: shipment.reviewed,
-              )),
+          ...shipment.items.map((item) => _ShipmentItemRow(item: item)),
         ],
       ),
     );
@@ -212,13 +295,9 @@ class _ShipmentSection extends StatelessWidget {
 }
 
 class _ShipmentItemRow extends StatelessWidget {
-  const _ShipmentItemRow({
-    required this.item,
-    this.showReviewed = true,
-  });
+  const _ShipmentItemRow({required this.item});
 
   final CheckoutShipmentItem item;
-  final bool showReviewed;
 
   @override
   Widget build(BuildContext context) {
@@ -250,22 +329,26 @@ class _ShipmentItemRow extends StatelessWidget {
                   style: AppTextStyles.bodyMedium(AppConfig.textColor),
                 ),
                 const SizedBox(height: AppSpacing.xs),
-                if (showReviewed)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppConfig.successGreen.withValues(alpha: 0.15),
-                      borderRadius:
-                          BorderRadius.circular(AppConfig.radiusSmall),
-                    ),
-                    child: Text(
-                      'REVIEWED',
-                      style: AppTextStyles.bodySmall(AppConfig.successGreen),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: (item.reviewed
+                            ? AppConfig.successGreen
+                            : Colors.orange)
+                        .withValues(alpha: 0.15),
+                    borderRadius:
+                        BorderRadius.circular(AppConfig.radiusSmall),
+                  ),
+                  child: Text(
+                    item.reviewed ? 'REVIEWED' : 'PENDING REVIEW',
+                    style: AppTextStyles.bodySmall(
+                      item.reviewed ? AppConfig.successGreen : Colors.orange.shade800,
                     ),
                   ),
+                ),
                 const SizedBox(height: AppSpacing.xs),
                 Row(
                   children: [
@@ -285,6 +368,11 @@ Text(
                   'ETA: ${item.eta}',
                   style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
                 ),
+                if (item.shippingCost != null && item.shippingCost!.isNotEmpty)
+                  Text(
+                    'Shipping: ${item.shippingCost}',
+                    style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+                  ),
               ],
             ),
           ),

@@ -6,6 +6,8 @@ class CheckoutShipmentItem {
     required this.quantity,
     required this.eta,
     this.imageUrl,
+    this.reviewed = true,
+    this.shippingCost,
   });
 
   final String name;
@@ -13,6 +15,8 @@ class CheckoutShipmentItem {
   final int quantity;
   final String eta;
   final String? imageUrl;
+  final bool reviewed;
+  final String? shippingCost;
 }
 
 class CheckoutShipment {
