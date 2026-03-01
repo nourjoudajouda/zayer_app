@@ -14,6 +14,7 @@ class AppConfig {
   static const Color lightBlueBg = Color(0xFFEFF6FF);
   static const Color successGreen = Color(0xFF10B981);
   static const Color errorRed = Color(0xFFDC2626);
+  static const Color warningOrange = Color(0xFFF59E0B);
 
   // Radius (used for rounded corners)
   static const double radiusSmall = 12;

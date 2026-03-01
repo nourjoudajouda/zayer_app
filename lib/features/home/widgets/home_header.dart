@@ -6,9 +6,16 @@ import '../../../generated/l10n/app_localizations.dart';
 
 /// Top header: avatar, greeting, notification bell.
 class HomeHeader extends StatelessWidget {
-  const HomeHeader({super.key, required this.greeting});
+  const HomeHeader({
+    super.key,
+    required this.greeting,
+    this.onProfileTap,
+    this.onNotificationTap,
+  });
 
   final String greeting;
+  final VoidCallback? onProfileTap;
+  final VoidCallback? onNotificationTap;
 
   @override
   Widget build(BuildContext context) {
@@ -16,31 +23,48 @@ class HomeHeader extends StatelessWidget {
 
     return Row(
       children: [
-        CircleAvatar(
-          radius: 24,
-          backgroundColor: AppConfig.borderColor,
-          child: const Icon(Icons.person, color: AppConfig.subtitleColor),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onProfileTap,
+            customBorder: const CircleBorder(),
+            child: CircleAvatar(
+              radius: 24,
+              backgroundColor: AppConfig.borderColor,
+              child: const Icon(Icons.person, color: AppConfig.subtitleColor),
+            ),
+          ),
         ),
         const SizedBox(width: AppSpacing.md),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                l10n.helloUser(greeting),
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppConfig.textColor,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onProfileTap,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.helloUser(greeting),
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: AppConfig.textColor,
+                          ),
                     ),
-              ),
-              Text(
-                l10n.welcomeBackCaps,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppConfig.subtitleColor,
-                      letterSpacing: 0.5,
+                    Text(
+                      l10n.welcomeBackCaps,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppConfig.subtitleColor,
+                            letterSpacing: 0.5,
+                          ),
                     ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
         ),
         Container(
@@ -58,7 +82,7 @@ class HomeHeader extends StatelessWidget {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: () {},
+              onTap: onNotificationTap,
               customBorder: const CircleBorder(),
               child: const Padding(
                 padding: EdgeInsets.all(12),

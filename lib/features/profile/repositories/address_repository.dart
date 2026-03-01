@@ -7,13 +7,58 @@ class AddressRepository {
   static final List<Address> _mockAddresses = [
     const Address(
       id: '1',
-      addressLine: '123 Main Street, Apt 4B\nNew York, NY 10001',
-      countryId: 'us',
-      countryName: 'United States',
-      cityId: 'ny',
-      cityName: 'New York',
-      phone: '+1 555 123 4567',
+      addressLine: '123 Burj Khalifa St, Suite 402, Downtown Dubai, UAE',
+      countryId: 'ae',
+      countryName: 'United Arab Emirates',
+      cityId: 'dxb',
+      cityName: 'Dubai',
+      phone: '+971 50 123 4567',
       isDefault: true,
+      nickname: 'Home - Dubai',
+      addressType: AddressType.home,
+      areaDistrict: 'Downtown Dubai',
+      streetAddress: '123 Burj Khalifa St',
+      buildingVillaSuite: 'Suite 402',
+      isVerified: true,
+      isResidential: true,
+      linkedToActiveOrder: false,
+      isLocked: false,
+      lat: 25.0760,
+      lng: 55.3093,
+    ),
+    const Address(
+      id: '2',
+      addressLine: 'Building 4, Dubai Media City, UAE',
+      countryId: 'ae',
+      countryName: 'United Arab Emirates',
+      cityId: 'dxb',
+      cityName: 'Dubai',
+      isDefault: false,
+      nickname: 'Work - Office',
+      addressType: AddressType.office,
+      areaDistrict: 'Dubai Media City',
+      streetAddress: 'Building 4',
+      isVerified: false,
+      isResidential: false,
+      linkedToActiveOrder: true,
+      isLocked: true,
+    ),
+    const Address(
+      id: '3',
+      addressLine: 'Plot 12, Jebel Ali Free Zone, UAE',
+      countryId: 'ae',
+      countryName: 'United Arab Emirates',
+      cityId: 'dxb',
+      cityName: 'Dubai',
+      isDefault: false,
+      nickname: 'Warehouse 2',
+      addressType: AddressType.other,
+      areaDistrict: 'Jebel Ali Free Zone',
+      streetAddress: 'Plot 12',
+      isVerified: false,
+      isResidential: false,
+      linkedToActiveOrder: false,
+      isLocked: false,
     ),
   ];
 
@@ -67,7 +112,14 @@ class AddressRepository {
 
   Future<List<Address>> getAddresses() async {
     await Future<void>.delayed(const Duration(milliseconds: 50));
-    return List.from(_addresses);
+    // Primary (default) first, then others
+    final list = List<Address>.from(_addresses);
+    list.sort((a, b) {
+      if (a.isDefault) return -1;
+      if (b.isDefault) return 1;
+      return 0;
+    });
+    return list;
   }
 
   Future<void> setDefaultAddress(String addressId) async {
@@ -84,6 +136,15 @@ class AddressRepository {
     String? cityName,
     String? phone,
     required bool isDefault,
+    String? nickname,
+    AddressType addressType = AddressType.home,
+    String? areaDistrict,
+    String? streetAddress,
+    String? buildingVillaSuite,
+    bool isVerified = false,
+    bool isResidential = true,
+    double? lat,
+    double? lng,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 100));
     if (id != null) {
@@ -98,6 +159,17 @@ class AddressRepository {
           cityName: cityName,
           phone: phone,
           isDefault: isDefault,
+          nickname: nickname,
+          addressType: addressType,
+          areaDistrict: areaDistrict,
+          streetAddress: streetAddress,
+          buildingVillaSuite: buildingVillaSuite,
+          isVerified: isVerified,
+          isResidential: isResidential,
+          linkedToActiveOrder: _addresses[i].linkedToActiveOrder,
+          isLocked: _addresses[i].isLocked,
+          lat: lat,
+          lng: lng,
         );
         if (isDefault) {
           for (var j = 0; j < _addresses.length; j++) {
@@ -117,6 +189,17 @@ class AddressRepository {
       cityName: cityName,
       phone: phone,
       isDefault: isDefault,
+      nickname: nickname,
+      addressType: addressType,
+      areaDistrict: areaDistrict,
+      streetAddress: streetAddress,
+      buildingVillaSuite: buildingVillaSuite,
+      isVerified: isVerified,
+      isResidential: isResidential,
+      linkedToActiveOrder: false,
+      isLocked: false,
+      lat: lat,
+      lng: lng,
     );
     if (isDefault) {
       _addresses = _addresses.map((a) => a.copyWith(isDefault: false)).toList();

@@ -12,7 +12,6 @@ import 'widgets/consolidation_savings_card.dart';
 import 'widgets/flash_sale_carousel.dart';
 import 'widgets/global_markets_row.dart';
 import 'widgets/home_header.dart';
-import 'widgets/home_search_bar.dart';
 import 'widgets/popular_stores_grid.dart';
 
 /// Home dashboard. Bottom nav is provided by MainShell.
@@ -29,8 +28,16 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
+        child: RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(promoBannersProvider);
+            ref.invalidate(homeMarketsProvider);
+            ref.invalidate(homeStoresProvider);
+            await Future.delayed(const Duration(milliseconds: 400));
+          },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
@@ -38,9 +45,12 @@ class HomeScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: AppSpacing.sm),
-                    HomeHeader(greeting: greeting),
+                    HomeHeader(
+                      greeting: greeting,
+                      onProfileTap: () => context.go(AppRoutes.account),
+                      onNotificationTap: () => context.push(AppRoutes.notifications),
+                    ),
                     const SizedBox(height: AppSpacing.md),
-                    const HomeSearchBar(),
                     const SizedBox(height: AppSpacing.lg),
                     if (banners.isNotEmpty) FlashSaleCarousel(banners: banners),
                     const SizedBox(height: AppSpacing.xl),
@@ -91,6 +101,7 @@ class HomeScreen extends ConsumerWidget {
           ],
         ),
       ),
+    ),
     );
   }
 }

@@ -1,24 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
-import '../../core/theme/app_text_styles.dart';
+import 'models/wallet_model.dart';
+import 'providers/wallet_providers.dart';
 
-/// Top Up Wallet: balance card, amount presets + custom, payment method, order summary, confirm.
-class TopUpWalletScreen extends StatefulWidget {
+/// Top Up Wallet: available balance, amount presets + custom, payment method, order summary, confirm.
+class TopUpWalletScreen extends ConsumerStatefulWidget {
   const TopUpWalletScreen({super.key});
 
   @override
-  State<TopUpWalletScreen> createState() => _TopUpWalletScreenState();
+  ConsumerState<TopUpWalletScreen> createState() => _TopUpWalletScreenState();
 }
 
-class _TopUpWalletScreenState extends State<TopUpWalletScreen> {
-  static const double _mockBalance = 240.0;
+class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
   final List<double> _presets = [50, 100, 500];
-  int _selectedPresetIndex = -1;
-  final TextEditingController _customAmountController = TextEditingController();
+  int _selectedPresetIndex = 1;
+  final TextEditingController _customAmountController = TextEditingController(text: '100.00');
   bool _useCustom = false;
 
   @override
@@ -48,12 +49,30 @@ class _TopUpWalletScreenState extends State<TopUpWalletScreen> {
     setState(() {
       _selectedPresetIndex = i;
       _useCustom = false;
+      _customAmountController.text = _presets[i].toStringAsFixed(2);
     });
+  }
+
+  void _confirmTopUp() {
+    final amount = _selectedAmount;
+    if (amount == null || amount <= 0) return;
+    final current = ref.read(walletBalanceProvider);
+    ref.read(walletBalanceProvider.notifier).state = WalletBalance(
+      available: current.available + amount,
+      pending: current.pending,
+      promo: current.promo,
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('+\$${amount.toStringAsFixed(2)} added to wallet')));
+      context.pop();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final balance = ref.watch(walletBalanceProvider);
     final amount = _selectedAmount;
+
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
       appBar: AppBar(
@@ -69,137 +88,95 @@ class _TopUpWalletScreenState extends State<TopUpWalletScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: AppSpacing.sm),
+              const SizedBox(height: AppSpacing.md),
               Container(
-                padding: const EdgeInsets.all(AppSpacing.lg),
+                padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
-                  color: AppConfig.lightBlueBg.withValues(alpha: 0.5),
+                  color: AppConfig.borderColor.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
                   border: Border.all(color: AppConfig.borderColor),
-                  borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.account_balance_wallet_outlined,
-                        size: 40, color: AppConfig.primaryColor),
-                    const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Text('AVAILABLE BALANCE', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppConfig.subtitleColor)),
+                          const SizedBox(height: 4),
                           Text(
-                            'AVAILABLE BALANCE',
-                            style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
-                          ),
-                          Text(
-                            '\$${_mockBalance.toStringAsFixed(2)}',
-                            style: AppTextStyles.headlineSmall(AppConfig.textColor),
+                            '\$${balance.available.toStringAsFixed(2)}',
+                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
                           ),
                         ],
                       ),
                     ),
+                    Icon(Icons.account_balance_wallet_outlined, size: 32, color: AppConfig.primaryColor.withValues(alpha: 0.8)),
                   ],
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              Text(
-                'Select Top-up Amount',
-                style: AppTextStyles.titleMedium(AppConfig.textColor),
-              ),
+              Text('Select Top-up Amount', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
               const SizedBox(height: AppSpacing.sm),
               Row(
                 children: [
-                  ..._presets.asMap().entries.map((e) {
-                    final selected = !_useCustom && _selectedPresetIndex == e.key;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: AppSpacing.sm),
-                      child: Material(
-                        color: selected
-                            ? AppConfig.primaryColor.withValues(alpha: 0.15)
-                            : Colors.white,
-                        borderRadius:
-                            BorderRadius.circular(AppConfig.radiusSmall),
-                        child: InkWell(
-                          onTap: () => _selectPreset(e.key),
-                          borderRadius:
-                              BorderRadius.circular(AppConfig.radiusSmall),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.md, vertical: 12),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: selected
-                                    ? AppConfig.primaryColor
-                                    : AppConfig.borderColor,
-                              ),
-                              borderRadius:
-                                  BorderRadius.circular(AppConfig.radiusSmall),
-                            ),
-                            child: Text(
-                              '\$${e.value.toStringAsFixed(0)}',
-                              style: AppTextStyles.titleMedium(
-                                  selected
-                                      ? AppConfig.primaryColor
-                                      : AppConfig.textColor),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: TextField(
-                      controller: _customAmountController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
-                      onTap: () => setState(() {
-                        _useCustom = true;
-                        _selectedPresetIndex = -1;
-                      }),
-                      decoration: InputDecoration(
-                        hintText: '\$0.00',
-                        hintStyle:
-                            AppTextStyles.bodyMedium(AppConfig.subtitleColor),
-                        prefixText: '\$ ',
-                        border: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(AppConfig.radiusSmall),
-                          borderSide:
-                              const BorderSide(color: AppConfig.borderColor),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 12),
+                  for (var i = 0; i < _presets.length; i++) ...[
+                    if (i > 0) const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: _PresetButton(
+                        amount: _presets[i],
+                        isSelected: !_useCustom && _selectedPresetIndex == i,
+                        onTap: () => _selectPreset(i),
                       ),
                     ),
-                  ),
+                  ],
                 ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              TextField(
+                controller: _customAmountController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                onTap: () => setState(() {
+                  _useCustom = true;
+                  _selectedPresetIndex = -1;
+                }),
+                decoration: InputDecoration(
+                  prefixText: '\$ ',
+                  hintText: '0.00',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConfig.radiusSmall)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
               ),
               const SizedBox(height: AppSpacing.lg),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Payment Method',
-                    style: AppTextStyles.titleMedium(AppConfig.textColor),
-                  ),
+                  Text('Payment Method', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                   TextButton(
                     onPressed: () {},
-                    child: Text(
-                      'Change',
-                      style: AppTextStyles.label(AppConfig.primaryColor),
-                    ),
+                    child: Text('Change', style: TextStyle(color: AppConfig.primaryColor, fontWeight: FontWeight.w500)),
                   ),
                 ],
               ),
+              const SizedBox(height: AppSpacing.sm),
               Container(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
-                  border: Border.all(color: AppConfig.borderColor),
+                  color: AppConfig.cardColor,
                   borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                  border: Border.all(color: AppConfig.primaryColor, width: 2),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.credit_card, color: AppConfig.subtitleColor),
+                    Container(
+                      width: 48,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFB74D),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Center(child: Text('VISA', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700))),
+                    ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Column(
@@ -207,88 +184,73 @@ class _TopUpWalletScreenState extends State<TopUpWalletScreen> {
                         children: [
                           Row(
                             children: [
-                              Text(
-                                'Visa ending in 4242',
-                                style:
-                                    AppTextStyles.titleMedium(AppConfig.textColor),
-                              ),
-                              const SizedBox(width: AppSpacing.sm),
+                              Text('Visa ending in 4242', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                              const SizedBox(width: 8),
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: AppConfig.primaryColor
-                                      .withValues(alpha: 0.15),
+                                  color: AppConfig.successGreen.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: Text(
-                                  'DEFAULT',
-                                  style: AppTextStyles.bodySmall(
-                                      AppConfig.primaryColor),
-                                ),
+                                child: Text('DEFAULT', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppConfig.successGreen, fontWeight: FontWeight.w600)),
                               ),
                             ],
                           ),
-                          Text(
-                            'Expires 12/26',
-                            style:
-                                AppTextStyles.bodySmall(AppConfig.subtitleColor),
-                          ),
+                          Text('Expires 12/26', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor)),
                         ],
                       ),
                     ),
-                    const Icon(Icons.check_circle,
-                        color: AppConfig.primaryColor, size: 24),
+                    Icon(Icons.check_circle, color: AppConfig.primaryColor, size: 26),
                   ],
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.sm),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
-                  border: Border.all(
-                      color: Colors.orange.withValues(alpha: 0.3)),
-                  borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
-                ),
-                child: Text(
-                  'A small fee may apply depending on your payment method.',
-                  style: AppTextStyles.bodySmall(Colors.orange.shade800),
-                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.warning_amber_rounded, size: 20, color: AppConfig.warningOrange),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Selecting a different method may incur a small transaction fee from your provider.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: AppSpacing.sm),
-              TextButton.icon(
+              OutlinedButton.icon(
                 onPressed: () {},
                 icon: const Icon(Icons.add, size: 20),
                 label: const Text('ADD NEW METHOD'),
-                style: TextButton.styleFrom(
+                style: OutlinedButton.styleFrom(
                   foregroundColor: AppConfig.primaryColor,
+                  side: BorderSide(color: AppConfig.borderColor, style: BorderStyle.solid),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConfig.radiusSmall)),
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              Text(
-                'ORDER SUMMARY',
-                style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
-              ),
+              Text('ORDER SUMMARY', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppConfig.subtitleColor, fontWeight: FontWeight.w600)),
               const SizedBox(height: AppSpacing.sm),
               Container(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
-                  border: Border.all(color: AppConfig.borderColor),
+                  color: AppConfig.cardColor,
                   borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                  border: Border.all(color: AppConfig.borderColor),
                 ),
                 child: Column(
                   children: [
-                    _SummaryRow(
-                        'Top-up Amount',
-                        amount != null
-                            ? '\$${amount.toStringAsFixed(2)}'
-                            : '—'),
-                    const _SummaryRow('Payment Method', 'Visa ****4242'),
+                    _SummaryRow('Top-up Amount', amount != null ? '\$${amount.toStringAsFixed(2)}' : '—'),
+                    _SummaryRow('Payment Method', 'Visa **** 4242'),
                     const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'Protected by secure payment processing.',
-                      style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+                    Row(
+                      children: [
+                        Icon(Icons.shield_outlined, size: 18, color: AppConfig.successGreen),
+                        const SizedBox(width: 6),
+                        Text('Protected by secure payment processing', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor)),
+                      ],
                     ),
                   ],
                 ),
@@ -296,52 +258,74 @@ class _TopUpWalletScreenState extends State<TopUpWalletScreen> {
               const SizedBox(height: AppSpacing.xl),
               SizedBox(
                 height: 52,
-                child: ElevatedButton(
-                  onPressed: amount != null
-                      ? () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Top up confirmed (mock)')),
-                          );
-                          context.pop();
-                        }
-                      : null,
-                  style: ElevatedButton.styleFrom(
+                child: FilledButton.icon(
+                  onPressed: amount != null ? _confirmTopUp : null,
+                  icon: const Icon(Icons.lock_outline, size: 20),
+                  label: const Text('Confirm Top Up'),
+                  style: FilledButton.styleFrom(
                     backgroundColor: AppConfig.primaryColor,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(AppConfig.radiusSmall),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConfig.radiusSmall)),
                   ),
-                  child: const Text('Confirm Top Up'),
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.sm),
               RichText(
                 textAlign: TextAlign.center,
                 text: TextSpan(
-                  style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
                   children: [
-                    const TextSpan(text: 'By confirming, you agree to our '),
+                    const TextSpan(text: 'By clicking \'Confirm\', you authorize Zayer to charge your payment method. '),
                     WidgetSpan(
                       child: GestureDetector(
                         onTap: () {},
-                        child: const Text(
-                          'Terms of Service',
-                          style: TextStyle(
-                            color: AppConfig.primaryColor,
-                            decoration: TextDecoration.underline,
-                          ),
+                        child: Text(
+                          'View our Terms of Service.',
+                          style: TextStyle(color: AppConfig.primaryColor, decoration: TextDecoration.underline, fontSize: 12),
                         ),
                       ),
                     ),
-                    const TextSpan(text: '.'),
                   ],
                 ),
               ),
               const SizedBox(height: AppSpacing.xxl),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PresetButton extends StatelessWidget {
+  const _PresetButton({required this.amount, required this.isSelected, required this.onTap});
+
+  final double amount;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: isSelected ? AppConfig.primaryColor : AppConfig.borderColor.withValues(alpha: 0.3),
+      borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+            border: Border.all(color: isSelected ? AppConfig.primaryColor : AppConfig.borderColor),
+          ),
+          child: Center(
+            child: Text(
+              '\$${amount.toStringAsFixed(0)}',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? Colors.white : AppConfig.textColor,
+                  ),
+            ),
           ),
         ),
       ),
@@ -358,12 +342,12 @@ class _SummaryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: AppTextStyles.bodyMedium(AppConfig.subtitleColor)),
-          Text(value, style: AppTextStyles.bodyMedium(AppConfig.textColor)),
+          Text(label, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppConfig.subtitleColor)),
+          Text(value, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
         ],
       ),
     );

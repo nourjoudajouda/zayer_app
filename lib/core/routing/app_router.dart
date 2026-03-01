@@ -12,11 +12,14 @@ import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/onboarding/splash_screen.dart';
 import '../../features/cart/cart_empty_screen.dart';
 import '../../features/placeholders/cart_screen.dart';
-import '../../features/favorites/favorites_empty_screen.dart';
+import '../../features/favorites/favorites_screen.dart';
 import '../../features/markets/markets_screen.dart';
 import '../../features/checkout/review_pay_screen.dart';
 import '../../features/notifications/notification_settings_screen.dart';
 import '../../features/notifications/notifications_list_screen.dart';
+import '../../features/orders/order_detail_screen.dart';
+import '../../features/orders/order_invoice_screen.dart';
+import '../../features/orders/order_tracking_screen.dart';
 import '../../features/orders/orders_list_screen.dart';
 import '../../features/placeholders/coming_soon_screen.dart';
 import '../../features/profile/add_edit_address_screen.dart';
@@ -36,6 +39,7 @@ import '../../features/support/support_inbox_screen.dart';
 import '../../features/support/support_request_submitted_screen.dart';
 import '../../features/support/support_ticket_chat_screen.dart';
 import '../../features/wallet/top_up_wallet_screen.dart';
+import '../../features/wallet/wallet_screen.dart';
 import '../../features/settings/default_warehouse_screen.dart';
 import '../../features/settings/privacy_policy_screen.dart';
 import '../../features/paste_link/paste_product_link_screen.dart';
@@ -57,6 +61,9 @@ class AppRoutes {
   static const String favorites = '/favorites';
   static const String cart = '/cart';
   static const String orders = '/orders';
+  static const String orderDetail = '/order-detail';
+  static const String orderTracking = '/order-tracking';
+  static const String orderInvoice = '/order-invoice';
   static const String account = '/account';
   static const String storeLanding = '/store-landing';
   static const String store = '/store';
@@ -81,6 +88,7 @@ class AppRoutes {
   static const String contactSupport = '/contact-support';
   static const String supportSuccess = '/support/success';
   static const String supportTicket = '/support/ticket';
+  static const String wallet = '/wallet';
   static const String topUpWallet = '/wallet/top-up';
   static const String defaultWarehouse = '/settings/default-warehouse';
   static const String privacyPolicy = '/privacy-policy';
@@ -277,6 +285,13 @@ GoRouter _createAppRouter() {
             initialCityName: extra?['cityName'] as String?,
             initialPhone: extra?['phone'] as String?,
             initialIsDefault: extra?['isDefault'] as bool? ?? false,
+            initialNickname: extra?['nickname'] as String?,
+            initialAddressTypeIndex: extra?['addressType'] as int?,
+            initialAreaDistrict: extra?['areaDistrict'] as String?,
+            initialStreetAddress: extra?['streetAddress'] as String?,
+            initialBuildingVillaSuite: extra?['buildingVillaSuite'] as String?,
+            initialLat: (extra?['lat'] as num?)?.toDouble(),
+            initialLng: (extra?['lng'] as num?)?.toDouble(),
           );
         },
       ),
@@ -310,7 +325,7 @@ GoRouter _createAppRouter() {
       ),
       GoRoute(
         path: AppRoutes.favorites,
-        builder: (context, state) => const FavoritesEmptyScreen(),
+        builder: (context, state) => const FavoritesScreen(),
       ),
       GoRoute(
         path: AppRoutes.notificationSettings,
@@ -334,7 +349,29 @@ GoRouter _createAppRouter() {
         path: AppRoutes.contactSupport,
         builder: (context, state) {
           final orderId = state.uri.queryParameters['orderId'];
-          return ContactSupportScreen(initialOrderId: orderId);
+          final extra = state.extra as Map<String, dynamic>?;
+          return ContactSupportScreen(initialOrderId: orderId ?? extra?['orderId']?.toString());
+        },
+      ),
+      GoRoute(
+        path: '${AppRoutes.orderDetail}/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return OrderDetailScreen(orderId: id);
+        },
+      ),
+      GoRoute(
+        path: '${AppRoutes.orderTracking}/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return OrderTrackingScreen(orderId: id);
+        },
+      ),
+      GoRoute(
+        path: '${AppRoutes.orderInvoice}/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return OrderInvoiceScreen(orderId: id);
         },
       ),
       GoRoute(
@@ -350,6 +387,10 @@ GoRouter _createAppRouter() {
           final ticketId = state.uri.queryParameters['ticketId'] ?? 'SUP-882910';
           return SupportRequestSubmittedScreen(ticketId: ticketId);
         },
+      ),
+      GoRoute(
+        path: AppRoutes.wallet,
+        builder: (context, state) => const WalletScreen(),
       ),
       GoRoute(
         path: AppRoutes.topUpWallet,

@@ -37,18 +37,21 @@ class ProfileScreen extends ConsumerWidget {
       textDirection: locale.isRtl ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
         appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.of(context).maybePop(),
-          ),
+          leading: Navigator.canPop(context)
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => Navigator.of(context).pop(),
+                )
+              : null,
           title: const Text('Profile & Compliance'),
           centerTitle: true,
           actions: [
             TextButton(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Language switch coming soon')),
-                );
+                ref.read(appLocaleProvider.notifier).state =
+                    ref.read(appLocaleProvider) == AppLocale.en
+                        ? AppLocale.ar
+                        : AppLocale.en;
               },
               child: Text(locale == AppLocale.en ? 'EN' : 'AR'),
             ),
@@ -262,7 +265,7 @@ class _ProfileContent extends ConsumerWidget {
             icon: Icons.account_balance_wallet_outlined,
             title: 'Wallet',
             subtitle: 'Top up balance',
-            onTap: () => context.push(AppRoutes.topUpWallet),
+            onTap: () => context.push(AppRoutes.wallet),
           ),
           const SizedBox(height: AppSpacing.xl),
           OutlinedButton(

@@ -30,6 +30,7 @@ class MarketItem {
   final String id;
   final String name;
   final String? imageUrl;
+  /// Display string e.g. "250+ stores" or "12 stores" (real count when from API).
   final String storeCount;
   /// ISO country code for Markets filter (e.g. US, TR).
   final String? countryCode;
@@ -41,11 +42,14 @@ class StoreItem {
     required this.name,
     required this.category,
     this.logoUrl,
+    this.marketId,
   });
   final String id;
   final String name;
   final String category;
   final String? logoUrl;
+  /// Market id this store belongs to (e.g. 'usa', 'turkey') for real store count.
+  final String? marketId;
 }
 
 final homeUserGreetingProvider = Provider<String>((_) => 'Hazem');
@@ -72,18 +76,36 @@ final promoBannersProvider = Provider<List<PromoBanner>>((_) => [
   ),
 ]);
 
-final homeMarketsProvider = Provider<List<MarketItem>>((_) => [
-  const MarketItem(id: 'usa', name: 'USA', imageUrl: null, storeCount: '250+ stores', countryCode: 'US'),
-  const MarketItem(id: 'turkey', name: 'Turkey', imageUrl: null, storeCount: '180+ stores', countryCode: 'TR'),
-  const MarketItem(id: 'uae', name: 'UAE', imageUrl: null, storeCount: '120+ stores', countryCode: 'AE'),
-  const MarketItem(id: 'uk', name: 'UK', imageUrl: null, storeCount: '200+ stores', countryCode: 'UK'),
-]);
+/// Base list of markets (storeCount overwritten with real count from stores).
+const List<MarketItem> _marketsBase = [
+  MarketItem(id: 'usa', name: 'USA', imageUrl: null, storeCount: '0', countryCode: 'US'),
+  MarketItem(id: 'turkey', name: 'Turkey', imageUrl: null, storeCount: '0', countryCode: 'TR'),
+  MarketItem(id: 'uae', name: 'UAE', imageUrl: null, storeCount: '0', countryCode: 'AE'),
+  MarketItem(id: 'uk', name: 'UK', imageUrl: null, storeCount: '0', countryCode: 'UK'),
+];
 
 final homeStoresProvider = Provider<List<StoreItem>>((_) => [
-  const StoreItem(id: 'amazon', name: 'Amazon', category: 'GLOBAL SHOP', logoUrl: null),
-  const StoreItem(id: 'zara', name: 'Zara', category: 'FASHION', logoUrl: null),
-  const StoreItem(id: 'nike', name: 'Nike', category: 'SPORTSWEAR', logoUrl: null),
-  const StoreItem(id: 'sephora', name: 'Sephora', category: 'BEAUTY', logoUrl: null),
+  const StoreItem(id: 'amazon', name: 'Amazon', category: 'GLOBAL SHOP', logoUrl: null, marketId: 'usa'),
+  const StoreItem(id: 'zara', name: 'Zara', category: 'FASHION', logoUrl: null, marketId: 'turkey'),
+  const StoreItem(id: 'nike', name: 'Nike', category: 'SPORTSWEAR', logoUrl: null, marketId: 'usa'),
+  const StoreItem(id: 'sephora', name: 'Sephora', category: 'BEAUTY', logoUrl: null, marketId: 'usa'),
+  const StoreItem(id: 'noon', name: 'Noon', category: 'MARKETPLACE', logoUrl: null, marketId: 'uae'),
+  const StoreItem(id: 'asos', name: 'ASOS', category: 'FASHION', logoUrl: null, marketId: 'uk'),
 ]);
+
+/// Markets with real store count: each market shows the number of stores linked to it.
+final homeMarketsProvider = Provider<List<MarketItem>>((ref) {
+  final stores = ref.watch(homeStoresProvider);
+  return _marketsBase.map((m) {
+    final count = stores.where((s) => s.marketId == m.id).length;
+    return MarketItem(
+      id: m.id,
+      name: m.name,
+      imageUrl: m.imageUrl,
+      storeCount: count == 1 ? '1 store' : '$count stores',
+      countryCode: m.countryCode,
+    );
+  }).toList();
+});
 
 final cartBadgeCountProvider = StateProvider<int>((_) => 2);

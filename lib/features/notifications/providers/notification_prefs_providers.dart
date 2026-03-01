@@ -33,6 +33,18 @@ class NotificationPrefsNotifier extends StateNotifier<NotificationPrefsModel?> {
     state = (state ?? const NotificationPrefsModel()).copyWith(emailEnabled: value);
   }
 
+  void setSms(bool value) {
+    state = (state ?? const NotificationPrefsModel()).copyWith(smsEnabled: value);
+  }
+
+  void setLiveStatusUpdates(bool value) {
+    state = (state ?? const NotificationPrefsModel()).copyWith(liveStatusUpdates: value);
+  }
+
+  void setSmartFilter(bool value) {
+    state = (state ?? const NotificationPrefsModel()).copyWith(smartFilter: value);
+  }
+
   void setOrderUpdates(bool value) {
     state = (state ?? const NotificationPrefsModel()).copyWith(orderUpdates: value);
   }
@@ -45,12 +57,32 @@ class NotificationPrefsNotifier extends StateNotifier<NotificationPrefsModel?> {
     state = (state ?? const NotificationPrefsModel()).copyWith(customsCompliance: value);
   }
 
+  void setDutyTaxPayments(bool value) {
+    state = (state ?? const NotificationPrefsModel()).copyWith(dutyTaxPayments: value);
+  }
+
+  void setDocumentRequests(bool value) {
+    state = (state ?? const NotificationPrefsModel()).copyWith(documentRequests: value);
+  }
+
+  void setPaymentFailed(bool value) {
+    state = (state ?? const NotificationPrefsModel()).copyWith(paymentFailed: value);
+  }
+
   void setPaymentReminders(bool value) {
     state = (state ?? const NotificationPrefsModel()).copyWith(paymentReminders: value);
   }
 
   void setPromotions(bool value) {
     state = (state ?? const NotificationPrefsModel()).copyWith(promotions: value);
+  }
+
+  void setMuteAllMarketing(bool value) {
+    state = (state ?? const NotificationPrefsModel()).copyWith(muteAllMarketing: value);
+  }
+
+  void setQuietHoursEnabled(bool value) {
+    state = (state ?? const NotificationPrefsModel()).copyWith(quietHoursEnabled: value);
   }
 
   void setQuietHours(String from, String to) {

@@ -1,0 +1,10 @@
+---
+description: Do not create or save plan files in this project
+alwaysApply: true
+---
+
+# No Plan Files
+
+- Do **not** create, save, or write plan files (e.g. to `.cursor/plans` or any `.plan.md`).
+- Do **not** use plan mode or any create_plan / save-plan tool.
+- Work directly: propose steps in chat and apply changes without generating persistent plan documents.

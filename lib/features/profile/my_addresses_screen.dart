@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/routing/app_router.dart';
@@ -20,6 +22,7 @@ class MyAddressesScreen extends ConsumerWidget {
     final addressesAsync = ref.watch(addressesProvider);
 
     return Scaffold(
+      backgroundColor: AppConfig.backgroundColor,
       appBar: AppBar(
         title: const Text('My Addresses'),
         centerTitle: true,
@@ -42,24 +45,36 @@ class _MyAddressesContent extends ConsumerWidget {
   final List<Address> addresses;
 
   Future<void> _onEdit(BuildContext context, WidgetRef ref, Address address) async {
+    if (address.isLocked) return;
     final saved = await context.push<bool>(
       AppRoutes.addEditAddress,
-      extra: <String, dynamic>{
-        'isEdit': true,
-        'addressId': address.id,
-        'address': address.addressLine,
-        'countryId': address.countryId,
-        'countryName': address.countryName,
-        'cityId': address.cityId,
-        'cityName': address.cityName,
-        'phone': address.phone,
-        'isDefault': address.isDefault,
-      },
+      extra: _addressToExtra(address),
     );
     if (context.mounted && saved == true) {
       ref.invalidate(addressesProvider);
       context.pop(true);
     }
+  }
+
+  Map<String, dynamic> _addressToExtra(Address address) {
+    return <String, dynamic>{
+      'isEdit': true,
+      'addressId': address.id,
+      'address': address.addressLine,
+      'countryId': address.countryId,
+      'countryName': address.countryName,
+      'cityId': address.cityId,
+      'cityName': address.cityName,
+      'phone': address.phone,
+      'isDefault': address.isDefault,
+      'nickname': address.nickname,
+      'addressType': address.addressType.index,
+      'areaDistrict': address.areaDistrict,
+      'streetAddress': address.streetAddress,
+      'buildingVillaSuite': address.buildingVillaSuite,
+      'lat': address.lat,
+      'lng': address.lng,
+    };
   }
 
   Future<void> _onAddNew(BuildContext context, WidgetRef ref) async {
@@ -81,8 +96,18 @@ class _MyAddressesContent extends ConsumerWidget {
     }
   }
 
+  void _onCopy(BuildContext context, Address address) {
+    Clipboard.setData(ClipboardData(text: address.addressLine));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Address copied')));
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final defaultAddress = addresses.where((a) => a.isDefault).firstOrNull;
+    final otherAddresses = addresses.where((a) => !a.isDefault).toList();
+
     if (addresses.isEmpty) {
       return Center(
         child: Padding(
@@ -111,100 +136,65 @@ class _MyAddressesContent extends ConsumerWidget {
         ),
       );
     }
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'SAVED ADDRESSES',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: AppConfig.subtitleColor,
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          ...addresses.map((address) => Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                child: ActionCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          if (address.countryName.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppConfig.borderColor.withValues(alpha: 0.5),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                address.countryName,
-                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                      color: AppConfig.subtitleColor,
-                                    ),
-                              ),
-                            ),
-                          if (address.countryName.isNotEmpty) const SizedBox(width: 8),
-                          if (address.isDefault)
-                            BadgePill(
-                              label: 'DEFAULT',
-                              icon: Icons.star,
-                              color: AppConfig.primaryColor,
-                            ),
-                          const Spacer(),
-                          TextButton.icon(
-                            onPressed: () => _onEdit(context, ref, address),
-                            icon: const Icon(Icons.edit_outlined, size: 18),
-                            label: const Text('Edit'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        address.addressLine,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppConfig.textColor,
-                            ),
-                      ),
-                      if (address.cityName != null && address.cityName!.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          address.cityName!,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppConfig.subtitleColor,
-                              ),
-                        ),
-                      ],
-                      if (address.phone != null && address.phone!.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(Icons.phone_outlined, size: 16, color: AppConfig.subtitleColor),
-                            const SizedBox(width: 6),
-                            Text(
-                              address.phone!,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: AppConfig.subtitleColor,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ],
-                      if (!address.isDefault) ...[
-                        const SizedBox(height: AppSpacing.sm),
-                        TextButton.icon(
-                          onPressed: () => _onSetDefault(context, ref, address.id),
-                          icon: const Icon(Icons.star_border, size: 18),
-                          label: const Text('Set as default'),
-                        ),
-                      ],
-                    ],
+          // PRIMARY RESIDENCE
+          if (defaultAddress != null) ...[
+            Text(
+              'PRIMARY RESIDENCE',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AppConfig.subtitleColor,
+                    fontWeight: FontWeight.w600,
                   ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _PrimaryResidenceCard(
+              address: defaultAddress,
+              onEdit: () => _onEdit(context, ref, defaultAddress),
+              onSetDefault: () => _onSetDefault(context, ref, defaultAddress.id),
+              onCopy: () => _onCopy(context, defaultAddress),
+              onUsage: () {},
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
+          // OTHER LOCATIONS
+          if (otherAddresses.isNotEmpty) ...[
+            Text(
+              'OTHER LOCATIONS',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AppConfig.subtitleColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            ...otherAddresses.map((address) => Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                  child: _OtherLocationCard(
+                    address: address,
+                    onEdit: address.isLocked ? null : () => _onEdit(context, ref, address),
+                  ),
+                )),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          // Legal & Logistics Policy
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, size: 20, color: AppConfig.subtitleColor),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  'Legal & Logistics Policy: Addresses linked to active orders or customs clearance processes cannot be modified until delivery is complete. Changes to addresses may impact regional pricing, tax calculations, and shipping timelines.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
                 ),
-              )),
-          const SizedBox(height: AppSpacing.lg),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xl),
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
@@ -215,6 +205,256 @@ class _MyAddressesContent extends ConsumerWidget {
                 backgroundColor: AppConfig.primaryColor,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrimaryResidenceCard extends StatelessWidget {
+  const _PrimaryResidenceCard({
+    required this.address,
+    required this.onEdit,
+    required this.onSetDefault,
+    required this.onCopy,
+    required this.onUsage,
+  });
+
+  final Address address;
+  final VoidCallback onEdit;
+  final VoidCallback onSetDefault;
+  final VoidCallback onCopy;
+  final VoidCallback onUsage;
+
+  @override
+  Widget build(BuildContext context) {
+    return ActionCard(
+      padding: EdgeInsets.zero,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Map
+            Stack(
+              alignment: Alignment.topLeft,
+              children: [
+                SizedBox(
+                  height: 140,
+                  width: double.infinity,
+                  child: address.lat != null && address.lng != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.zero,
+                          child: GoogleMap(
+                            initialCameraPosition: CameraPosition(
+                              target: LatLng(address.lat!, address.lng!),
+                              zoom: 14,
+                            ),
+                            markers: {
+                              Marker(
+                                markerId: const MarkerId('addr'),
+                                position: LatLng(address.lat!, address.lng!),
+                              ),
+                            },
+                            zoomControlsEnabled: false,
+                            scrollGesturesEnabled: false,
+                            zoomGesturesEnabled: false,
+                            myLocationButtonEnabled: false,
+                            liteModeEnabled: true,
+                          ),
+                        )
+                      : Container(
+                          color: AppConfig.borderColor.withValues(alpha: 0.5),
+                          child: Center(
+                            child: Icon(Icons.map_outlined, size: 48, color: AppConfig.subtitleColor),
+                          ),
+                        ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  child: BadgePill(
+                    label: 'DEFAULT',
+                    icon: Icons.star,
+                    color: AppConfig.primaryColor,
+                  ),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          address.displayTitle,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: AppConfig.textColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: onEdit,
+                        icon: const Icon(Icons.edit_outlined),
+                        color: AppConfig.primaryColor,
+                        iconSize: 22,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    address.addressLine,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppConfig.subtitleColor),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.xs,
+                    children: [
+                      if (address.isVerified)
+                        BadgePill(label: 'VERIFIED', icon: Icons.check_circle_outline, color: AppConfig.successGreen),
+                      if (address.isResidential)
+                        BadgePill(label: 'RESIDENTIAL', icon: Icons.home_outlined, color: AppConfig.primaryColor),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      _ActionChip(icon: Icons.check_circle_outline, label: 'Default', onTap: onSetDefault),
+                      const SizedBox(width: AppSpacing.md),
+                      _ActionChip(icon: Icons.copy_outlined, label: 'Copy', onTap: onCopy),
+                      const SizedBox(width: AppSpacing.md),
+                      _ActionChip(icon: Icons.history, label: 'Usage', onTap: onUsage),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionChip extends StatelessWidget {
+  const _ActionChip({required this.icon, required this.label, required this.onTap});
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: AppConfig.subtitleColor),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OtherLocationCard extends StatelessWidget {
+  const _OtherLocationCard({required this.address, this.onEdit});
+
+  final Address address;
+  final VoidCallback? onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = address.addressType == AddressType.office
+        ? Icons.work_outline
+        : address.addressType == AddressType.home
+            ? Icons.home_outlined
+            : Icons.warehouse_outlined;
+
+    return ActionCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppConfig.borderColor.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: AppConfig.subtitleColor),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        address.displayTitle,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: AppConfig.textColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ),
+                    if (onEdit != null)
+                      IconButton(
+                        onPressed: onEdit,
+                        icon: const Icon(Icons.edit_outlined),
+                        color: AppConfig.primaryColor,
+                        iconSize: 20,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      )
+                    else
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.lock_outline, size: 20, color: AppConfig.subtitleColor),
+                          Text(
+                            'LOCKED',
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: AppConfig.subtitleColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  address.addressLine,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
+                ),
+                if (address.linkedToActiveOrder) ...[
+                  const SizedBox(height: 8),
+                  BadgePill(
+                    label: 'LINKED TO ACTIVE ORDER',
+                    icon: Icons.local_shipping_outlined,
+                    color: AppConfig.warningOrange,
+                  ),
+                ],
+              ],
             ),
           ),
         ],
