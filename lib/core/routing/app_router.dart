@@ -45,6 +45,8 @@ import '../../features/settings/privacy_policy_screen.dart';
 import '../../features/paste_link/paste_product_link_screen.dart';
 import '../../features/product_import/confirm_product_screen.dart';
 import '../../features/store_webview/models/detected_product.dart';
+import '../../features/development/dev_mode_screen.dart';
+import '../../features/development/under_development_screen.dart';
 import '../../features/store_landing/store_landing_screen.dart';
 import '../../features/store_webview/store_webview_screen.dart';
 
@@ -92,6 +94,8 @@ class AppRoutes {
   static const String topUpWallet = '/wallet/top-up';
   static const String defaultWarehouse = '/settings/default-warehouse';
   static const String privacyPolicy = '/privacy-policy';
+  static const String devMode = '/dev';
+  static const String underDevelopment = '/under-development';
 }
 
 final GoRouter appRouter = _createAppRouter();
@@ -120,12 +124,26 @@ GoRouter _createAppRouter() {
         path: AppRoutes.otp,
         builder: (context, state) {
           final mode = state.uri.queryParameters['mode'] ?? 'signup';
-          return OtpScreen(mode: mode);
+          final phone = state.uri.queryParameters['phone'] ?? '';
+          final devOtp = state.uri.queryParameters['dev_otp'];
+          return OtpScreen(
+            mode: mode,
+            initialPhone: phone,
+            devOtp: devOtp,
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.forgotPassword,
         builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.devMode,
+        builder: (context, state) => const DevModeScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.underDevelopment,
+        builder: (context, state) => const UnderDevelopmentScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) => MainShell(

@@ -1,10 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
+import 'models/auth_result.dart';
+import 'providers/auth_providers.dart';
 import '../../core/localization/app_locale.dart';
 import '../../core/localization/locale_provider.dart';
 import '../../core/routing/app_router.dart';
@@ -13,18 +16,31 @@ import '../../core/theme/app_text_styles.dart';
 import '../../generated/l10n/app_localizations.dart';
 
 class OtpScreen extends ConsumerStatefulWidget {
-  const OtpScreen({super.key, this.mode = 'signup'});
+  const OtpScreen({
+    super.key,
+    this.mode = 'signup',
+    this.initialPhone = '',
+    this.devOtp,
+  });
 
   /// signup | reset
   final String mode;
+  /// Phone number from previous screen (register/forgot)
+  final String initialPhone;
+  /// When in debug mode, OTP returned by API (e.g. from register/forgot) to show on screen.
+  final String? devOtp;
 
   @override
   ConsumerState<OtpScreen> createState() => _OtpScreenState();
 }
 
 class _OtpScreenState extends ConsumerState<OtpScreen> {
+  final _formKey = GlobalKey<FormState>();
   final List<TextEditingController> _controllers = List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
+  final _passwordController = TextEditingController();
+  final _passwordConfirmController = TextEditingController();
+  bool _obscurePassword = true;
   int _resendSeconds = 55;
   Timer? _timer;
 
@@ -32,11 +48,24 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
   void initState() {
     super.initState();
     _startResendTimer();
+    if (kDebugMode && widget.devOtp != null && widget.devOtp!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final digits = widget.devOtp!.replaceAll(RegExp(r'\D'), '');
+        final code = digits.length >= 6
+            ? digits.substring(0, 6)
+            : digits.padRight(6, '0');
+        for (var i = 0; i < 6 && i < _controllers.length; i++) {
+          _controllers[i].text = code[i];
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _passwordController.dispose();
+    _passwordConfirmController.dispose();
     for (final c in _controllers) {
       c.dispose();
     }
@@ -44,6 +73,13 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       f.dispose();
     }
     super.dispose();
+  }
+
+  String _maskPhone(String phone) {
+    if (phone.isEmpty) return '••• ••• ••••';
+    final len = phone.length;
+    if (len <= 4) return '••• $phone';
+    return '••• ••• ••${phone.substring(len - 4)}';
   }
 
   void _startResendTimer() {
@@ -58,10 +94,31 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     });
   }
 
-  void _verify() {
+  Future<void> _verify() async {
     final otp = _controllers.map((c) => c.text).join();
-    if (otp.length == 6) {
-      context.go(AppRoutes.home);
+    if (otp.length != 6) return;
+    if (widget.mode == 'reset' && !(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    final repo = ref.read(authRepositoryProvider);
+    final result = await repo.verifyOtp(
+      phone: widget.initialPhone,
+      code: otp,
+      mode: widget.mode,
+      password: widget.mode == 'reset' ? _passwordController.text : null,
+      passwordConfirmation:
+          widget.mode == 'reset' ? _passwordConfirmController.text : null,
+    );
+    if (!mounted) return;
+    switch (result) {
+      case AuthSuccess():
+        context.go(AppRoutes.home);
+      case AuthRequiresOtp():
+        break;
+      case AuthFailure(:final message):
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
     }
   }
 
@@ -103,10 +160,12 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                     ),
                   ],
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                     Row(
                       children: [
                         IconButton(
@@ -137,9 +196,49 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     _PhonePreviewRow(
-                      phone: '+1 234 ••• ••89',
+                      phone: _maskPhone(widget.initialPhone),
                       onEdit: () => context.pop(),
                     ),
+                    if (kDebugMode && widget.devOtp != null && widget.devOtp!.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      _DevOtpBanner(otp: widget.devOtp!),
+                    ],
+                    if (widget.mode == 'reset') ...[
+                      const SizedBox(height: AppSpacing.lg),
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        decoration: InputDecoration(
+                          labelText: l10n.password,
+                          hintText: l10n.passwordHint,
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                            ),
+                            onPressed: () =>
+                                setState(() => _obscurePassword = !_obscurePassword),
+                          ),
+                        ),
+                        validator: (v) =>
+                            v == null || v.isEmpty ? l10n.pleaseEnterPassword : null,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      TextFormField(
+                        controller: _passwordConfirmController,
+                        obscureText: _obscurePassword,
+                        decoration: InputDecoration(
+                          labelText: l10n.confirmPassword,
+                          hintText: l10n.passwordHint,
+                        ),
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return l10n.pleaseEnterPassword;
+                          if (v != _passwordController.text) return 'Passwords do not match';
+                          return null;
+                        },
+                      ),
+                    ],
                     const SizedBox(height: AppSpacing.xl),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -188,6 +287,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                       textAlign: TextAlign.center,
                     ),
                   ],
+                ),
                 ),
               ),
             ),
@@ -291,6 +391,55 @@ class _TimerBox extends StatelessWidget {
       child: Text(
         value.toString().padLeft(2, '0'),
         style: AppTextStyles.titleMedium(AppConfig.textColor),
+      ),
+    );
+  }
+}
+
+/// Shows OTP on screen in debug mode when API returns it (no SMS needed).
+class _DevOtpBanner extends StatelessWidget {
+  const _DevOtpBanner({required this.otp});
+
+  final String otp;
+
+  @override
+  Widget build(BuildContext context) {
+    final digits = otp.replaceAll(RegExp(r'\D'), '');
+    final code = digits.length >= 6
+        ? digits.substring(0, 6)
+        : digits.padRight(6, '0');
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppConfig.successGreen.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+        border: Border.all(color: AppConfig.successGreen.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.bug_report_outlined, color: AppConfig.successGreen, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Dev: OTP',
+                  style: AppTextStyles.label(AppConfig.subtitleColor),
+                ),
+                const SizedBox(height: 4),
+                SelectableText(
+                  code,
+                  style: AppTextStyles.titleLarge(AppConfig.textColor).copyWith(
+                    letterSpacing: 8,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

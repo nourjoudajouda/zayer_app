@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/localization/app_locale.dart';
+import 'models/auth_result.dart';
+import 'models/country_city.dart';
+import 'providers/auth_providers.dart';
 import '../../core/localization/locale_provider.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
@@ -23,11 +27,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
-  String? _selectedCountry;
-  String? _selectedCity;
+  String _countryCode = '966';
+  String? _selectedCountryId;
+  String? _selectedCityId;
+  List<CountryItem> _countries = [];
+  List<CityItem> _cities = [];
+  bool _loadingCountries = true;
+  bool _loadingCities = false;
 
-  static const List<String> _countries = ['United States', 'Saudi Arabia', 'Egypt', 'UAE'];
-  static const List<String> _cities = ['New York', 'Riyadh', 'Cairo', 'Dubai'];
+  @override
+  void initState() {
+    super.initState();
+    _loadCountries();
+  }
 
   @override
   void dispose() {
@@ -37,9 +49,65 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     super.dispose();
   }
 
-  void _createAccount() {
-    if (_formKey.currentState?.validate() ?? false) {
-      context.go(AppRoutes.otp);
+  Future<void> _loadCountries() async {
+    final repo = ref.read(authRepositoryProvider);
+    final list = await repo.getCountries();
+    if (mounted) setState(() {
+      _countries = list;
+      _loadingCountries = false;
+      if (_selectedCountryId == null && list.isNotEmpty) {
+        _selectedCountryId = list.first.id;
+        _countryCode = list.first.dialCode.isNotEmpty ? list.first.dialCode : '966';
+      }
+    });
+  }
+
+  Future<void> _loadCities(String? countryId) async {
+    if (countryId == null || countryId.isEmpty) {
+      setState(() {
+        _cities = [];
+        _loadingCities = false;
+      });
+      return;
+    }
+    setState(() {
+      _loadingCities = true;
+      _cities = [];
+      _selectedCityId = null;
+    });
+    final repo = ref.read(authRepositoryProvider);
+    final list = await repo.getCities(countryId: countryId);
+    if (mounted) setState(() {
+      _cities = list;
+      _loadingCities = false;
+    });
+  }
+
+  Future<void> _createAccount() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final digits = _phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
+    final phone = _countryCode + digits;
+    if (phone.isEmpty) return;
+    final repo = ref.read(authRepositoryProvider);
+    final result = await repo.register(
+      phone: phone,
+      fullName: _fullNameController.text.trim(),
+      password: _passwordController.text,
+      countryId: _selectedCountryId,
+      cityId: _selectedCityId,
+    );
+    if (!mounted) return;
+    switch (result) {
+      case AuthSuccess():
+        context.go(AppRoutes.home);
+      case AuthRequiresOtp(:final phone, :final devOtp):
+        var path = '${AppRoutes.otp}?phone=${Uri.encodeComponent(phone)}&mode=signup';
+        if (devOtp != null && devOtp.isNotEmpty) {
+          path += '&dev_otp=${Uri.encodeComponent(devOtp)}';
+        }
+        context.go(path);
+      case AuthFailure(:final message):
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -98,23 +166,41 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SizedBox(
-                      width: 100,
-                      child: DropdownButtonFormField<String>(
-                        value: null,
+                      width: 120,
+                      child: DropdownButtonFormField<String?>(
+                        value: _selectedCountryId,
                         decoration: InputDecoration(
                           labelText: '',
-                          hintText: '+1',
+                          hintText: '+966',
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 12,
                             vertical: 14,
                           ),
                         ),
-                        items: const [
-                          DropdownMenuItem(value: '+1', child: Text('+1')),
-                          DropdownMenuItem(value: '+966', child: Text('+966')),
-                          DropdownMenuItem(value: '+20', child: Text('+20')),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('—'),
+                          ),
+                          ..._countries.map(
+                            (c) => DropdownMenuItem<String?>(
+                              value: c.id,
+                              child: Text('${c.flagEmoji} +${c.dialCode.isNotEmpty ? c.dialCode : c.id}'),
+                            ),
+                          ),
                         ],
-                        onChanged: (_) {},
+                        onChanged: (v) {
+                          setState(() {
+                            _selectedCountryId = v;
+                            _selectedCityId = null;
+                            final idx = v != null ? _countries.indexWhere((c) => c.id == v) : -1;
+                            final country = idx >= 0 ? _countries[idx] : null;
+                            _countryCode = (country != null && country.dialCode.isNotEmpty)
+                                ? country.dialCode
+                                : '966';
+                            if (v != null && v.isNotEmpty) _loadCities(v);
+                          });
+                        },
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -122,19 +208,25 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       child: TextFormField(
                         controller: _phoneController,
                         keyboardType: TextInputType.phone,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
                         decoration: InputDecoration(
                           labelText: l10n.phoneNumber,
                           hintText: l10n.phoneNumberHint,
                         ),
-                        validator: (v) =>
-                            v?.trim().isEmpty ?? true ? l10n.pleaseEnterPhone : null,
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return l10n.pleaseEnterPhone;
+                          if (v.replaceAll(RegExp(r'\d'), '').isNotEmpty) return l10n.pleaseEnterPhone;
+                          return null;
+                        },
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
                 DropdownButtonFormField<String?>(
-                  value: _selectedCountry,
+                  value: _selectedCountryId,
                   decoration: InputDecoration(
                     labelText: l10n.country,
                     hintText: l10n.country,
@@ -142,34 +234,62 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   items: [
                     DropdownMenuItem<String?>(
                       value: null,
-                      child: Text(l10n.country),
+                      child: Text('— ${l10n.country} —'),
                     ),
                     ..._countries.map(
-                      (c) => DropdownMenuItem<String?>(value: c, child: Text(c)),
-                    ),
+                      (c) => DropdownMenuItem<String?>(
+                        value: c.id,
+                        child: Text('${c.flagEmoji} ${c.name}'.trim()),
+                      ),
+                    ).toList(),
                   ],
-                  onChanged: (v) => setState(() => _selectedCountry = v),
-                  validator: (v) =>
-                      v == null ? l10n.pleaseSelectCountry : null,
+                  onChanged: (v) {
+                    setState(() {
+                      _selectedCountryId = v;
+                      _selectedCityId = null;
+                      final idx = v != null ? _countries.indexWhere((c) => c.id == v) : -1;
+                      final country = idx >= 0 ? _countries[idx] : null;
+                      _countryCode = (country != null && country.dialCode.isNotEmpty)
+                          ? country.dialCode
+                          : '966';
+                      if (v != null && v.isNotEmpty) _loadCities(v);
+                    });
+                  },
                 ),
                 const SizedBox(height: AppSpacing.md),
                 DropdownButtonFormField<String?>(
-                  value: _selectedCity,
+                  value: _loadingCities ? null : _selectedCityId,
                   decoration: InputDecoration(
                     labelText: l10n.city,
-                    hintText: l10n.city,
+                    hintText: _loadingCities ? '' : l10n.city,
+                    suffixIcon: _loadingCities
+                        ? const Padding(
+                            padding: EdgeInsets.only(right: 12),
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : null,
                   ),
                   items: [
                     DropdownMenuItem<String?>(
                       value: null,
-                      child: Text(l10n.city),
+                      child: Text(
+                        _loadingCities ? '…' : '— ${l10n.city} —',
+                      ),
                     ),
                     ..._cities.map(
-                      (c) => DropdownMenuItem<String?>(value: c, child: Text(c)),
+                      (c) => DropdownMenuItem<String?>(
+                        value: c.id,
+                        child: Text(c.name),
+                      ),
                     ),
                   ],
-                  onChanged: (v) => setState(() => _selectedCity = v),
-                  validator: (v) => v == null ? l10n.pleaseSelectCity : null,
+                  onChanged: _loadingCities
+                      ? null
+                      : (v) => setState(() => _selectedCityId = v),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 TextFormField(
@@ -188,8 +308,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
-                  validator: (v) =>
-                      v == null || v.isEmpty ? l10n.pleaseEnterPassword : null,
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return l10n.pleaseEnterPassword;
+                    if (v.length < 8) return l10n.passwordReq8Chars;
+                    if (!RegExp(r'[0-9]').hasMatch(v)) return l10n.passwordReqNumber;
+                    if (!RegExp(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/`~]').hasMatch(v)) return l10n.passwordReqSpecial;
+                    return null;
+                  },
                 ),
                 const SizedBox(height: AppSpacing.md),
                 _PasswordRequirements(l10n: l10n),

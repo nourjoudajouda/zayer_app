@@ -4,10 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/address_model.dart';
 import '../models/user_profile_model.dart';
+import '../../auth/providers/auth_providers.dart';
 import '../repositories/address_repository.dart';
+import '../repositories/address_repository_impl.dart';
 import '../repositories/profile_repository.dart';
+import '../repositories/profile_repository_impl.dart';
 
-final profileRepositoryProvider = Provider<ProfileRepository>((_) => ProfileRepository());
+final profileRepositoryProvider = Provider<ProfileRepository>((_) => ProfileRepositoryImpl());
 
 final userProfileProvider = FutureProvider<UserProfile>((ref) async {
   return ref.read(profileRepositoryProvider).getProfile();
@@ -21,7 +24,9 @@ final complianceStatusProvider = FutureProvider<ComplianceStatus>((ref) async {
 final avatarImageProvider = StateProvider<(File?, int)>((_) => (null, 0));
 
 // --- Addresses (from backend)
-final addressRepositoryProvider = Provider<AddressRepository>((_) => AddressRepository());
+final addressRepositoryProvider = Provider<AddressRepository>((ref) {
+  return AddressRepositoryImpl(authRepo: ref.watch(authRepositoryProvider));
+});
 
 final countriesProvider = FutureProvider<List<CountryOption>>((ref) async {
   return ref.read(addressRepositoryProvider).getCountries();

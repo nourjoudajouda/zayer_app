@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
@@ -7,80 +8,28 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/widgets/empty_state_scaffold.dart';
 import 'models/notification_item.dart';
+import 'providers/notifications_list_provider.dart';
 
-/// Notifications list with filters (All | Orders | Shipments | Promo) and sections
-/// IMPORTANT, TODAY, YESTERDAY. Shows empty state when no items.
-class NotificationsListScreen extends StatefulWidget {
+/// Notifications list with filters (All | Orders | Shipments | Promo) and sections.
+/// Data from GET /api/notifications.
+class NotificationsListScreen extends ConsumerStatefulWidget {
   const NotificationsListScreen({super.key});
 
   @override
-  State<NotificationsListScreen> createState() => _NotificationsListScreenState();
+  ConsumerState<NotificationsListScreen> createState() =>
+      _NotificationsListScreenState();
 }
 
-class _NotificationsListScreenState extends State<NotificationsListScreen> {
+class _NotificationsListScreenState
+    extends ConsumerState<NotificationsListScreen> {
   NotificationFilterType _filter = NotificationFilterType.all;
-  late List<NotificationItem> _items;
 
-  @override
-  void initState() {
-    super.initState();
-    _items = _mockNotifications();
-  }
-
-  static List<NotificationItem> _mockNotifications() {
-    return [
-      const NotificationItem(
-        id: '1',
-        type: NotificationFilterType.shipments,
-        title: 'Customs Issue: Package #ZY-9902',
-        subtitle: 'Action required. Please provide additional details to clear your package.',
-        timeAgo: 'Now',
-        read: false,
-        important: true,
-        actionLabel: 'Resolve Now',
-        actionRoute: null,
-      ),
-      const NotificationItem(
-        id: '2',
-        type: NotificationFilterType.shipments,
-        title: 'Shipment Out for Delivery',
-        subtitle: 'Order #ZY-9901 is out for delivery today.',
-        timeAgo: '2h ago',
-        read: false,
-      ),
-      const NotificationItem(
-        id: '3',
-        type: NotificationFilterType.orders,
-        title: 'Order Confirmed',
-        subtitle: 'Your order #ZY-9903 has been confirmed.',
-        timeAgo: '5h ago',
-        read: false,
-      ),
-      const NotificationItem(
-        id: '4',
-        type: NotificationFilterType.promo,
-        title: 'Price Drop Alert',
-        subtitle: 'Items in your wishlist have dropped in price.',
-        timeAgo: 'Yesterday',
-        read: true,
-      ),
-      const NotificationItem(
-        id: '5',
-        type: NotificationFilterType.shipments,
-        title: 'Monthly Logistics Summary',
-        subtitle: 'Your January shipping summary is ready.',
-        timeAgo: 'Yesterday',
-        read: true,
-      ),
-    ];
-  }
-
-  List<NotificationItem> get _important =>
-      _items.where((e) => e.important).toList();
-  List<NotificationItem> get _today =>
-      _items.where((e) => e.timeAgo.contains('h') || e.timeAgo == 'Now').toList();
-  List<NotificationItem> get _yesterday =>
-      _items.where((e) => e.timeAgo == 'Yesterday').toList();
+  static List<NotificationItem> _importantFrom(List<NotificationItem> items) =>
+      items.where((e) => e.important).toList();
+  static List<NotificationItem> _todayFrom(List<NotificationItem> items) =>
+      items.where((e) => e.timeAgo.contains('h') || e.timeAgo == 'Now').toList();
+  static List<NotificationItem> _yesterdayFrom(List<NotificationItem> items) =>
+      items.where((e) => e.timeAgo == 'Yesterday').toList();
 
   List<NotificationItem> _byFilter(List<NotificationItem> list) {
     switch (_filter) {
@@ -96,24 +45,41 @@ class _NotificationsListScreenState extends State<NotificationsListScreen> {
   }
 
   void _markAllRead() {
-    setState(() {
-      _items = _items.map((e) => NotificationItem(
-            id: e.id,
-            type: e.type,
-            title: e.title,
-            subtitle: e.subtitle,
-            timeAgo: e.timeAgo,
-            read: true,
-            important: e.important,
-            actionLabel: e.actionLabel,
-            actionRoute: e.actionRoute,
-          )).toList();
-    });
+    ref.invalidate(notificationsListProvider);
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasItems = _items.isNotEmpty;
+    final notificationsAsync = ref.watch(notificationsListProvider);
+    return notificationsAsync.when(
+      loading: () => Scaffold(
+        backgroundColor: AppConfig.backgroundColor,
+        appBar: AppBar(
+          title: const Text('Notifications'),
+          centerTitle: true,
+          backgroundColor: AppConfig.backgroundColor,
+          foregroundColor: AppConfig.textColor,
+          elevation: 0,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => Scaffold(
+        backgroundColor: AppConfig.backgroundColor,
+        appBar: AppBar(
+          title: const Text('Notifications'),
+          centerTitle: true,
+          backgroundColor: AppConfig.backgroundColor,
+          foregroundColor: AppConfig.textColor,
+          elevation: 0,
+        ),
+        body: Center(child: Text('Error: $e')),
+      ),
+      data: (items) => _buildContent(items),
+    );
+  }
+
+  Widget _buildContent(List<NotificationItem> items) {
+    final hasItems = items.isNotEmpty;
     if (!hasItems) {
       return EmptyStateScaffold(
         appBarTitle: 'Notifications',
@@ -190,9 +156,9 @@ class _NotificationsListScreenState extends State<NotificationsListScreen> {
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
                 children: [
-                  ..._buildSection('IMPORTANT', _byFilter(_important), true),
-                  ..._buildSection('TODAY', _byFilter(_today), false),
-                  ..._buildSection('YESTERDAY', _byFilter(_yesterday), false),
+                  ..._buildSection('IMPORTANT', _byFilter(_importantFrom(items)), true),
+                  ..._buildSection('TODAY', _byFilter(_todayFrom(items)), false),
+                  ..._buildSection('YESTERDAY', _byFilter(_yesterdayFrom(items)), false),
                   const SizedBox(height: AppSpacing.xxl),
                 ],
               ),

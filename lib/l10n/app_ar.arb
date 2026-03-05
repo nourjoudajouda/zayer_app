@@ -20,6 +20,7 @@
   "city": "المدينة",
   "password": "كلمة المرور",
   "passwordHint": "••••••••",
+  "confirmPassword": "تأكيد كلمة المرور",
   "haveReferralCode": "لديك رمز إحالة؟",
   "createAccount": "إنشاء حساب",
   "passwordReq8Chars": "8 أحرف على الأقل",

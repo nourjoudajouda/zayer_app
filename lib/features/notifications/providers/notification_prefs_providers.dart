@@ -1,10 +1,25 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_client.dart';
 import '../models/notification_prefs_model.dart';
 
-/// Mock fetch. Replace with GET /api/me/notification-preferences later.
+/// Fetch from API: GET /api/me/notification-preferences
 Future<NotificationPrefsModel> _fetchPrefs() async {
-  await Future.delayed(const Duration(milliseconds: 200));
+  try {
+    final res = await ApiClient.instance.get<Map<String, dynamic>>('/api/me/notification-preferences');
+    final d = res.data;
+    if (d != null) {
+      return NotificationPrefsModel(
+        pushEnabled: d['push_enabled'] != false,
+        emailEnabled: d['email_enabled'] != false,
+        smsEnabled: d['sms_enabled'] == true,
+        liveStatusUpdates: d['live_status_updates'] != false,
+        quietHoursEnabled: d['quiet_hours_enabled'] != false,
+        quietHoursFrom: d['quiet_hours_from'] as String? ?? '22:00',
+        quietHoursTo: d['quiet_hours_to'] as String? ?? '07:00',
+      );
+    }
+  } catch (_) {}
   return const NotificationPrefsModel();
 }
 

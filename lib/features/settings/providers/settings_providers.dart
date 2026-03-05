@@ -1,14 +1,56 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_client.dart';
 import '../models/app_settings_model.dart';
 
-/// Mock settings repository. Replace with API (GET/PATCH /api/me/settings) later.
+/// Warehouse option for default warehouse selection.
+class WarehouseOption {
+  const WarehouseOption({required this.id, required this.label});
+  final String id;
+  final String label;
+}
+
+/// Warehouses from API: GET /api/warehouses
+/// Response: [{"id": "delaware_us", "label": "Delaware, US"}, ...]
+final warehousesProvider = FutureProvider<List<WarehouseOption>>((ref) async {
+  try {
+    final res = await ApiClient.instance.get<List<dynamic>>('/api/warehouses');
+    final list = res.data;
+    if (list == null) return [];
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map((e) => WarehouseOption(
+              id: e['id'] as String? ?? '',
+              label: e['label'] as String? ?? '',
+            ))
+        .where((w) => w.id.isNotEmpty)
+        .toList();
+  } catch (_) {}
+  return [];
+});
+
+/// Settings from API: GET /api/me/settings
 Future<AppSettingsModel> _fetchSettings() async {
-  await Future.delayed(const Duration(milliseconds: 300));
+  try {
+    final res = await ApiClient.instance.get<Map<String, dynamic>>('/api/me/settings');
+    final d = res.data;
+    if (d != null) {
+      return AppSettingsModel(
+        languageCode: d['language_code'] as String? ?? 'en',
+        languageLabel: d['language_label'] as String? ?? 'English (US)',
+        currencyCode: d['currency_code'] as String? ?? 'USD',
+        currencySymbol: d['currency_symbol'] as String? ?? r'$',
+        defaultWarehouseId: d['default_warehouse_id'] as String? ?? 'delaware_us',
+        defaultWarehouseLabel: d['default_warehouse_label'] as String? ?? 'Delaware, US',
+        smartConsolidationEnabled: d['smart_consolidation_enabled'] != false,
+        autoInsuranceEnabled: d['auto_insurance_enabled'] == true,
+      );
+    }
+  } catch (_) {}
   return const AppSettingsModel();
 }
 
-/// Settings data. API will plug in here.
+/// Settings data from API.
 final settingsProvider =
     FutureProvider<AppSettingsModel>((ref) => _fetchSettings());
 

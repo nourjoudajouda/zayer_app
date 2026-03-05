@@ -119,9 +119,16 @@ class Address {
 
 /// Country option for dropdown. API: GET /api/countries or from addresses config.
 class CountryOption {
-  const CountryOption({required this.id, required this.name});
+  const CountryOption({
+    required this.id,
+    required this.name,
+    this.flagEmoji = '',
+    this.dialCode = '',
+  });
   final String id;
   final String name;
+  final String flagEmoji;
+  final String dialCode;
 }
 
 /// City option for dropdown. API: GET /api/cities?countryId= or from addresses config.

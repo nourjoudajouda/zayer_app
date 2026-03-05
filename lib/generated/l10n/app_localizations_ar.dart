@@ -72,6 +72,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get passwordHint => '••••••••';
 
   @override
+  String get confirmPassword => 'تأكيد كلمة المرور';
+
+  @override
   String get haveReferralCode => 'لديك رمز إحالة؟';
 
   @override

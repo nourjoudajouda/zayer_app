@@ -5,8 +5,11 @@ import '../../core/config/app_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 
-/// Shows "Sign out from this device?" bottom sheet. On confirm, navigates to login.
-void showSignOutConfirmation(BuildContext context) {
+/// Shows "Sign out from this device?" bottom sheet. On confirm, calls [onSignOut] then navigates to login.
+void showSignOutConfirmation(
+  BuildContext context, {
+  Future<void> Function()? onSignOut,
+}) {
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.transparent,
@@ -50,9 +53,10 @@ void showSignOutConfirmation(BuildContext context) {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: () {
+                onPressed: () async {
                   Navigator.of(ctx).pop();
-                  context.go(AppRoutes.login);
+                  await onSignOut?.call();
+                  if (ctx.mounted) context.go(AppRoutes.login);
                 },
                 style: FilledButton.styleFrom(
                   backgroundColor: AppConfig.errorRed,

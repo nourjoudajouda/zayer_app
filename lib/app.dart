@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'core/config/app_config_provider.dart';
 import 'core/localization/locale_provider.dart';
@@ -16,6 +17,7 @@ class ZayerApp extends ConsumerWidget {
     final locale = ref.watch(localeProvider);
     final configAsync = ref.watch(bootstrapConfigProvider);
     final connectivity = ref.watch(connectivityProvider);
+    final devMode = ref.watch(developmentModeProvider);
 
     final theme = configAsync.whenOrNull(
           data: (config) => AppTheme.fromConfig(config.theme),
@@ -25,8 +27,15 @@ class ZayerApp extends ConsumerWidget {
     final textDirection =
         locale.languageCode == 'ar' ? TextDirection.rtl : TextDirection.ltr;
 
+    final appTitle = configAsync.whenOrNull(
+          data: (config) => config.appName?.trim().isNotEmpty == true
+              ? config.appName!
+              : null,
+        ) ??
+        'Zayer';
+
     return MaterialApp.router(
-      title: 'Zayer',
+      title: appTitle,
       theme: theme,
       locale: locale,
       builder: (context, child) {
@@ -35,34 +44,70 @@ class ZayerApp extends ConsumerWidget {
           child: child ?? const SizedBox.shrink(),
         );
         final isOffline = connectivity.valueOrNull == false;
-        if (!isOffline) return content;
         return Stack(
           children: [
             content,
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: Material(
-                elevation: 4,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  color: Colors.orange.shade700,
-                  child: SafeArea(
-                    bottom: false,
-                    child: Text(
-                      'No internet connection',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 14,
+            if (isOffline)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Material(
+                  elevation: 4,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    color: Colors.orange.shade700,
+                    child: SafeArea(
+                      bottom: false,
+                      child: Text(
+                        'No internet connection',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
+            if (devMode)
+              Positioned(
+                top: isOffline ? 52 : 0,
+                left: 0,
+                right: 0,
+                child: Material(
+                  elevation: 4,
+                  child: InkWell(
+                    onTap: () => context.push(AppRoutes.devMode),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                      color: Colors.deepPurple.shade700,
+                      child: SafeArea(
+                        bottom: false,
+                        child: Row(
+                          children: [
+                            Icon(Icons.developer_mode, color: Colors.white, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              'وضع التطوير',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const Spacer(),
+                            Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 14),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         );
       },

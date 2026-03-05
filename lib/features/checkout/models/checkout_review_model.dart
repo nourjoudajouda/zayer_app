@@ -53,4 +53,40 @@ class CheckoutReviewModel {
   final String insurance;
   final String total;
   final List<CheckoutShipment> shipments;
+
+  factory CheckoutReviewModel.fromJson(Map<String, dynamic> j) {
+    final shipmentsList = j['shipments'] as List<dynamic>?;
+    final shipments = shipmentsList?.map((s) {
+      final sm = s as Map<String, dynamic>;
+      final itemsList = sm['items'] as List<dynamic>?;
+      final items = itemsList?.map((i) {
+        final im = i as Map<String, dynamic>;
+        return CheckoutShipmentItem(
+          name: (im['name'] ?? '').toString(),
+          price: (im['price'] ?? '\$0.00').toString(),
+          quantity: (im['quantity'] as int?) ?? 1,
+          eta: (im['eta'] ?? '').toString(),
+          imageUrl: im['image_url'] as String?,
+          reviewed: im['reviewed'] == true,
+          shippingCost: im['shipping_cost'] as String?,
+        );
+      }).toList() ?? [];
+      return CheckoutShipment(
+        originLabel: (sm['origin_label'] ?? '').toString(),
+        items: items,
+        reviewed: sm['reviewed'] == true,
+      );
+    }).toList() ?? [];
+    return CheckoutReviewModel(
+      shippingAddressShort: (j['shipping_address_short'] ?? '').toString(),
+      consolidationSavings: (j['consolidation_savings'] ?? '\$0.00').toString(),
+      walletBalanceEnabled: j['wallet_balance_enabled'] != false,
+      walletBalance: (j['wallet_balance'] ?? '\$0.00').toString(),
+      subtotal: (j['subtotal'] ?? '\$0.00').toString(),
+      shipping: (j['shipping'] ?? '\$0.00').toString(),
+      insurance: (j['insurance'] ?? '\$0.00').toString(),
+      total: (j['total'] ?? '\$0.00').toString(),
+      shipments: shipments,
+    );
+  }
 }

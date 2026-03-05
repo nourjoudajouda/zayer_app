@@ -7,6 +7,9 @@ import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import 'models/checkout_review_model.dart';
+import '../cart/providers/cart_providers.dart';
+import '../orders/providers/orders_providers.dart';
+import '../wallet/providers/wallet_providers.dart';
 import 'providers/checkout_review_providers.dart';
 
 /// Opens My Addresses first. When user returns after saving/editing address, shows recalculation warning.
@@ -94,29 +97,71 @@ void _showRecalculationWarning(BuildContext context) {
 }
 
 /// Review & Pay (consolidated checkout). Route: /review-pay.
-/// API will plug in: GET /api/checkout/review, POST /api/checkout/confirm later.
-class ReviewPayScreen extends ConsumerWidget {
+/// API: GET /api/checkout/review, POST /api/checkout/confirm.
+class ReviewPayScreen extends ConsumerStatefulWidget {
   const ReviewPayScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final review = ref.watch(checkoutReviewProvider);
+  ConsumerState<ReviewPayScreen> createState() => _ReviewPayScreenState();
+}
+
+class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
+  bool _confirming = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final reviewAsync = ref.watch(checkoutReviewProvider);
+    final review = reviewAsync.valueOrNull;
     final walletEnabled = ref.watch(checkoutWalletEnabledProvider);
 
-    if (review.shipments.isEmpty) {
-      return Scaffold(
+    return reviewAsync.when(
+      loading: () => Scaffold(
         appBar: AppBar(title: const Text('Review & Pay')),
-        body: const Center(
-          child: Text('Your cart is empty. Add items from the cart.'),
-        ),
-      );
-    }
-
-    return _ReviewPayContent(
-      review: review,
-      walletEnabled: walletEnabled,
-      onWalletToggle: (v) =>
-          ref.read(checkoutWalletEnabledProvider.notifier).state = v,
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (_, __) => Scaffold(
+        appBar: AppBar(title: const Text('Review & Pay')),
+        body: const Center(child: Text('Failed to load checkout')),
+      ),
+      data: (r) {
+        if (r.shipments.isEmpty) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Review & Pay')),
+            body: const Center(
+              child: Text('Your cart is empty. Add items from the cart.'),
+            ),
+          );
+        }
+        return _ReviewPayContent(
+          review: r,
+          walletEnabled: walletEnabled,
+          onWalletToggle: (v) =>
+              ref.read(checkoutWalletEnabledProvider.notifier).state = v,
+          onConfirm: _confirming
+              ? null
+              : () async {
+                  setState(() => _confirming = true);
+                  final result = await confirmCheckout(ref, useWallet: walletEnabled);
+                  if (!mounted) return;
+                  setState(() => _confirming = false);
+                  if (result.ok) {
+                    ref.invalidate(cartItemsProvider);
+                    ref.invalidate(ordersProvider);
+                    ref.invalidate(walletBalanceProvider);
+                    ref.invalidate(walletTransactionsProvider);
+                    if (result.orderId != null) {
+                      context.go('${AppRoutes.orderDetail}/${result.orderId}');
+                    } else {
+                      context.go(AppRoutes.orders);
+                    }
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Checkout failed')),
+                    );
+                  }
+                },
+        );
+      },
     );
   }
 }
@@ -126,11 +171,13 @@ class _ReviewPayContent extends StatelessWidget {
     required this.review,
     required this.walletEnabled,
     required this.onWalletToggle,
+    this.onConfirm,
   });
 
   final CheckoutReviewModel review;
   final bool walletEnabled;
   final ValueChanged<bool> onWalletToggle;
+  final VoidCallback? onConfirm;
 
   @override
   Widget build(BuildContext context) {
@@ -179,7 +226,7 @@ class _ReviewPayContent extends StatelessWidget {
                 ),
               ),
             ),
-            _ConfirmPayBar(total: review.total),
+                    _ConfirmPayBar(total: review.total, onConfirm: onConfirm),
           ],
         ),
       ),
@@ -574,9 +621,10 @@ class _PromoCodeField extends StatelessWidget {
 }
 
 class _ConfirmPayBar extends StatelessWidget {
-  const _ConfirmPayBar({required this.total});
+  const _ConfirmPayBar({required this.total, this.onConfirm});
 
   final String total;
+  final VoidCallback? onConfirm;
 
   @override
   Widget build(BuildContext context) {
@@ -594,7 +642,7 @@ class _ConfirmPayBar extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: () {},
+                onPressed: onConfirm,
                 icon: const Icon(Icons.lock, size: 20, color: Colors.white),
                 label: Text('Confirm & Pay $total'),
                 style: FilledButton.styleFrom(

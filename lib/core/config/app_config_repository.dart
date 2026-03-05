@@ -1,8 +1,32 @@
+import 'package:dio/dio.dart';
+
+import '../network/api_client.dart';
 import 'models/app_bootstrap_config.dart';
 
 /// Fetches app bootstrap config (theme + splash + onboarding) from remote or mock.
 abstract class AppConfigRepository {
   Future<AppBootstrapConfig> fetchBootstrapConfig();
+}
+
+/// API implementation: GET /api/config/bootstrap
+class AppConfigRepositoryImpl implements AppConfigRepository {
+  AppConfigRepositoryImpl({Dio? dio}) : _dio = dio ?? ApiClient.instance;
+
+  final Dio _dio;
+
+  @override
+  Future<AppBootstrapConfig> fetchBootstrapConfig() async {
+    try {
+      final res = await _dio.get<Map<String, dynamic>>('/api/config/bootstrap');
+      final data = res.data;
+      if (data != null) {
+        return AppBootstrapConfig.fromJson(data);
+      }
+    } catch (_) {
+      // Network error or invalid response; use fallback
+    }
+    return AppBootstrapConfig.fallback;
+  }
 }
 
 /// Mock implementation: Laravel-style JSON with theme + bilingual splash/onboarding.

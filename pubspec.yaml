@@ -36,12 +36,15 @@ dependencies:
   go_router: ^14.6.2
   flutter_riverpod: ^2.6.1
   dio: ^5.7.0
+  flutter_secure_storage: ^9.2.2
   webview_flutter: ^4.10.0
   url_launcher: ^6.3.0
   intl: any
   cached_network_image: ^3.4.1
   image_picker: ^1.1.2
   google_maps_flutter: ^2.9.0
+  firebase_core: ^3.8.1
+  firebase_messaging: ^15.1.5
 
 dev_dependencies:
   flutter_test:

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/config/app_config.dart';
+import '../auth/providers/auth_providers.dart';
 import '../../core/localization/app_locale.dart';
 import '../../core/localization/locale_provider.dart';
 import '../../core/routing/app_router.dart';
@@ -269,7 +270,10 @@ class _ProfileContent extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpacing.xl),
           OutlinedButton(
-            onPressed: () => context.go(AppRoutes.login),
+            onPressed: () async {
+              await ref.read(authRepositoryProvider).logout();
+              if (context.mounted) context.go(AppRoutes.login);
+            },
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
               foregroundColor: AppConfig.textColor,

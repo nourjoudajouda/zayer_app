@@ -40,10 +40,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     }
   }
 
-  void _navigateAfterDelay(bool onboardingEmpty) {
+  void _navigateAfterDelay(bool onboardingEmpty, bool developmentMode) {
     Future<void>.delayed(const Duration(milliseconds: 1200), () {
       if (mounted) {
-        context.go(onboardingEmpty ? AppRoutes.register : AppRoutes.onboarding);
+        if (developmentMode) {
+          context.go(AppRoutes.underDevelopment);
+        } else {
+          context.go(onboardingEmpty ? AppRoutes.register : AppRoutes.onboarding);
+        }
       }
     });
   }
@@ -64,7 +68,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             data: (config) {
               if (!_hasScheduledNavigation) {
                 _hasScheduledNavigation = true;
-                _navigateAfterDelay(config.onboarding.isEmpty);
+                _navigateAfterDelay(
+                  config.onboarding.isEmpty,
+                  config.developmentMode,
+                );
               }
               return _buildContent(config.splash, lang);
             },

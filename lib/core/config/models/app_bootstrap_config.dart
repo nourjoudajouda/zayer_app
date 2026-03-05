@@ -281,25 +281,74 @@ class MarketsConfig {
   );
 }
 
-/// Root bootstrap config: theme + splash + onboarding + markets.
+/// Promo banner from bootstrap. Laravel snake_case.
+class PromoBannerConfig {
+  const PromoBannerConfig({
+    required this.id,
+    required this.label,
+    required this.title,
+    required this.ctaText,
+    this.imageUrl = '',
+    this.deepLink = '',
+  });
+
+  final Object id;
+  final String label;
+  final String title;
+  final String ctaText;
+  final String imageUrl;
+  final String deepLink;
+
+  factory PromoBannerConfig.fromJson(Map<String, dynamic> json) {
+    return PromoBannerConfig(
+      id: json['id'] ?? '',
+      label: json['label'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      ctaText: json['cta_text'] as String? ?? '',
+      imageUrl: json['image_url'] as String? ?? '',
+      deepLink: json['deep_link'] as String? ?? '',
+    );
+  }
+}
+
+/// Root bootstrap config: theme + splash + onboarding + markets + promo_banners + api_base_url + development_mode + app_name + app_icon_url.
 class AppBootstrapConfig {
   const AppBootstrapConfig({
     required this.theme,
     required this.splash,
     required this.onboarding,
     this.markets,
+    this.promoBanners = const [],
+    this.apiBaseUrl,
+    this.developmentMode = false,
+    this.appName,
+    this.appIconUrl,
   });
 
   final ThemeConfig theme;
   final SplashConfig splash;
   final List<OnboardingPageConfig> onboarding;
   final MarketsConfig? markets;
+  final List<PromoBannerConfig> promoBanners;
+  /// Base URL for API from admin panel. When set, app uses it for all requests.
+  final String? apiBaseUrl;
+  /// When true (set in admin), app shows development UI (banner / dev screen).
+  final bool developmentMode;
+  /// App display name from admin. Used for MaterialApp title.
+  final String? appName;
+  /// App icon/logo URL from admin. Used inside the app (e.g. AppBar).
+  final String? appIconUrl;
 
   factory AppBootstrapConfig.fromJson(Map<String, dynamic> json) {
     final themeJson = json['theme'] as Map<String, dynamic>?;
     final splashJson = json['splash'] as Map<String, dynamic>?;
     final onboardingList = json['onboarding'] as List<dynamic>?;
     final marketsJson = json['markets'] as Map<String, dynamic>?;
+    final promoList = json['promo_banners'] as List<dynamic>?;
+    final apiBase = json['api_base_url'] as String?;
+    final devMode = json['development_mode'] as bool? ?? false;
+    final appName = json['app_name'] as String?;
+    final appIconUrl = json['app_icon_url'] as String?;
     return AppBootstrapConfig(
       theme: ThemeConfig.fromJson(themeJson),
       splash: SplashConfig.fromJson(splashJson),
@@ -310,6 +359,14 @@ class AppBootstrapConfig {
               .toList() ??
           AppBootstrapConfig.fallbackOnboarding,
       markets: MarketsConfig.fromJson(marketsJson),
+      promoBanners: promoList
+              ?.map((e) => PromoBannerConfig.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
+      apiBaseUrl: apiBase != null && apiBase.trim().isNotEmpty ? apiBase.trim() : null,
+      developmentMode: devMode,
+      appName: appName != null && appName.trim().isNotEmpty ? appName.trim() : null,
+      appIconUrl: appIconUrl != null && appIconUrl.trim().isNotEmpty ? appIconUrl.trim() : null,
     );
   }
 
@@ -348,5 +405,7 @@ class AppBootstrapConfig {
         splash: SplashConfig.fallback,
         onboarding: fallbackOnboarding,
         markets: MarketsConfig.fallback,
+        promoBanners: const [],
       );
 }
+

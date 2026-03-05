@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../config/app_config.dart';
 
@@ -14,6 +15,7 @@ class ZayerTextField extends StatelessWidget {
     this.validator,
     this.suffixIcon,
     this.maxLength,
+    this.inputFormatters,
   });
 
   final TextEditingController? controller;
@@ -24,6 +26,7 @@ class ZayerTextField extends StatelessWidget {
   final String? Function(String?)? validator;
   final Widget? suffixIcon;
   final int? maxLength;
+  final List<TextInputFormatter>? inputFormatters;
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +36,7 @@ class ZayerTextField extends StatelessWidget {
       keyboardType: keyboardType,
       validator: validator,
       maxLength: maxLength,
+      inputFormatters: inputFormatters,
       decoration: InputDecoration(
         labelText: labelText,
         hintText: hintText,

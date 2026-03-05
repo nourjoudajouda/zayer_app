@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_client.dart';
 import '../../cart/models/cart_item_model.dart';
 import '../../cart/providers/cart_providers.dart';
 import '../models/checkout_review_model.dart';
@@ -78,11 +79,33 @@ CheckoutReviewModel _buildReviewFromCart(List<CartItem> cartItems) {
   );
 }
 
-/// Checkout review built from cart. When backend is ready, use GET /api/checkout/review.
-final checkoutReviewProvider = Provider<CheckoutReviewModel>((ref) {
+/// Checkout review from API: GET /api/checkout/review. Fallback to cart-built.
+final checkoutReviewProvider = FutureProvider<CheckoutReviewModel>((ref) async {
+  try {
+    final res = await ApiClient.instance.get<Map<String, dynamic>>('/api/checkout/review');
+    if (res.data != null) return CheckoutReviewModel.fromJson(res.data!);
+  } catch (_) {}
   final cartItems = ref.watch(cartItemsProvider);
   return _buildReviewFromCart(cartItems);
 });
 
-/// Toggle wallet balance usage. API: include in POST /api/checkout/confirm later.
+/// Toggle wallet balance usage. Include in POST /api/checkout/confirm.
 final checkoutWalletEnabledProvider = StateProvider<bool>((ref) => true);
+
+/// Confirm checkout: POST /api/checkout/confirm
+Future<({bool ok, String? orderId, String? orderNumber})> confirmCheckout(WidgetRef ref, {bool useWallet = true}) async {
+  try {
+    final res = await ApiClient.instance.post<Map<String, dynamic>>(
+      '/api/checkout/confirm',
+      data: {'use_wallet_balance': useWallet},
+    );
+    if (res.statusCode == 201 && res.data != null) {
+      return (
+        ok: true,
+        orderId: res.data!['order_id']?.toString(),
+        orderNumber: res.data!['order_number']?.toString(),
+      );
+    }
+  } catch (_) {}
+  return (ok: false, orderId: null, orderNumber: null);
+}

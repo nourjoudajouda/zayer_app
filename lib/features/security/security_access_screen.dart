@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
+import '../../features/auth/providers/auth_providers.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -121,7 +122,10 @@ class _SecurityAccessScreenState extends ConsumerState<SecurityAccessScreen> {
               ),
               const SizedBox(height: AppSpacing.xl),
               OutlinedButton.icon(
-                onPressed: () => showSignOutConfirmation(context),
+                onPressed: () => showSignOutConfirmation(
+                  context,
+                  onSignOut: () => ref.read(authRepositoryProvider).logout(),
+                ),
                 icon: Icon(Icons.logout, size: 20, color: AppConfig.errorRed),
                 label: Text(
                   'Sign out of all sessions',

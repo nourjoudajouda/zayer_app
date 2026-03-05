@@ -20,6 +20,7 @@
   "city": "City",
   "password": "Password",
   "passwordHint": "••••••••",
+  "confirmPassword": "Confirm password",
   "haveReferralCode": "Have a referral code?",
   "createAccount": "Create Account",
   "passwordReq8Chars": "At least 8 characters",

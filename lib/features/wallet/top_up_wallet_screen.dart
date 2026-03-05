@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/network/api_client.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import 'models/wallet_model.dart';
@@ -53,24 +54,28 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
     });
   }
 
-  void _confirmTopUp() {
+  Future<void> _confirmTopUp() async {
     final amount = _selectedAmount;
     if (amount == null || amount <= 0) return;
-    final current = ref.read(walletBalanceProvider);
-    ref.read(walletBalanceProvider.notifier).state = WalletBalance(
-      available: current.available + amount,
-      pending: current.pending,
-      promo: current.promo,
-    );
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('+\$${amount.toStringAsFixed(2)} added to wallet')));
-      context.pop();
+    try {
+      await ApiClient.instance.post('/api/wallet/top-up', data: {'amount': amount});
+      ref.invalidate(walletBalanceProvider);
+      ref.invalidate(walletTransactionsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('+\$${amount.toStringAsFixed(2)} added to wallet')));
+        context.pop();
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Top-up failed')));
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final balance = ref.watch(walletBalanceProvider);
+    final balanceAsync = ref.watch(walletBalanceProvider);
+    final balance = balanceAsync.valueOrNull ?? const WalletBalance(available: 0, pending: 0, promo: 0);
     final amount = _selectedAmount;
 
     return Scaffold(

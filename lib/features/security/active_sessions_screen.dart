@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 
-/// Mock session model. Replace with API GET /api/me/sessions.
+/// Session model. From API GET /api/me/sessions.
 class SessionInfo {
   const SessionInfo({
     required this.id,
@@ -22,44 +23,30 @@ class SessionInfo {
   final String lastActive;
   final String clientInfo;
   final bool isCurrent;
+
+  static SessionInfo fromJson(Map<String, dynamic> json) => SessionInfo(
+        id: json['id']?.toString() ?? '',
+        deviceName: json['device_name'] as String? ?? '',
+        location: json['location'] as String? ?? '',
+        lastActive: json['last_active'] as String? ?? '',
+        clientInfo: json['client_info'] as String? ?? '',
+        isCurrent: json['is_current'] == true,
+      );
 }
 
-final _mockSessionsProvider = FutureProvider<List<SessionInfo>>((ref) async {
-  await Future<void>.delayed(const Duration(milliseconds: 80));
-  return [
-    const SessionInfo(
-      id: '1',
-      deviceName: 'iPhone 15 Pro',
-      location: 'London, United Kingdom',
-      lastActive: 'Active now',
-      clientInfo: 'Zayer App',
-      isCurrent: true,
-    ),
-    const SessionInfo(
-      id: '2',
-      deviceName: 'MacBook Pro 16"',
-      location: 'Dubai, UAE • 2 hours ago',
-      lastActive: '2 hours ago',
-      clientInfo: 'Safari on macOS',
-      isCurrent: false,
-    ),
-    const SessionInfo(
-      id: '3',
-      deviceName: 'iPad Air',
-      location: 'Riyadh, Saudi Arabia • Dec 12',
-      lastActive: 'Dec 12',
-      clientInfo: 'Zayer App v2.4',
-      isCurrent: false,
-    ),
-    const SessionInfo(
-      id: '4',
-      deviceName: 'Work Desktop',
-      location: 'London, UK • Dec 10',
-      lastActive: 'Dec 10',
-      clientInfo: 'Chrome on Windows',
-      isCurrent: false,
-    ),
-  ];
+/// Sessions from API: GET /api/me/sessions
+final sessionsProvider = FutureProvider<List<SessionInfo>>((ref) async {
+  try {
+    final res = await ApiClient.instance.get<List<dynamic>>('/api/me/sessions');
+    final list = res.data;
+    if (list == null) return [];
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map(SessionInfo.fromJson)
+        .where((s) => s.id.isNotEmpty)
+        .toList();
+  } catch (_) {}
+  return [];
 });
 
 /// Active Sessions: this device, other sessions, danger zone. Mock sign out.
@@ -68,7 +55,7 @@ class ActiveSessionsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sessionsAsync = ref.watch(_mockSessionsProvider);
+    final sessionsAsync = ref.watch(sessionsProvider);
 
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,

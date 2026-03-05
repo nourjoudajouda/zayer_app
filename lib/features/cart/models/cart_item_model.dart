@@ -144,9 +144,9 @@ class CartItem {
     if (s == 'rejected') status = CartItemReviewStatus.rejected;
     return CartItem(
       id: json['id'] as String,
-      productUrl: json['url'] as String? ?? json['productUrl'] as String? ?? '',
+      productUrl: json['url'] as String? ?? json['product_url'] as String? ?? json['productUrl'] as String? ?? '',
       name: json['name'] as String,
-      unitPrice: (json['price'] as num?)?.toDouble() ?? (json['unitPrice'] as num?)?.toDouble() ?? 0,
+      unitPrice: (json['price'] as num?)?.toDouble() ?? (json['unit_price'] as num?)?.toDouble() ?? (json['unitPrice'] as num?)?.toDouble() ?? 0,
       quantity: json['quantity'] as int? ?? 1,
       currency: json['currency'] as String? ?? 'USD',
       imageUrl: json['image_url'] as String? ?? json['imageUrl'] as String?,

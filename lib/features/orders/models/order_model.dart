@@ -160,4 +160,75 @@ class OrderModel {
 
   bool get canTrack => status == OrderStatus.inTransit;
   bool get canBuyAgain => status == OrderStatus.delivered;
+
+  static OrderStatus _statusFrom(String? s) {
+    if (s == 'delivered') return OrderStatus.delivered;
+    if (s == 'cancelled') return OrderStatus.cancelled;
+    return OrderStatus.inTransit;
+  }
+
+  static OrderOrigin _originFrom(String? s) {
+    if (s == 'multi_origin') return OrderOrigin.multiOrigin;
+    if (s == 'turkey') return OrderOrigin.turkey;
+    return OrderOrigin.usa;
+  }
+
+  static OrderModel fromJson(Map<String, dynamic> j) {
+    final shipmentsList = j['shipments'] as List<dynamic>?;
+    final shipments = shipmentsList
+            ?.map((s) => _shipmentFromJson(s as Map<String, dynamic>))
+            .toList() ??
+        [];
+    return OrderModel(
+      id: (j['id'] ?? '').toString(),
+      origin: _originFrom(j['origin'] as String?),
+      status: _statusFrom(j['status'] as String?),
+      orderNumber: (j['order_number'] ?? '').toString(),
+      placedDate: (j['placed_date'] ?? '').toString(),
+      deliveredOn: j['delivered_on'] as String?,
+      totalAmount: (j['total_amount'] ?? '\$0.00').toString(),
+      refundStatus: j['refund_status'] as String?,
+      estimatedDelivery: j['estimated_delivery'] as String?,
+      shippingAddress: j['shipping_address'] as String?,
+      shipments: shipments,
+    );
+  }
+
+  static OrderShipment _shipmentFromJson(Map<String, dynamic> s) {
+    final itemsList = s['items'] as List<dynamic>?;
+    final items = itemsList
+            ?.map((i) => OrderLineItem(
+                  id: (i['id'] ?? '').toString(),
+                  name: (i['name'] ?? '').toString(),
+                  storeName: (i['store_name'] ?? '').toString(),
+                  sku: (i['sku'] ?? '').toString(),
+                  price: (i['price'] ?? '\$0.00').toString(),
+                  quantity: (i['quantity'] as int?) ?? 1,
+                  imageUrl: i['image_url'] as String?,
+                ))
+            .toList() ??
+        [];
+    final eventsList = s['tracking_events'] as List<dynamic>?;
+    final events = eventsList
+            ?.map((e) => OrderTrackingEvent(
+                  title: (e['title'] ?? '').toString(),
+                  subtitle: (e['subtitle'] ?? '').toString(),
+                  icon: Icons.check_circle_outlined,
+                  isHighlighted: e['is_highlighted'] == true,
+                ))
+            .toList() ??
+        [];
+    return OrderShipment(
+      id: (s['id'] ?? '').toString(),
+      countryCode: (s['country_code'] ?? '').toString(),
+      countryLabel: (s['country_label'] ?? '').toString(),
+      shippingMethod: (s['shipping_method'] ?? '').toString(),
+      eta: (s['eta'] ?? '').toString(),
+      items: items,
+      trackingEvents: events,
+      subtotal: s['subtotal'] as String?,
+      shippingFee: s['shipping_fee'] as String?,
+      customsDuties: s['customs_duties'] as String?,
+    );
+  }
 }

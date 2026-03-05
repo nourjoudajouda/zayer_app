@@ -92,11 +92,11 @@ class OnboardingPageWidget extends StatelessWidget {
     return Container(
       width: double.infinity,
       color: AppConfig.borderColor.withValues(alpha: 0.5),
-      child: const Center(
-        child: SizedBox(
-          width: 48,
-          height: 48,
-          child: CircularProgressIndicator(strokeWidth: 2),
+      child: Center(
+        child: Icon(
+          Icons.image_outlined,
+          size: 48,
+          color: AppConfig.subtitleColor,
         ),
       ),
     );

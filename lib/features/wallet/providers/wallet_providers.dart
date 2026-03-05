@@ -1,13 +1,23 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_client.dart';
 import '../models/wallet_model.dart';
 
-/// Current wallet balance. Replace with API later. StateProvider so top-up can add to it.
-final walletBalanceProvider = StateProvider<WalletBalance>((_) => const WalletBalance(
-      available: 1240.0,
-      pending: 45.0,
-      promo: 10.0,
-    ));
+/// Wallet balance from API: GET /api/wallet
+final walletBalanceProvider = FutureProvider<WalletBalance>((ref) async {
+  try {
+    final res = await ApiClient.instance.get<Map<String, dynamic>>('/api/wallet');
+    final d = res.data;
+    if (d != null) {
+      return WalletBalance(
+        available: (d['available'] as num?)?.toDouble() ?? 0,
+        pending: (d['pending'] as num?)?.toDouble() ?? 0,
+        promo: (d['promo'] as num?)?.toDouble() ?? 0,
+      );
+    }
+  } catch (_) {}
+  return const WalletBalance(available: 0, pending: 0, promo: 0);
+});
 
 /// Balance visibility (hide/show amount).
 final walletBalanceVisibleProvider = StateProvider<bool>((_) => true);
@@ -15,50 +25,42 @@ final walletBalanceVisibleProvider = StateProvider<bool>((_) => true);
 /// Activity filter: All | Refunds | Payments | Top-ups.
 final walletActivityFilterProvider = StateProvider<WalletActivityType>((_) => WalletActivityType.all);
 
-/// Mock transactions. Replace with API: GET /api/wallet/activity.
-final walletTransactionsProvider = Provider<List<WalletTransaction>>((_) => [
-      const WalletTransaction(
-        id: '1',
-        type: WalletActivityType.payments,
-        title: 'Order #ZY-92841',
-        dateTime: 'Sep 24, 2023 • 14:30',
-        amount: '- \$120.00',
-        subtitle: 'SHIPPING FEE',
-        isCredit: false,
-      ),
-      const WalletTransaction(
-        id: '2',
-        type: WalletActivityType.refunds,
-        title: 'Refund #ZY-10332',
-        dateTime: 'Sep 22, 2023 • 09:12',
-        amount: '+ \$45.00',
-        subtitle: 'PENDING',
-        isCredit: true,
-      ),
-      const WalletTransaction(
-        id: '3',
-        type: WalletActivityType.payments,
-        title: 'Order #ZY-88402',
-        dateTime: 'Sep 20, 2023 • 11:45',
-        amount: '- \$34.50',
-        subtitle: 'HANDLING',
-        isCredit: false,
-      ),
-      const WalletTransaction(
-        id: '4',
-        type: WalletActivityType.topUps,
-        title: 'Top-up',
-        dateTime: 'Sep 18, 2023 • 10:00',
-        amount: '+ \$200.00',
-        subtitle: 'COMPLETED',
-        isCredit: true,
-      ),
-    ]);
+/// Transactions from API: GET /api/wallet/activity
+final walletTransactionsProvider = FutureProvider<List<WalletTransaction>>((ref) async {
+  try {
+    final res = await ApiClient.instance.get<List<dynamic>>('/api/wallet/activity');
+    final list = res.data;
+    if (list != null) {
+      return list.whereType<Map<String, dynamic>>().map((t) {
+        final typeStr = t['type'] as String?;
+        var type = WalletActivityType.topUps;
+        if (typeStr == 'payment' || typeStr == 'payments') type = WalletActivityType.payments;
+        if (typeStr == 'refund' || typeStr == 'refunds') type = WalletActivityType.refunds;
+        return WalletTransaction(
+          id: (t['id'] ?? '').toString(),
+          type: type,
+          title: (t['title'] ?? '').toString(),
+          dateTime: (t['date_time'] ?? '').toString(),
+          amount: (t['amount'] ?? '').toString(),
+          subtitle: (t['subtitle'] ?? '').toString(),
+          isCredit: t['is_credit'] == true,
+        );
+      }).toList();
+    }
+  } catch (_) {}
+  return const [];
+});
 
 /// Filtered transactions by activity type.
-final walletFilteredTransactionsProvider = Provider<List<WalletTransaction>>((ref) {
-  final list = ref.watch(walletTransactionsProvider);
+final walletFilteredTransactionsProvider = Provider<AsyncValue<List<WalletTransaction>>>((ref) {
+  final async = ref.watch(walletTransactionsProvider);
   final filter = ref.watch(walletActivityFilterProvider);
-  if (filter == WalletActivityType.all) return list;
-  return list.where((t) => t.type == filter).toList();
+  return async.when(
+    data: (list) {
+      if (filter == WalletActivityType.all) return AsyncValue.data(list);
+      return AsyncValue.data(list.where((t) => t.type == filter).toList());
+    },
+    loading: () => const AsyncValue.loading(),
+    error: (e, st) => AsyncValue.error(e, st),
+  );
 });

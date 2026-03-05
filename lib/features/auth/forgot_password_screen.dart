@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
+import 'models/auth_result.dart';
+import 'models/country_city.dart';
+import 'providers/auth_providers.dart';
 import '../../core/localization/app_locale.dart';
 import '../../core/localization/locale_provider.dart';
 import '../../core/routing/app_router.dart';
@@ -21,6 +25,26 @@ class ForgotPasswordScreen extends ConsumerStatefulWidget {
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
+  String _countryCode = '966';
+  List<CountryItem> _countries = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCountries();
+  }
+
+  Future<void> _loadCountries() async {
+    final repo = ref.read(authRepositoryProvider);
+    final list = await repo.getCountries();
+    if (mounted) setState(() {
+      _countries = list;
+      if (list.isNotEmpty && _countryCode == '966') {
+        final first = list.first;
+        _countryCode = first.dialCode.isNotEmpty ? first.dialCode : '966';
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -28,9 +52,25 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     super.dispose();
   }
 
-  void _sendResetCode() {
-    if (_formKey.currentState?.validate() ?? false) {
-      context.go('${AppRoutes.otp}?mode=reset');
+  Future<void> _sendResetCode() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final digits = _phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
+    final phone = _countryCode + digits;
+    if (phone.isEmpty) return;
+    final repo = ref.read(authRepositoryProvider);
+    final result = await repo.forgotPassword(phone: phone);
+    if (!mounted) return;
+    switch (result) {
+      case AuthSuccess():
+        context.go(AppRoutes.home);
+      case AuthRequiresOtp(:final phone, :final devOtp):
+        var path = '${AppRoutes.otp}?phone=${Uri.encodeComponent(phone)}&mode=reset';
+        if (devOtp != null && devOtp.isNotEmpty) {
+          path += '&dev_otp=${Uri.encodeComponent(devOtp)}';
+        }
+        context.go(path);
+      case AuthFailure(:final message):
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -78,13 +118,55 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                         ),
                   ),
                   const SizedBox(height: AppSpacing.xl),
-                  ZayerTextField(
-                    controller: _phoneController,
-                    labelText: l10n.phoneNumber,
-                    hintText: l10n.phoneNumberHint,
-                    keyboardType: TextInputType.phone,
-                    validator: (v) =>
-                        v?.trim().isEmpty ?? true ? l10n.pleaseEnterPhone : null,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 120,
+                        child: DropdownButtonFormField<String>(
+                          value: _countries.any((c) => (c.dialCode.isNotEmpty ? c.dialCode : c.id) == _countryCode)
+                              ? _countryCode
+                              : (_countries.isNotEmpty ? (_countries.first.dialCode.isNotEmpty ? _countries.first.dialCode : _countries.first.id) : '966'),
+                          decoration: InputDecoration(
+                            labelText: '',
+                            hintText: '+966',
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 14,
+                            ),
+                          ),
+                          items: _countries.isEmpty
+                              ? [
+                                  const DropdownMenuItem(value: '966', child: Text('+966')),
+                                  const DropdownMenuItem(value: '20', child: Text('+20')),
+                                  const DropdownMenuItem(value: '1', child: Text('+1')),
+                                ]
+                              : _countries
+                                  .map((c) => DropdownMenuItem<String>(
+                                        value: c.dialCode.isNotEmpty ? c.dialCode : c.id,
+                                        child: Text('${c.flagEmoji} +${c.dialCode.isNotEmpty ? c.dialCode : c.id}'),
+                                      ))
+                                  .toList(),
+                          onChanged: (v) =>
+                              setState(() => _countryCode = v ?? '966'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ZayerTextField(
+                          controller: _phoneController,
+                          labelText: l10n.phoneNumber,
+                          hintText: l10n.phoneNumberHint,
+                          keyboardType: TextInputType.phone,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return l10n.pleaseEnterPhone;
+                            if (RegExp(r'\D').hasMatch(v)) return l10n.pleaseEnterPhone;
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   ZayerPrimaryButton(

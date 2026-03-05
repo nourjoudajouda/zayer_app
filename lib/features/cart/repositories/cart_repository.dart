@@ -2,13 +2,13 @@ import 'dart:math';
 
 import 'package:dio/dio.dart';
 
-import '../../../core/network/api_config.dart';
+import '../../../core/network/api_client.dart';
 import '../models/cart_item_model.dart';
 
-/// Adds items to local cart and sends to backend.
-/// Local list is the source of truth; backend sync is best-effort.
+/// Cart: load from API, add/update/remove via API.
 abstract class CartRepository {
   List<CartItem> get items;
+  Future<void> loadItems();
   Future<void> addItem(CartItem item);
   Future<void> updateQuantity(String id, int quantity);
   Future<void> removeItem(String id);
@@ -16,37 +16,48 @@ abstract class CartRepository {
 }
 
 class CartRepositoryImpl implements CartRepository {
-  CartRepositoryImpl({List<CartItem>? initialItems, Dio? dio})
-      : _dio = dio ?? Dio(BaseOptions(baseUrl: kApiBaseUrl)) {
-    _items.addAll(initialItems ?? []);
-  }
-
-  final List<CartItem> _items = [];
+  CartRepositoryImpl({Dio? dio}) : _dio = dio ?? ApiClient.instance;
   final Dio _dio;
+  final List<CartItem> _items = [];
 
   @override
   List<CartItem> get items => List.unmodifiable(_items);
 
   @override
-  Future<void> addItem(CartItem item) async {
-    _items.add(item);
+  Future<void> loadItems() async {
     try {
-      await _dio.post(
-        kCartItemsPath,
-        data: item.toJson(),
-        options: Options(
-          contentType: Headers.jsonContentType,
-          validateStatus: (status) => status != null && status < 500,
-        ),
-      );
-      // Optionally mark item as synced if backend returns 2xx
-      final index = _items.indexOf(item);
-      if (index >= 0) {
-        _items[index] = item.copyWith(syncedToBackend: true);
+      final res = await _dio.get<List<dynamic>>('/api/cart/items');
+      _items.clear();
+      final list = res.data;
+      if (list != null) {
+        for (final e in list) {
+          if (e is Map<String, dynamic>) _items.add(CartItem.fromJson(e));
+        }
       }
-    } catch (e) {
-      // Keep item locally; backend sync failed (e.g. no network or API not ready)
-      assert(true, 'Cart item saved locally; backend sync failed: $e');
+    } catch (_) {
+      _items.clear();
+    }
+  }
+
+  Map<String, dynamic> _addPayload(CartItem item) => {
+        'url': item.productUrl,
+        'name': item.name,
+        'price': item.unitPrice,
+        'quantity': item.quantity,
+        'currency': item.currency,
+        if (item.imageUrl != null) 'image_url': item.imageUrl,
+        if (item.storeKey != null) 'store_key': item.storeKey,
+        if (item.storeName != null) 'store_name': item.storeName,
+        if (item.productId != null) 'product_id': item.productId,
+        if (item.country != null) 'country': item.country,
+        'source': item.source,
+      };
+
+  @override
+  Future<void> addItem(CartItem item) async {
+    final res = await _dio.post<Map<String, dynamic>>('/api/cart/items', data: _addPayload(item));
+    if (res.statusCode == 201 && res.data != null) {
+      _items.add(CartItem.fromJson({...res.data!, 'id': res.data!['id']?.toString()}));
     }
   }
 
@@ -56,20 +67,20 @@ class CartRepositoryImpl implements CartRepository {
       await removeItem(id);
       return;
     }
+    await _dio.patch('/api/cart/items/$id', data: {'quantity': quantity});
     final i = _items.indexWhere((e) => e.id == id);
-    if (i >= 0) {
-      final item = _items[i];
-      _items[i] = item.copyWith(quantity: quantity);
-    }
+    if (i >= 0) _items[i] = _items[i].copyWith(quantity: quantity);
   }
 
   @override
   Future<void> removeItem(String id) async {
+    await _dio.delete('/api/cart/items/$id');
     _items.removeWhere((e) => e.id == id);
   }
 
   @override
   Future<void> clear() async {
+    await _dio.delete('/api/cart');
     _items.clear();
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_client.dart';
 import '../models/favorite_item.dart';
 
 /// Filter for favorites list.
@@ -9,67 +10,41 @@ enum FavoritesFilter {
   inStock,
 }
 
-/// Mock list. Replace with API later.
-final _mockItems = [
-  FavoriteItem(
-    id: '1',
-    sourceKey: 'amazon',
-    sourceLabel: 'FOUND ON AMAZON',
-    title: 'Amazon Echo Dot (5th Gen) Deep Sea Blue',
-    price: 44.99,
-    currency: '€',
-    priceDrop: 12,
-    trackingOn: true,
-    stockStatus: FavoriteStockStatus.inStock,
-    stockLabel: 'In Stock',
-    imageUrl: null,
-  ),
-  FavoriteItem(
-    id: '2',
-    sourceKey: 'shein',
-    sourceLabel: 'FOUND ON SHEIN',
-    title: 'Minimalist Oversized Cotton Hoodie',
-    price: 22.50,
-    currency: '€',
-    priceDrop: 5,
-    trackingOn: false,
-    stockStatus: FavoriteStockStatus.lowStock,
-    stockLabel: 'Low Stock (2 left)',
-    imageUrl: null,
-  ),
-  FavoriteItem(
-    id: '3',
-    sourceKey: 'amazon',
-    sourceLabel: 'FOUND ON AMAZON',
-    title: 'Sony WH-1000XM5 Wireless Headphones',
-    price: 329.00,
-    currency: '€',
-    priceDrop: null,
-    trackingOn: true,
-    stockStatus: FavoriteStockStatus.outOfStock,
-    stockLabel: 'OUT OF STOCK',
-    imageUrl: null,
-  ),
-];
-
-final favoritesListProvider = Provider<List<FavoriteItem>>((ref) {
-  return _mockItems;
+/// Favorites from API: GET /api/favorites
+final favoritesListProvider = FutureProvider<List<FavoriteItem>>((ref) async {
+  try {
+    final res = await ApiClient.instance.get<List<dynamic>>('/api/favorites');
+    final list = res.data;
+    if (list != null) {
+      return list
+          .whereType<Map<String, dynamic>>()
+          .map(FavoriteItem.fromJson)
+          .toList();
+    }
+  } catch (_) {}
+  return [];
 });
 
 final favoritesFilterProvider = StateProvider<FavoritesFilter>((ref) {
   return FavoritesFilter.all;
 });
 
-final filteredFavoritesProvider = Provider<List<FavoriteItem>>((ref) {
-  final list = ref.watch(favoritesListProvider);
+final filteredFavoritesProvider = Provider<AsyncValue<List<FavoriteItem>>>((ref) {
+  final async = ref.watch(favoritesListProvider);
   final filter = ref.watch(favoritesFilterProvider);
-  switch (filter) {
-    case FavoritesFilter.priceDrops:
-      return list.where((e) => e.priceDrop != null && e.priceDrop! > 0).toList();
-    case FavoritesFilter.inStock:
-      return list.where((e) => e.stockStatus != FavoriteStockStatus.outOfStock).toList();
-    case FavoritesFilter.all:
-    default:
-      return list;
-  }
+  return async.when(
+    data: (list) {
+      switch (filter) {
+        case FavoritesFilter.priceDrops:
+          return AsyncValue.data(list.where((e) => e.priceDrop != null && e.priceDrop! > 0).toList());
+        case FavoritesFilter.inStock:
+          return AsyncValue.data(list.where((e) => e.stockStatus != FavoriteStockStatus.outOfStock).toList());
+        case FavoritesFilter.all:
+        default:
+          return AsyncValue.data(list);
+      }
+    },
+    loading: () => const AsyncValue.loading(),
+    error: (e, st) => AsyncValue.error(e, st),
+  );
 });

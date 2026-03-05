@@ -263,7 +263,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               hint: const Text('Select country'),
-              items: list.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+              items: list.map((c) => DropdownMenuItem(value: c.id, child: Text('${c.flagEmoji} ${c.name}'.trim()))).toList(),
               onChanged: (v) => setState(() {
                 _selectedCountryId = v;
                 _selectedCityId = null;

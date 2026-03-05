@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Promo banner model. Replace with API/remote config later.
+import '../../../core/config/app_config_provider.dart';
+import '../../../core/config/models/app_bootstrap_config.dart';
+
+/// Promo banner model. From bootstrap API.
 class PromoBanner {
   const PromoBanner({
     required this.id,
@@ -16,9 +19,18 @@ class PromoBanner {
   final String ctaText;
   final String? imageUrl;
   final String? deepLink;
+
+  static PromoBanner fromConfig(PromoBannerConfig c) => PromoBanner(
+        id: c.id.toString(),
+        label: c.label,
+        title: c.title,
+        ctaText: c.ctaText,
+        imageUrl: c.imageUrl.isEmpty ? null : c.imageUrl,
+        deepLink: c.deepLink.isEmpty ? null : c.deepLink,
+      );
 }
 
-/// Mock home data. Replace with API later.
+/// Market item. From bootstrap API.
 class MarketItem {
   const MarketItem({
     required this.id,
@@ -50,62 +62,54 @@ class StoreItem {
   final String? logoUrl;
   /// Market id this store belongs to (e.g. 'usa', 'turkey') for real store count.
   final String? marketId;
+
+  static StoreItem fromConfig(StoreConfig c) => StoreItem(
+        id: c.id,
+        name: c.name,
+        category: c.description.isNotEmpty ? c.description : 'STORE',
+        logoUrl: c.logoUrl.isEmpty ? null : c.logoUrl,
+        marketId: c.countryCode.isEmpty ? null : c.countryCode.toLowerCase(),
+      );
 }
 
-final homeUserGreetingProvider = Provider<String>((_) => 'Hazem');
+final homeUserGreetingProvider = Provider<String>((_) => 'Hey');
 
-/// Mock promo banners. Replace with API/remote config later.
-final promoBannersProvider = Provider<List<PromoBanner>>((_) => [
-  const PromoBanner(
-    id: '1',
-    label: 'FLASH SALE',
-    title: 'Up to 40% off on US Premium Brands',
-    ctaText: 'Shop Now',
-  ),
-  const PromoBanner(
-    id: '2',
-    label: 'NEW ARRIVALS',
-    title: 'Latest products from Turkey & UAE',
-    ctaText: 'Explore',
-  ),
-  const PromoBanner(
-    id: '3',
-    label: 'FREE SHIPPING',
-    title: 'Orders over \$100 ship free',
-    ctaText: 'Shop Now',
-  ),
-]);
-
-/// Base list of markets (storeCount overwritten with real count from stores).
-const List<MarketItem> _marketsBase = [
-  MarketItem(id: 'usa', name: 'USA', imageUrl: null, storeCount: '0', countryCode: 'US'),
-  MarketItem(id: 'turkey', name: 'Turkey', imageUrl: null, storeCount: '0', countryCode: 'TR'),
-  MarketItem(id: 'uae', name: 'UAE', imageUrl: null, storeCount: '0', countryCode: 'AE'),
-  MarketItem(id: 'uk', name: 'UK', imageUrl: null, storeCount: '0', countryCode: 'UK'),
-];
-
-final homeStoresProvider = Provider<List<StoreItem>>((_) => [
-  const StoreItem(id: 'amazon', name: 'Amazon', category: 'GLOBAL SHOP', logoUrl: null, marketId: 'usa'),
-  const StoreItem(id: 'zara', name: 'Zara', category: 'FASHION', logoUrl: null, marketId: 'turkey'),
-  const StoreItem(id: 'nike', name: 'Nike', category: 'SPORTSWEAR', logoUrl: null, marketId: 'usa'),
-  const StoreItem(id: 'sephora', name: 'Sephora', category: 'BEAUTY', logoUrl: null, marketId: 'usa'),
-  const StoreItem(id: 'noon', name: 'Noon', category: 'MARKETPLACE', logoUrl: null, marketId: 'uae'),
-  const StoreItem(id: 'asos', name: 'ASOS', category: 'FASHION', logoUrl: null, marketId: 'uk'),
-]);
-
-/// Markets with real store count: each market shows the number of stores linked to it.
-final homeMarketsProvider = Provider<List<MarketItem>>((ref) {
-  final stores = ref.watch(homeStoresProvider);
-  return _marketsBase.map((m) {
-    final count = stores.where((s) => s.marketId == m.id).length;
-    return MarketItem(
-      id: m.id,
-      name: m.name,
-      imageUrl: m.imageUrl,
-      storeCount: count == 1 ? '1 store' : '$count stores',
-      countryCode: m.countryCode,
-    );
-  }).toList();
+/// Promo banners from bootstrap API.
+final promoBannersProvider = Provider<List<PromoBanner>>((ref) {
+  final config = ref.watch(bootstrapConfigProvider).valueOrNull;
+  if (config?.promoBanners == null || config!.promoBanners.isEmpty) {
+    return [];
+  }
+  return config.promoBanners.map(PromoBanner.fromConfig).toList();
 });
 
-final cartBadgeCountProvider = StateProvider<int>((_) => 2);
+/// Markets from bootstrap API (countries with store count from featured_stores).
+final homeMarketsProvider = Provider<List<MarketItem>>((ref) {
+  final config = ref.watch(bootstrapConfigProvider).valueOrNull;
+  final markets = config?.markets;
+  if (markets == null) return [];
+  final stores = markets.featuredStores;
+  return markets.countries
+      .where((c) => c.code != 'ALL')
+      .map((c) {
+        final count = stores.where((s) => s.countryCode == c.code).length;
+        return MarketItem(
+          id: c.code.toLowerCase(),
+          name: c.name,
+          imageUrl: null,
+          storeCount: count == 1 ? '1 store' : '$count stores',
+          countryCode: c.code,
+        );
+      })
+      .toList();
+});
+
+/// Featured stores from bootstrap API.
+final homeStoresProvider = Provider<List<StoreItem>>((ref) {
+  final config = ref.watch(bootstrapConfigProvider).valueOrNull;
+  final stores = config?.markets?.featuredStores;
+  if (stores == null || stores.isEmpty) return [];
+  return stores.map(StoreItem.fromConfig).toList();
+});
+
+final cartBadgeCountProvider = StateProvider<int>((_) => 0);

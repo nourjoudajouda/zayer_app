@@ -73,6 +73,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get passwordHint => '••••••••';
 
   @override
+  String get confirmPassword => 'Confirm password';
+
+  @override
   String get haveReferralCode => 'Have a referral code?';
 
   @override

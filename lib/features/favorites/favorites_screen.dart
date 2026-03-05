@@ -16,11 +16,18 @@ class FavoritesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final items = ref.watch(filteredFavoritesProvider);
+    final itemsAsync = ref.watch(filteredFavoritesProvider);
+    final items = itemsAsync.valueOrNull ?? [];
     final filter = ref.watch(favoritesFilterProvider);
-    final allItems = ref.watch(favoritesListProvider);
 
-    if (allItems.isEmpty) {
+    if (itemsAsync.isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Favorites')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (items.isEmpty) {
       return const FavoritesEmptyScreen();
     }
 

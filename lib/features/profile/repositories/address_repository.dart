@@ -1,9 +1,33 @@
 import '../models/address_model.dart';
 
-/// Addresses, countries, cities. Replace with API: GET/POST/PATCH /api/me/addresses, GET /api/countries, GET /api/cities.
-class AddressRepository {
-  AddressRepository() : _addresses = _mockAddresses;
+/// Addresses, countries, cities. API: GET/POST/PATCH /api/me/addresses, GET /api/countries, GET /api/cities.
+abstract class AddressRepository {
+  Future<List<CountryOption>> getCountries();
+  Future<List<CityOption>> getCities(String countryId);
+  Future<List<Address>> getAddresses();
+  Future<void> setDefaultAddress(String addressId);
+  Future<void> saveAddress({
+    String? id,
+    required String addressLine,
+    required String countryId,
+    required String countryName,
+    String? cityId,
+    String? cityName,
+    String? phone,
+    required bool isDefault,
+    String? nickname,
+    AddressType addressType = AddressType.home,
+    String? areaDistrict,
+    String? streetAddress,
+    String? buildingVillaSuite,
+    bool isVerified = false,
+    bool isResidential = true,
+    double? lat,
+    double? lng,
+  });
+}
 
+class AddressRepositoryMock implements AddressRepository {
   static final List<Address> _mockAddresses = [
     const Address(
       id: '1',
@@ -62,6 +86,10 @@ class AddressRepository {
     ),
   ];
 
+  List<Address> _addresses;
+
+  AddressRepositoryMock() : _addresses = List.from(_mockAddresses);
+
   static const List<CountryOption> _mockCountries = [
     CountryOption(id: 'us', name: 'United States'),
     CountryOption(id: 'ae', name: 'United Arab Emirates'),
@@ -88,13 +116,13 @@ class AddressRepository {
     CityOption(id: 'par', name: 'Paris'),
   ];
 
-  List<Address> _addresses;
-
+  @override
   Future<List<CountryOption>> getCountries() async {
     await Future<void>.delayed(const Duration(milliseconds: 50));
     return List.from(_mockCountries);
   }
 
+  @override
   Future<List<CityOption>> getCities(String countryId) async {
     await Future<void>.delayed(const Duration(milliseconds: 50));
     final byCountry = <String, List<CityOption>>{
@@ -110,6 +138,7 @@ class AddressRepository {
     return List.from(byCountry[countryId] ?? []);
   }
 
+  @override
   Future<List<Address>> getAddresses() async {
     await Future<void>.delayed(const Duration(milliseconds: 50));
     // Primary (default) first, then others
@@ -122,11 +151,13 @@ class AddressRepository {
     return list;
   }
 
+  @override
   Future<void> setDefaultAddress(String addressId) async {
     await Future<void>.delayed(const Duration(milliseconds: 80));
     _addresses = _addresses.map((a) => a.copyWith(isDefault: a.id == addressId)).toList();
   }
 
+  @override
   Future<void> saveAddress({
     String? id,
     required String addressLine,

@@ -14,9 +14,11 @@ class WalletScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final balance = ref.watch(walletBalanceProvider);
+    final balanceAsync = ref.watch(walletBalanceProvider);
+    final balance = balanceAsync.valueOrNull ?? const WalletBalance(available: 0, pending: 0, promo: 0);
     final visible = ref.watch(walletBalanceVisibleProvider);
-    final transactions = ref.watch(walletFilteredTransactionsProvider);
+    final transactionsAsync = ref.watch(walletFilteredTransactionsProvider);
+    final transactions = transactionsAsync.valueOrNull ?? [];
     final activityFilter = ref.watch(walletActivityFilterProvider);
 
     return Scaffold(
