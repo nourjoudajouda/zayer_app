@@ -1,3 +1,4 @@
+import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -254,21 +255,37 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
         countriesAsync.when(
           data: (list) {
             _countries = list;
-            final value = _selectedCountryId != null && list.any((c) => c.id == _selectedCountryId)
-                ? _selectedCountryId
-                : null;
-            return DropdownButtonFormField<String>(
-              value: value,
-              decoration: InputDecoration(
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            final selected = list.where((c) => c.id == _selectedCountryId).firstOrNull;
+            return DropdownSearch<CountryOption>(
+              selectedItem: selected,
+              items: (filter, loadProps) {
+                if (list.isEmpty) return [];
+                if (filter.isEmpty) return list;
+                final f = filter.toLowerCase();
+                return list.where((c) => c.name.toLowerCase().contains(f)).toList();
+              },
+              itemAsString: (c) => '${c.flagEmoji} ${c.name}'.trim(),
+              compareFn: (a, b) => a.id == b.id,
+              dropdownBuilder: (context, selectedItem) => Text(
+                selectedItem != null ? '${selectedItem.flagEmoji} ${selectedItem.name}'.trim() : 'Select country',
               ),
-              hint: const Text('Select country'),
-              items: list.map((c) => DropdownMenuItem(value: c.id, child: Text('${c.flagEmoji} ${c.name}'.trim()))).toList(),
-              onChanged: (v) => setState(() {
-                _selectedCountryId = v;
+              popupProps: PopupProps.modalBottomSheet(
+                showSearchBox: true,
+                itemBuilder: (context, item, isSelected, isHighlighted) => ListTile(
+                  title: Text('${item.flagEmoji} ${item.name}'.trim()),
+                ),
+              ),
+              onChanged: (c) => setState(() {
+                _selectedCountryId = c?.id;
                 _selectedCityId = null;
               }),
-              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+              validator: (v) => v == null ? 'Required' : null,
+              decoratorProps: DropDownDecoratorProps(
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                ),
+              ),
             );
           },
           loading: () => const InputDecorator(
@@ -285,18 +302,30 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
           data: (list) {
             _cities = list;
             if (list.isEmpty) return const SizedBox.shrink();
-            final value = _selectedCityId != null && list.any((c) => c.id == _selectedCityId)
-                ? _selectedCityId
-                : null;
-            return DropdownButtonFormField<String>(
-              value: value,
-              decoration: InputDecoration(
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            final selected = list.where((c) => c.id == _selectedCityId).firstOrNull;
+            return DropdownSearch<CityOption>(
+              selectedItem: selected,
+              items: (filter, loadProps) {
+                if (list.isEmpty) return [];
+                if (filter.isEmpty) return list;
+                final f = filter.toLowerCase();
+                return list.where((c) => c.name.toLowerCase().contains(f)).toList();
+              },
+              itemAsString: (c) => c.name,
+              compareFn: (a, b) => a.id == b.id,
+              dropdownBuilder: (context, selectedItem) => Text(selectedItem?.name ?? 'Select city'),
+              popupProps: PopupProps.modalBottomSheet(
+                showSearchBox: true,
+                itemBuilder: (context, item, isSelected, isHighlighted) => ListTile(title: Text(item.name)),
               ),
-              hint: Text(_selectedCountryId == null ? 'Select country first' : 'Select city'),
-              items: list.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
-              onChanged: _selectedCountryId == null ? null : (v) => setState(() => _selectedCityId = v),
-              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+              onChanged: (c) => setState(() => _selectedCityId = c?.id),
+              validator: (v) => v == null ? 'Required' : null,
+              decoratorProps: DropDownDecoratorProps(
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                ),
+              ),
             );
           },
           loading: () => const InputDecorator(

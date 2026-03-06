@@ -9,7 +9,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'Zayer';
+  String get appTitle => 'Eshterely';
 
   @override
   String get splashSubtitle => 'Shop globally, delivered locally';
@@ -22,7 +22,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingPage1Description =>
-      'Access millions of products from the world\'s best markets directly through Zayer.';
+      'Access millions of products from the world\'s best markets directly through Eshterely.';
 
   @override
   String get onboardingPage2Title => 'Combine & Save';
@@ -45,7 +45,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get getStarted => 'Get Started';
 
   @override
-  String get joinZayer => 'Join Zayer';
+  String get joinZayer => 'Join Eshterely';
 
   @override
   String get createAccountSubtitle =>
@@ -310,11 +310,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'Browse millions of products from global stores';
 
   @override
-  String get addToZayerCart => 'Add to Zayer Cart';
+  String get addToZayerCart => 'Add to Eshterely Cart';
 
   @override
   String get addToZayerCartDesc =>
-      'Add items to your Zayer cart for consolidation';
+      'Add items to your Eshterely cart for consolidation';
 
   @override
   String get globalDelivery => 'Global Delivery';
@@ -365,4 +365,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get import => 'Import';
+
+  @override
+  String get checkConnectionAndRetry =>
+      'No connection. Check network and retry.';
+
+  @override
+  String get retry => 'Retry';
 }

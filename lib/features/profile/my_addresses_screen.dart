@@ -109,29 +109,60 @@ class _MyAddressesContent extends ConsumerWidget {
     final otherAddresses = addresses.where((a) => !a.isDefault).toList();
 
     if (addresses.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.location_off_outlined, size: 64, color: AppConfig.subtitleColor),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'No addresses yet',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppConfig.subtitleColor),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              FilledButton.icon(
-                onPressed: () => _onAddNew(context, ref),
-                icon: const Icon(Icons.add_location_alt_outlined),
-                label: const Text('Add New Address'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppConfig.primaryColor,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+      return SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.xl),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: MediaQuery.of(context).size.height - 200,
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  decoration: BoxDecoration(
+                    color: AppConfig.borderColor.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.location_off_outlined,
+                    size: 64,
+                    color: AppConfig.subtitleColor,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: AppSpacing.xl),
+                Text(
+                  'No addresses yet',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: AppConfig.textColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Add an address to get started with checkout and delivery.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppConfig.subtitleColor,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                FilledButton.icon(
+                  onPressed: () => _onAddNew(context, ref),
+                  icon: const Icon(Icons.add_location_alt_outlined, size: 22),
+                  label: const Text('Add New Address'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppConfig.primaryColor,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );

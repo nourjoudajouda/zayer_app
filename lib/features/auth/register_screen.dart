@@ -1,7 +1,11 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import 'package:dropdown_search/dropdown_search.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/localization/app_locale.dart';
@@ -34,32 +38,101 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   List<CityItem> _cities = [];
   bool _loadingCountries = true;
   bool _loadingCities = false;
+  bool _countriesLoadError = false;
 
   @override
   void initState() {
     super.initState();
     _loadCountries();
+    _passwordController.addListener(_onPasswordChanged);
+  }
+
+  void _onPasswordChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _passwordController.removeListener(_onPasswordChanged);
     _fullNameController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
+  /// Map locale country code (e.g. IQ, JO) to dial_code for matching API countries.
+  static const Map<String, String> _localeToDialCode = {
+    'SA': '966', 'IQ': '964', 'JO': '962', 'KW': '965', 'BH': '973',
+    'QA': '974', 'AE': '971', 'OM': '968', 'YE': '967', 'SY': '963',
+    'LB': '961', 'PS': '970', 'EG': '20', 'LY': '218', 'TN': '216',
+    'DZ': '213', 'MA': '212', 'SD': '249',
+  };
+
   Future<void> _loadCountries() async {
+    setState(() => _countriesLoadError = false);
     final repo = ref.read(authRepositoryProvider);
-    final list = await repo.getCountries();
-    if (mounted) setState(() {
+    List<CountryItem> list;
+    try {
+      list = await repo.getCountries();
+    } catch (_) {
+      if (mounted) setState(() {
+        _loadingCountries = false;
+        _countriesLoadError = true;
+      });
+      return;
+    }
+    if (!mounted) return;
+    final deviceCountryCode = _deviceCountryCode();
+    CountryItem? toSelect;
+    if (list.isNotEmpty) {
+      if (deviceCountryCode != null) {
+        final dial = _localeToDialCode[deviceCountryCode];
+        for (final c in list) {
+          if (c.id == deviceCountryCode || (dial != null && (c.dialCode == dial || c.dialCode == '+$dial'))) {
+            toSelect = c;
+            break;
+          }
+        }
+      }
+      if (toSelect == null) {
+        final iq = list.where((c) => c.dialCode == '964' || c.id == 'IQ');
+        final jo = list.where((c) => c.dialCode == '962' || c.id == 'JO');
+        toSelect = iq.isNotEmpty ? iq.first : (jo.isNotEmpty ? jo.first : list.first);
+      }
+    }
+    setState(() {
       _countries = list;
       _loadingCountries = false;
-      if (_selectedCountryId == null && list.isNotEmpty) {
-        _selectedCountryId = list.first.id;
-        _countryCode = list.first.dialCode.isNotEmpty ? list.first.dialCode : '966';
+      if (_selectedCountryId == null && toSelect != null) {
+        _selectedCountryId = toSelect.id;
+        _countryCode = toSelect.dialCode.isNotEmpty ? toSelect.dialCode : '966';
       }
     });
+    if (_selectedCountryId != null && _selectedCountryId!.isNotEmpty) {
+      _loadCities(_selectedCountryId);
+    }
+  }
+
+  String? _deviceCountryCode() {
+    try {
+      final locale = Platform.localeName;
+      if (locale.contains('_')) return locale.split('_').last.toUpperCase();
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  CountryItem? _countryById(String? id) {
+    if (id == null || id.isEmpty) return null;
+    for (final c in _countries) if (c.id == id) return c;
+    return null;
+  }
+
+  CityItem? _cityById(String? id) {
+    if (id == null || id.isEmpty) return null;
+    for (final c in _cities) if (c.id == id) return c;
+    return null;
   }
 
   Future<void> _loadCities(String? countryId) async {
@@ -166,42 +239,64 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SizedBox(
-                      width: 120,
-                      child: DropdownButtonFormField<String?>(
-                        value: _selectedCountryId,
-                        decoration: InputDecoration(
-                          labelText: '',
-                          hintText: '+966',
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 14,
-                          ),
-                        ),
-                        items: [
-                          const DropdownMenuItem<String?>(
-                            value: null,
-                            child: Text('—'),
-                          ),
-                          ..._countries.map(
-                            (c) => DropdownMenuItem<String?>(
-                              value: c.id,
-                              child: Text('${c.flagEmoji} +${c.dialCode.isNotEmpty ? c.dialCode : c.id}'),
+                      width: 150,
+                      child: _countriesLoadError
+                          ? InputDecorator(
+                              decoration: InputDecoration(
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConfig.radiusSmall)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.wifi_off, size: 20, color: Colors.orange.shade700),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: Text(l10n.checkConnectionAndRetry, style: TextStyle(fontSize: 12, color: Colors.orange.shade700))),
+                                  TextButton(onPressed: _loadCountries, child: Text(l10n.retry)),
+                                ],
+                              ),
+                            )
+                          : _loadingCountries
+                              ? InputDecorator(
+                                  decoration: InputDecoration(
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConfig.radiusSmall)),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                  ),
+                                  child: const Row(children: [SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)), SizedBox(width: 8), Text('…')]),
+                                )
+                              : DropdownSearch<CountryItem>(
+                              selectedItem: _countryById(_selectedCountryId),
+                              items: (filter, loadProps) {
+                                if (_countries.isEmpty) return <CountryItem>[];
+                                if (filter.isEmpty) return _countries;
+                                final f = filter.toLowerCase();
+                                return _countries.where((c) {
+                                  final code = c.dialCode.isNotEmpty ? c.dialCode : c.id;
+                                  return code.contains(f) || '${c.flagEmoji}+$code'.toLowerCase().contains(f);
+                                }).toList();
+                              },
+                              itemAsString: (c) => '${c.flagEmoji} +${c.dialCode.isNotEmpty ? c.dialCode : c.id}',
+                              compareFn: (a, b) => a.id == b.id,
+                              onBeforePopupOpening: (_) async => _countries.isNotEmpty,
+                              dropdownBuilder: (context, selectedItem) => Text(
+                                selectedItem != null
+                                    ? '${selectedItem.flagEmoji} +${selectedItem.dialCode.isNotEmpty ? selectedItem.dialCode : selectedItem.id}'
+                                    : '+966',
+                              ),
+                              popupProps: PopupProps.modalBottomSheet(
+                                showSearchBox: true,
+                                itemBuilder: (context, item, isSelected, isHighlighted) => ListTile(
+                                  title: Text('${item.flagEmoji} +${item.dialCode.isNotEmpty ? item.dialCode : item.id}'),
+                                ),
+                              ),
+                              onChanged: (c) {
+                                setState(() {
+                                  _selectedCountryId = c?.id;
+                                  _selectedCityId = null;
+                                  _countryCode = (c != null && c.dialCode.isNotEmpty) ? c.dialCode : '966';
+                                  if (c != null && c.id.isNotEmpty) _loadCities(c.id);
+                                });
+                              },
                             ),
-                          ),
-                        ],
-                        onChanged: (v) {
-                          setState(() {
-                            _selectedCountryId = v;
-                            _selectedCityId = null;
-                            final idx = v != null ? _countries.indexWhere((c) => c.id == v) : -1;
-                            final country = idx >= 0 ? _countries[idx] : null;
-                            _countryCode = (country != null && country.dialCode.isNotEmpty)
-                                ? country.dialCode
-                                : '966';
-                            if (v != null && v.isNotEmpty) _loadCities(v);
-                          });
-                        },
-                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -225,72 +320,98 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
-                DropdownButtonFormField<String?>(
-                  value: _selectedCountryId,
-                  decoration: InputDecoration(
-                    labelText: l10n.country,
-                    hintText: l10n.country,
-                  ),
-                  items: [
-                    DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text('— ${l10n.country} —'),
-                    ),
-                    ..._countries.map(
-                      (c) => DropdownMenuItem<String?>(
-                        value: c.id,
-                        child: Text('${c.flagEmoji} ${c.name}'.trim()),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(l10n.country, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor)),
+                    const SizedBox(height: 4),
+                    DropdownSearch<CountryItem>(
+                      selectedItem: _countryById(_selectedCountryId),
+                      items: (filter, loadProps) {
+                        if (_countries.isEmpty) return <CountryItem>[];
+                        if (filter.isEmpty) return _countries;
+                        final f = filter.toLowerCase();
+                        return _countries.where((c) => c.name.toLowerCase().contains(f)).toList();
+                      },
+                      itemAsString: (c) => '${c.flagEmoji} ${c.name}'.trim(),
+                      compareFn: (a, b) => a.id == b.id,
+                      onBeforePopupOpening: (_) async => _countries.isNotEmpty,
+                      decoratorProps: DropDownDecoratorProps(
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConfig.radiusSmall)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                        ),
                       ),
-                    ).toList(),
+                      dropdownBuilder: (context, selectedItem) => Text(
+                        selectedItem != null ? '${selectedItem.flagEmoji} ${selectedItem.name}'.trim() : l10n.country,
+                      ),
+                      popupProps: PopupProps.modalBottomSheet(
+                        showSearchBox: true,
+                        itemBuilder: (context, item, isSelected, isHighlighted) => ListTile(
+                          title: Text('${item.flagEmoji} ${item.name}'.trim()),
+                        ),
+                      ),
+                      onChanged: (c) {
+                        setState(() {
+                          _selectedCountryId = c?.id;
+                          _selectedCityId = null;
+                          _countryCode = (c != null && c.dialCode.isNotEmpty) ? c.dialCode : '966';
+                          if (c != null && c.id.isNotEmpty) _loadCities(c.id);
+                        });
+                      },
+                    ),
                   ],
-                  onChanged: (v) {
-                    setState(() {
-                      _selectedCountryId = v;
-                      _selectedCityId = null;
-                      final idx = v != null ? _countries.indexWhere((c) => c.id == v) : -1;
-                      final country = idx >= 0 ? _countries[idx] : null;
-                      _countryCode = (country != null && country.dialCode.isNotEmpty)
-                          ? country.dialCode
-                          : '966';
-                      if (v != null && v.isNotEmpty) _loadCities(v);
-                    });
-                  },
                 ),
                 const SizedBox(height: AppSpacing.md),
-                DropdownButtonFormField<String?>(
-                  value: _loadingCities ? null : _selectedCityId,
-                  decoration: InputDecoration(
-                    labelText: l10n.city,
-                    hintText: _loadingCities ? '' : l10n.city,
-                    suffixIcon: _loadingCities
-                        ? const Padding(
+                _loadingCities
+                    ? InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: l10n.city,
+                          suffixIcon: const Padding(
                             padding: EdgeInsets.only(right: 12),
                             child: SizedBox(
                               width: 24,
                               height: 24,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             ),
-                          )
-                        : null,
-                  ),
-                  items: [
-                    DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text(
-                        _loadingCities ? '…' : '— ${l10n.city} —',
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                          ),
+                        ),
+                        child: const Text('…'),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(l10n.city, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor)),
+                          const SizedBox(height: 4),
+                          DropdownSearch<CityItem>(
+                            selectedItem: _cityById(_selectedCityId),
+                            items: (filter, loadProps) {
+                              if (_cities.isEmpty) return <CityItem>[];
+                              if (filter.isEmpty) return _cities;
+                              final f = filter.toLowerCase();
+                              return _cities.where((c) => c.name.toLowerCase().contains(f)).toList();
+                            },
+                            itemAsString: (c) => c.name,
+                            compareFn: (a, b) => a.id == b.id,
+                            onBeforePopupOpening: (_) async => _cities.isNotEmpty,
+                            decoratorProps: DropDownDecoratorProps(
+                              decoration: InputDecoration(
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConfig.radiusSmall)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                              ),
+                            ),
+                            dropdownBuilder: (context, selectedItem) => Text(selectedItem?.name ?? l10n.city),
+                            popupProps: PopupProps.modalBottomSheet(
+                              showSearchBox: true,
+                              itemBuilder: (context, item, isSelected, isHighlighted) => ListTile(title: Text(item.name)),
+                            ),
+                            onChanged: (c) => setState(() => _selectedCityId = c?.id),
+                          ),
+                        ],
                       ),
-                    ),
-                    ..._cities.map(
-                      (c) => DropdownMenuItem<String?>(
-                        value: c.id,
-                        child: Text(c.name),
-                      ),
-                    ),
-                  ],
-                  onChanged: _loadingCities
-                      ? null
-                      : (v) => setState(() => _selectedCityId = v),
-                ),
                 const SizedBox(height: AppSpacing.md),
                 TextFormField(
                   controller: _passwordController,
@@ -317,7 +438,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   },
                 ),
                 const SizedBox(height: AppSpacing.md),
-                _PasswordRequirements(l10n: l10n),
+                _PasswordRequirements(
+                  l10n: l10n,
+                  password: _passwordController.text,
+                ),
                 const SizedBox(height: AppSpacing.lg),
                 TextButton(
                   onPressed: () {},
@@ -363,12 +487,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 }
 
 class _PasswordRequirements extends StatelessWidget {
-  const _PasswordRequirements({required this.l10n});
+  const _PasswordRequirements({required this.l10n, required this.password});
 
   final AppLocalizations l10n;
+  final String password;
+
+  static bool _hasLength(String? s) => (s?.length ?? 0) >= 8;
+  static bool _hasNumber(String? s) => s != null && RegExp(r'[0-9]').hasMatch(s);
+  static bool _hasSpecial(String? s) =>
+      s != null && RegExp(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/`~]').hasMatch(s);
 
   @override
   Widget build(BuildContext context) {
+    final ok = AppConfig.primaryColor;
+    final pending = AppConfig.subtitleColor;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -378,22 +510,58 @@ class _PasswordRequirements extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            l10n.passwordReq8Chars,
-            style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+          _RequirementRow(
+            label: l10n.passwordReq8Chars,
+            met: _hasLength(password),
+            color: _hasLength(password) ? ok : pending,
           ),
           const SizedBox(height: 4),
-          Text(
-            l10n.passwordReqNumber,
-            style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+          _RequirementRow(
+            label: l10n.passwordReqNumber,
+            met: _hasNumber(password),
+            color: _hasNumber(password) ? ok : pending,
           ),
           const SizedBox(height: 4),
-          Text(
-            l10n.passwordReqSpecial,
-            style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+          _RequirementRow(
+            label: l10n.passwordReqSpecial,
+            met: _hasSpecial(password),
+            color: _hasSpecial(password) ? ok : pending,
           ),
         ],
       ),
+    );
+  }
+}
+
+class _RequirementRow extends StatelessWidget {
+  const _RequirementRow({
+    required this.label,
+    required this.met,
+    required this.color,
+  });
+
+  final String label;
+  final bool met;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(
+          met ? Icons.check_circle : Icons.radio_button_unchecked,
+          size: 20,
+          color: color,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            label,
+            style: AppTextStyles.bodySmall(color),
+          ),
+        ),
+      ],
     );
   }
 }

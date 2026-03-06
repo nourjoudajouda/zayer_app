@@ -1,11 +1,13 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/widgets/success_dialog.dart';
 import '../auth/providers/auth_providers.dart';
 import '../../core/localization/app_locale.dart';
 import '../../core/localization/locale_provider.dart';
@@ -124,12 +126,19 @@ class _ProfileContent extends ConsumerWidget {
                   final file = File(x.path);
                   final prev = ref.read(avatarImageProvider);
                   ref.read(avatarImageProvider.notifier).state = (file, prev.$2 + 1);
-                  await ref.read(profileRepositoryProvider).uploadAvatar(file);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Photo saved')),
-                    );
-                  }
+                  try {
+                    await ref.read(profileRepositoryProvider).uploadAvatar(file);
+                    if (!context.mounted) return;
+                    ref.invalidate(userProfileProvider);
+                    ref.read(avatarImageProvider.notifier).state = (null, prev.$2 + 2);
+                    await ref.read(userProfileProvider.future);
+                  } catch (_) {}
+                  if (!context.mounted) return;
+                  await showSuccessDialog(
+                    context,
+                    title: 'Success',
+                    message: 'Photo saved successfully',
+                  );
                 }
               },
             ),
@@ -144,12 +153,19 @@ class _ProfileContent extends ConsumerWidget {
                   final file = File(x.path);
                   final prev = ref.read(avatarImageProvider);
                   ref.read(avatarImageProvider.notifier).state = (file, prev.$2 + 1);
-                  await ref.read(profileRepositoryProvider).uploadAvatar(file);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Photo saved')),
-                    );
-                  }
+                  try {
+                    await ref.read(profileRepositoryProvider).uploadAvatar(file);
+                    if (!context.mounted) return;
+                    ref.invalidate(userProfileProvider);
+                    ref.read(avatarImageProvider.notifier).state = (null, prev.$2 + 2);
+                    await ref.read(userProfileProvider.future);
+                  } catch (_) {}
+                  if (!context.mounted) return;
+                  await showSuccessDialog(
+                    context,
+                    title: 'Success',
+                    message: 'Photo saved successfully',
+                  );
                 }
               },
             ),
@@ -343,8 +359,13 @@ class _ProfileHeader extends StatelessWidget {
                 key: ValueKey<int>(avatarVersion),
                 radius: 55,
                 backgroundColor: AppConfig.borderColor,
-                backgroundImage: avatarFile != null ? FileImage(avatarFile!) : null,
-                child: avatarFile == null
+                backgroundImage: avatarFile != null
+                    ? FileImage(avatarFile!) as ImageProvider
+                    : (profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty
+                        ? CachedNetworkImageProvider(profile.avatarUrl!)
+                        : null),
+                child: avatarFile == null &&
+                        (profile.avatarUrl == null || profile.avatarUrl!.isEmpty)
                     ? const Icon(Icons.person, size: 56, color: AppConfig.subtitleColor)
                     : null,
               ),

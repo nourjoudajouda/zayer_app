@@ -1,17 +1,17 @@
 {
   "@@locale": "ar",
-  "appTitle": "زير",
+  "appTitle": "اشترلي",
   "splashSubtitle": "تسوق عالميًا، توصيل محلي",
   "skip": "تخطي",
   "onboardingPage1Title": "تسوق من متاجر العالم",
-  "onboardingPage1Description": "الوصول إلى ملايين المنتجات من أفضل أسواق العالم مباشرة عبر زير.",
+  "onboardingPage1Description": "الوصول إلى ملايين المنتجات من أفضل أسواق العالم مباشرة عبر اشترلي.",
   "onboardingPage2Title": "اجمع ووفر",
   "onboardingPage2Description": "نجمع مشترياتك حسب دولة المنشأ لتقليل تكاليف الشحن وزيادة توفيرك.",
   "onboardingPage3Title": "تتبع شفاف",
   "onboardingPage3Description": "بدون رسوم خفية. تتبع شحناتك المجمعة من المستودع إلى عتبة بابك في الوقت الفعلي.",
   "continueButton": "متابعة",
   "getStarted": "ابدأ",
-  "joinZayer": "انضم إلى زير",
+  "joinZayer": "انضم إلى اشترلي",
   "createAccountSubtitle": "أنشئ حسابك لبدء التسوق عالميًا.",
   "fullName": "الاسم الكامل",
   "phoneNumber": "رقم الهاتف",
@@ -79,5 +79,7 @@
   "address": "العنوان",
   "logout": "تسجيل الخروج",
   "deleteAccount": "حذف الحساب",
-  "comingSoon": "قريباً"
+  "comingSoon": "قريباً",
+  "checkConnectionAndRetry": "لا يوجد اتصال. تحقق من الشبكة وحاول مرة أخرى.",
+  "retry": "إعادة المحاولة"
 }

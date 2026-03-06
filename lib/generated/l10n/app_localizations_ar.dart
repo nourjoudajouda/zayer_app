@@ -9,7 +9,7 @@ class AppLocalizationsAr extends AppLocalizations {
   AppLocalizationsAr([String locale = 'ar']) : super(locale);
 
   @override
-  String get appTitle => 'زير';
+  String get appTitle => 'اشترلي';
 
   @override
   String get splashSubtitle => 'تسوق عالميًا، توصيل محلي';
@@ -22,7 +22,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get onboardingPage1Description =>
-      'الوصول إلى ملايين المنتجات من أفضل أسواق العالم مباشرة عبر زير.';
+      'الوصول إلى ملايين المنتجات من أفضل أسواق العالم مباشرة عبر اشترلي.';
 
   @override
   String get onboardingPage2Title => 'اجمع ووفر';
@@ -45,7 +45,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get getStarted => 'ابدأ';
 
   @override
-  String get joinZayer => 'انضم إلى زير';
+  String get joinZayer => 'انضم إلى اشترلي';
 
   @override
   String get createAccountSubtitle => 'أنشئ حسابك لبدء التسوق عالميًا.';
@@ -309,11 +309,11 @@ class AppLocalizationsAr extends AppLocalizations {
       'Browse millions of products from global stores';
 
   @override
-  String get addToZayerCart => 'Add to Zayer Cart';
+  String get addToZayerCart => 'Add to Eshterely Cart';
 
   @override
   String get addToZayerCartDesc =>
-      'Add items to your Zayer cart for consolidation';
+      'Add items to your Eshterely cart for consolidation';
 
   @override
   String get globalDelivery => 'Global Delivery';
@@ -364,4 +364,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get import => 'Import';
+
+  @override
+  String get checkConnectionAndRetry =>
+      'لا يوجد اتصال. تحقق من الشبكة وحاول مرة أخرى.';
+
+  @override
+  String get retry => 'إعادة المحاولة';
 }

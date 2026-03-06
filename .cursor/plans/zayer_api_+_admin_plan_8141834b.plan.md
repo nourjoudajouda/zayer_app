@@ -173,6 +173,7 @@ isProject: false
 
 ## 2. هيكل Laravel API المقترح
 
+- **مسار واسم المشروع:** `F:\laragon\www\zayer` — مشروع Laravel يُنشأ في هذا المسار (ضمن www الخاص بـ Laragon).
 - **Laravel 11** (أو 10) مع **Sanctum** للمصادقة (Bearer token للجوال).
 - هيكل المجلدات:
   - `app/Http/Controllers/Api/` — AuthController, MeController, AddressController, CartController, OrderController, CheckoutController, WalletController, FavoritesController, SupportController, NotificationsController, ConfigController, **ProductImportController** (استيراد المنتج من الرابط بالـ AI).
@@ -300,11 +301,69 @@ erDiagram
 - لوحة رئيسية: عدد المستخدمين، الطلبات، الإيرادات، التذاكر المفتوحة.
 - تقارير طلبات، مبيعات، مستودعات.
 
-### 4.9 تقنيات مقترحة للوحة الإدارة
+### 4.9 لوحة الإدارة المستخدمة (محددة)
 
-- **Laravel** كـ API للوحة أيضاً أو استخدام نفس المشروع.
-- واجهة ويب: **Filament 3** (موصى به مع Laravel) أو **Laravel Nova** أو **Backpack** أو **Vue/React + Inertia** مع نفس الـ API.
+- **القالب:** **Vuexy v10.11.1** — نسخة HTML، Bootstrap 5، القالب الكامل (full-version)، قالب القائمة العمودية (vertical-menu-template).  
+المسار المرجعي للمثال: `Vuexy v10.11.1 HTML/html-version/Bootstrap5/vuexy-html-admin-template/full-version/html/vertical-menu-template/` (مثلاً `index.html`).
+- **Laravel** يبقى الـ API (للتطبيق الجوال وللوحة الإدارة). صفحات لوحة الأدمن تُبنى باستخدام صفحات Vuexy (HTML + Bootstrap 5 + JS) إما كـ views داخل Laravel أو كـ front-end منفصل يتصل بنفس الـ API؛ مع تسجيل دخول الأدمن (guard `admin`) والصلاحيات كما في 4.1.
 - الـ Admin يعتمد على نفس قاعدة البيانات؛ الصلاحيات تمنع الوصول لـ routes المستخدم العادي وتسمح فقط بـ admin routes و CRUD على الجداول المطلوبة.
+
+### 4.10 تقسيم الـ Layout (Blade Components)
+
+يجب أن يكون layout لوحة الإدارة مقسّماً إلى مكوّنات منفصلة يسهل صيانتها:
+
+
+| الجزء      | الملف                                              | الوصف                                                                 |
+| ---------- | -------------------------------------------------- | --------------------------------------------------------------------- |
+| **Head**   | `layouts/admin/partials/head.blade.php`            | قسم `<head>`: meta, عنوان الصفحة, CSS (Vuexy), `@stack('styles')`     |
+| **Menu**   | `layouts/admin/partials/menu.blade.php`            | القائمة الجانبية (sidebar): شعار Zayer، عناصر القائمة، قوائم فرعية    |
+| **Header** | `layouts/admin/partials/header.blade.php`          | شريط علوي (navbar): زر القائمة للموبايل، قائمة المستخدم، تسجيل الخروج |
+| **Footer** | `layouts/admin/partials/footer.blade.php`          | التذييل: حقوق النشر، روابط مساعدة                                     |
+| **Body**   | `@yield('content')` داخل `layouts/admin.blade.php` | منطقة المحتوى الرئيسي فقط                                             |
+
+
+**الهيكل:**
+
+```
+resources/views/
+├── layouts/
+│   └── admin.blade.php          ← Layout رئيسي يجمع الأجزاء
+└── layouts/admin/
+    └── partials/
+        ├── head.blade.php
+        ├── menu.blade.php
+        ├── header.blade.php
+        └── footer.blade.php
+```
+
+**ملف `admin.blade.php`:**
+
+```blade
+<!doctype html>
+<html ...>
+@include('layouts.admin.partials.head')
+<body>
+    <div class="layout-wrapper layout-content-navbar">
+        <div class="layout-container">
+            @include('layouts.admin.partials.menu')
+            <div class="menu-mobile-toggler ...">...</div>
+            <div class="layout-page">
+                @include('layouts.admin.partials.header')
+                <div class="content-wrapper">
+                    <div class="container-xxl flex-grow-1 container-p-y">
+                        @yield('content')   {{-- Body --}}
+                    </div>
+                    @include('layouts.admin.partials.footer')
+                </div>
+            </div>
+        </div>
+    </div>
+    @include('layouts.admin.partials.scripts')
+</body>
+</html>
+```
+
+يمكن استخراج scripts أيضاً إلى `partials/scripts.blade.php` لتنظيم أفضل.
 
 ---
 
@@ -320,6 +379,6 @@ erDiagram
 8. **Wallet:** balance + transactions + top-up.
 9. **Favorites, Support, Notifications:** CRUD حسب الـ endpoints أعلاه.
 10. **استيراد المنتج بالـ AI:** تنفيذ `POST /api/products/import-from-url` — جلب المحتوى من الرابط، استخراج البيانات عبر نموذج لغة (AI)، إرجاع JSON متوافق مع التطبيق؛ إضافة rate limit وقائمة دومينات مسموحة؛ (اختياري) cache حسب URL.
-11. **Admin Panel:** إعداد Filament (أو بديل)، صلاحيات، ثم إدارة Config، Users، Orders، Cart review، Support، ثم التقارير إن رغبت. (اختياري من لوحة الأدمن: إعداد قائمة المتاجر/الدومينات المسموح استيراد المنتج منها، أو إعدادات مفتاح API للـ AI.)
+11. **Admin Panel:** بناء لوحة الإدارة باستخدام قالب **Vuexy v10.11.1** (HTML، Bootstrap 5، vertical-menu)، مع صلاحيات الأدمن، وإدارة Config، Users، Orders، Cart review، Support، التقارير. (اختياري: إعداد دومينات استيراد المنتج ومفتاح API للـ AI.) Laravel يخدم صفحات الأدمن أو يوفر API فقط والواجهة تتصل به.
 
 بعد ذلك ربط التطبيق Flutter بهذه الـ endpoints (استبدال الـ mock implementations في الـ repositories والـ providers بـ HTTP client مثل Dio مع base URL من [api_config](lib/core/network/api_config.dart)).

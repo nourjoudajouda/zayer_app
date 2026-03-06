@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/widgets/success_dialog.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'providers/profile_providers.dart';
@@ -52,10 +53,12 @@ class _EditDateOfBirthScreenState extends ConsumerState<EditDateOfBirthScreen> {
     await repo.updateProfile(dateOfBirth: formatted);
     ref.invalidate(userProfileProvider);
     if (mounted) {
-      Navigator.of(context).pop(true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Date of birth updated')),
+      await showSuccessDialog(
+        context,
+        title: 'Success',
+        message: 'Date of birth updated successfully',
       );
+      if (mounted) Navigator.of(context).pop(true);
     }
   }
 

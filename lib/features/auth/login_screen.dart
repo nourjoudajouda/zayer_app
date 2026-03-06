@@ -1,7 +1,11 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import 'package:dropdown_search/dropdown_search.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/localization/app_locale.dart';
@@ -27,8 +31,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   String _countryCode = '966';
+  String? _selectedCountryId;
   List<CountryItem> _countries = [];
   bool _loadingCountries = true;
+  bool _countriesLoadError = false;
+
+  CountryItem? _countryById(String? id) {
+    if (id == null || id.isEmpty) return null;
+    for (final c in _countries) if (c.id == id) return c;
+    return null;
+  }
 
   @override
   void initState() {
@@ -36,17 +48,63 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _loadCountries();
   }
 
+  static const Map<String, String> _localeToDialCode = {
+    'SA': '966', 'IQ': '964', 'JO': '962', 'KW': '965', 'BH': '973',
+    'QA': '974', 'AE': '971', 'OM': '968', 'YE': '967', 'SY': '963',
+    'LB': '961', 'PS': '970', 'EG': '20', 'LY': '218', 'TN': '216',
+    'DZ': '213', 'MA': '212', 'SD': '249',
+  };
+
   Future<void> _loadCountries() async {
+    setState(() => _countriesLoadError = false);
     final repo = ref.read(authRepositoryProvider);
-    final list = await repo.getCountries();
-    if (mounted) setState(() {
+    List<CountryItem> list;
+    try {
+      list = await repo.getCountries();
+    } catch (_) {
+      if (mounted) setState(() {
+        _loadingCountries = false;
+        _countriesLoadError = true;
+      });
+      return;
+    }
+    if (!mounted) return;
+    final deviceCountryCode = _deviceCountryCode();
+    CountryItem? toSelect;
+    if (list.isNotEmpty) {
+      if (deviceCountryCode != null) {
+        final dial = _localeToDialCode[deviceCountryCode];
+        for (final c in list) {
+          if (c.id == deviceCountryCode || (dial != null && (c.dialCode == dial || c.dialCode == '+$dial'))) {
+            toSelect = c;
+            break;
+          }
+        }
+      }
+      if (toSelect == null) {
+        final iq = list.where((c) => c.dialCode == '964' || c.id == 'IQ');
+        final jo = list.where((c) => c.dialCode == '962' || c.id == 'JO');
+        toSelect = iq.isNotEmpty ? iq.first : (jo.isNotEmpty ? jo.first : list.first);
+      }
+    }
+    setState(() {
       _countries = list;
       _loadingCountries = false;
-      if (list.isNotEmpty && _countryCode == '966') {
-        final first = list.first;
-        _countryCode = first.dialCode.isNotEmpty ? first.dialCode : '966';
+      if (_selectedCountryId == null && toSelect != null) {
+        _selectedCountryId = toSelect.id;
+        _countryCode = toSelect.dialCode.isNotEmpty ? toSelect.dialCode : '966';
       }
     });
+  }
+
+  String? _deviceCountryCode() {
+    try {
+      final locale = Platform.localeName;
+      if (locale.contains('_')) return locale.split('_').last.toUpperCase();
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
@@ -117,33 +175,62 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SizedBox(
-                      width: 120,
-                      child: DropdownButtonFormField<String>(
-                        value: _countries.any((c) => (c.dialCode.isNotEmpty ? c.dialCode : c.id) == _countryCode)
-                            ? _countryCode
-                            : (_countries.isNotEmpty ? (_countries.first.dialCode.isNotEmpty ? _countries.first.dialCode : _countries.first.id) : '966'),
-                        decoration: InputDecoration(
-                          labelText: '',
-                          hintText: '+966',
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 14,
-                          ),
-                        ),
-                        items: _countries.isEmpty
-                            ? [
-                                const DropdownMenuItem(value: '966', child: Text('+966')),
-                                const DropdownMenuItem(value: '20', child: Text('+20')),
-                                const DropdownMenuItem(value: '1', child: Text('+1')),
-                              ]
-                            : _countries
-                                .map((c) => DropdownMenuItem<String>(
-                                      value: c.dialCode.isNotEmpty ? c.dialCode : c.id,
-                                      child: Text('${c.flagEmoji} +${c.dialCode.isNotEmpty ? c.dialCode : c.id}'),
-                                    ))
-                                .toList(),
-                        onChanged: (v) => setState(() => _countryCode = v ?? '966'),
-                      ),
+                      width: 150,
+                      child: _countriesLoadError
+                          ? InputDecorator(
+                              decoration: InputDecoration(
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConfig.radiusSmall)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.wifi_off, size: 20, color: Colors.orange.shade700),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: Text(l10n.checkConnectionAndRetry, style: TextStyle(fontSize: 12, color: Colors.orange.shade700))),
+                                  TextButton(onPressed: _loadCountries, child: Text(l10n.retry)),
+                                ],
+                              ),
+                            )
+                          : _loadingCountries
+                              ? InputDecorator(
+                                  decoration: InputDecoration(
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConfig.radiusSmall)),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                  ),
+                                  child: const Row(children: [SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)), SizedBox(width: 8), Text('…')]),
+                                )
+                              : DropdownSearch<CountryItem>(
+                              selectedItem: _countryById(_selectedCountryId),
+                              items: (filter, loadProps) {
+                                if (_countries.isEmpty) return <CountryItem>[];
+                                if (filter.isEmpty) return _countries;
+                                final f = filter.toLowerCase();
+                                return _countries.where((c) {
+                                  final code = c.dialCode.isNotEmpty ? c.dialCode : c.id;
+                                  return code.contains(f) || '${c.flagEmoji}+$code'.toLowerCase().contains(f);
+                                }).toList();
+                              },
+                              itemAsString: (c) => '${c.flagEmoji} +${c.dialCode.isNotEmpty ? c.dialCode : c.id}',
+                              compareFn: (a, b) => a.id == b.id,
+                              onBeforePopupOpening: (_) async => _countries.isNotEmpty,
+                              dropdownBuilder: (context, selectedItem) => Text(
+                                selectedItem != null
+                                    ? '${selectedItem.flagEmoji} +${selectedItem.dialCode.isNotEmpty ? selectedItem.dialCode : selectedItem.id}'
+                                    : '+966',
+                              ),
+                              popupProps: PopupProps.modalBottomSheet(
+                                showSearchBox: true,
+                                itemBuilder: (context, item, isSelected, isHighlighted) => ListTile(
+                                  title: Text('${item.flagEmoji} +${item.dialCode.isNotEmpty ? item.dialCode : item.id}'),
+                                ),
+                              ),
+                              onChanged: (c) {
+                                setState(() {
+                                  _selectedCountryId = c?.id;
+                                  _countryCode = (c != null && c.dialCode.isNotEmpty) ? c.dialCode : '966';
+                                });
+                              },
+                            ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(

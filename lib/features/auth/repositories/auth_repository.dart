@@ -306,6 +306,11 @@ class AuthRepositoryImpl implements AuthRepository {
     final queryParams = <String, String>{};
     if (countryId != null && countryId.isNotEmpty) {
       queryParams['country_id'] = countryId;
+      if (countryCode != null && countryCode.isNotEmpty) {
+        queryParams['country_code'] = countryCode;
+      } else if (int.tryParse(countryId) == null) {
+        queryParams['country_code'] = countryId;
+      }
     } else if (countryCode != null && countryCode.isNotEmpty) {
       queryParams['country_code'] = countryCode;
     }

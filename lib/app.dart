@@ -32,7 +32,7 @@ class ZayerApp extends ConsumerWidget {
               ? config.appName!
               : null,
         ) ??
-        'Zayer';
+        'Eshterely';
 
     return MaterialApp.router(
       title: appTitle,

@@ -101,7 +101,7 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In en, this message translates to:
-  /// **'Zayer'**
+  /// **'Eshterely'**
   String get appTitle;
 
   /// No description provided for @splashSubtitle.
@@ -125,7 +125,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingPage1Description.
   ///
   /// In en, this message translates to:
-  /// **'Access millions of products from the world\'s best markets directly through Zayer.'**
+  /// **'Access millions of products from the world\'s best markets directly through Eshterely.'**
   String get onboardingPage1Description;
 
   /// No description provided for @onboardingPage2Title.
@@ -167,7 +167,7 @@ abstract class AppLocalizations {
   /// No description provided for @joinZayer.
   ///
   /// In en, this message translates to:
-  /// **'Join Zayer'**
+  /// **'Join Eshterely'**
   String get joinZayer;
 
   /// No description provided for @createAccountSubtitle.
@@ -677,13 +677,13 @@ abstract class AppLocalizations {
   /// No description provided for @addToZayerCart.
   ///
   /// In en, this message translates to:
-  /// **'Add to Zayer Cart'**
+  /// **'Add to Eshterely Cart'**
   String get addToZayerCart;
 
   /// No description provided for @addToZayerCartDesc.
   ///
   /// In en, this message translates to:
-  /// **'Add items to your Zayer cart for consolidation'**
+  /// **'Add items to your Eshterely cart for consolidation'**
   String get addToZayerCartDesc;
 
   /// No description provided for @globalDelivery.
@@ -781,6 +781,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Import'**
   String get import;
+
+  /// No description provided for @checkConnectionAndRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Check network and retry.'**
+  String get checkConnectionAndRetry;
+
+  /// No description provided for @retry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get retry;
 }
 
 class _AppLocalizationsDelegate

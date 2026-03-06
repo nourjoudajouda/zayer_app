@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -43,11 +44,15 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
   bool _obscurePassword = true;
   int _resendSeconds = 55;
   Timer? _timer;
+  bool _verifying = false;
 
   @override
   void initState() {
     super.initState();
     _startResendTimer();
+    for (var i = 0; i < _controllers.length; i++) {
+      _controllers[i].addListener(_checkAutoVerify);
+    }
     if (kDebugMode && widget.devOtp != null && widget.devOtp!.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final digits = widget.devOtp!.replaceAll(RegExp(r'\D'), '');
@@ -61,8 +66,23 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     }
   }
 
+  void _checkAutoVerify() {
+    if (_verifying) return;
+    final otp = _controllers.map((c) => c.text).join();
+    if (otp.length == 6) {
+      _verifying = true;
+      setState(() {});
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _verify();
+      });
+    }
+  }
+
   @override
   void dispose() {
+    for (var i = 0; i < _controllers.length; i++) {
+      _controllers[i].removeListener(_checkAutoVerify);
+    }
     _timer?.cancel();
     _passwordController.dispose();
     _passwordConfirmController.dispose();
@@ -96,10 +116,15 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
 
   Future<void> _verify() async {
     final otp = _controllers.map((c) => c.text).join();
-    if (otp.length != 6) return;
-    if (widget.mode == 'reset' && !(_formKey.currentState?.validate() ?? false)) {
+    if (otp.length != 6) {
+      if (mounted) setState(() => _verifying = false);
       return;
     }
+    if (widget.mode == 'reset' && !(_formKey.currentState?.validate() ?? false)) {
+      if (mounted) setState(() => _verifying = false);
+      return;
+    }
+    if (mounted) setState(() => _verifying = true);
     final repo = ref.read(authRepositoryProvider);
     final result = await repo.verifyOtp(
       phone: widget.initialPhone,
@@ -110,6 +135,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
           widget.mode == 'reset' ? _passwordConfirmController.text : null,
     );
     if (!mounted) return;
+    setState(() => _verifying = false);
     switch (result) {
       case AuthSuccess():
         context.go(AppRoutes.home);
@@ -133,6 +159,31 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     }
   }
 
+  void _fillFromPaste(String digits) {
+    final only = digits.replaceAll(RegExp(r'\D'), '');
+    final code = only.length >= 6
+        ? only.substring(0, 6)
+        : only.padRight(6, '0');
+    for (var i = 0; i < 6 && i < _controllers.length; i++) {
+      _controllers[i].text = code[i];
+    }
+    FocusScope.of(context).requestFocus(_focusNodes[5]);
+    setState(() {});
+    _checkAutoVerify();
+  }
+
+  void _fillDebug123456() {
+    const code = '123456';
+    for (var i = 0; i < 6; i++) {
+      _controllers[i].text = code[i];
+    }
+    FocusScope.of(context).requestFocus(_focusNodes[5]);
+    setState(() => _verifying = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _verify();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -141,26 +192,14 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     return Directionality(
       textDirection: locale.isRtl ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
-        backgroundColor: AppConfig.borderColor.withValues(alpha: 0.3),
+        backgroundColor: Colors.white,
         body: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 400),
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(AppConfig.radiusXLarge),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Form(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.md,
+            ),
+            child: Form(
                   key: _formKey,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -197,11 +236,46 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                     const SizedBox(height: AppSpacing.sm),
                     _PhonePreviewRow(
                       phone: _maskPhone(widget.initialPhone),
-                      onEdit: () => context.pop(),
+                      onEdit: () {
+                        if (widget.mode == 'signup') {
+                          context.go(AppRoutes.register);
+                        } else {
+                          context.go(AppRoutes.forgotPassword);
+                        }
+                      },
                     ),
                     if (kDebugMode && widget.devOtp != null && widget.devOtp!.isNotEmpty) ...[
                       const SizedBox(height: AppSpacing.md),
                       _DevOtpBanner(otp: widget.devOtp!),
+                    ],
+                    if (kDebugMode && (widget.devOtp == null || widget.devOtp!.isEmpty)) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppConfig.warningOrange.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Debug: OTP is shown when the API returns it (otp/code). Or use fixed code below.',
+                              style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+                            ),
+                            const SizedBox(height: 8),
+                            TextButton.icon(
+                              onPressed: _fillDebug123456,
+                              icon: const Icon(Icons.pin_outlined, size: 18),
+                              label: const Text('Use 123456'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: AppConfig.primaryColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                     if (widget.mode == 'reset') ...[
                       const SizedBox(height: AppSpacing.lg),
@@ -246,6 +320,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                         controller: _controllers[i],
                         focusNode: _focusNodes[i],
                         onChanged: (v) => _onOtpChanged(i, v),
+                        onPaste: _fillFromPaste,
                       )),
                     ),
                     const SizedBox(height: AppSpacing.xl),
@@ -269,15 +344,21 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
-                        onPressed: _verify,
+                        onPressed: _verifying ? null : _verify,
                         style: FilledButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(AppConfig.radiusXLarge),
                           ),
                         ),
-                        icon: const Icon(Icons.check, size: 20),
-                        label: Text(l10n.verify),
+                        icon: _verifying
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.check, size: 20),
+                        label: Text(_verifying ? 'Verifying...' : l10n.verify),
                       ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
@@ -288,12 +369,10 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                     ),
                   ],
                 ),
-                ),
               ),
             ),
           ),
         ),
-      ),
     );
   }
 }
@@ -330,16 +409,41 @@ class _PhonePreviewRow extends StatelessWidget {
   }
 }
 
+class _OtpPasteFormatter extends TextInputFormatter {
+  const _OtpPasteFormatter(this.onPaste);
+
+  final void Function(String) onPaste;
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    if (digits.length > 1) {
+      onPaste(digits);
+      return oldValue;
+    }
+    if (digits.isEmpty) return newValue;
+    return TextEditingValue(
+      text: digits.substring(0, 1),
+      selection: const TextSelection.collapsed(offset: 1),
+    );
+  }
+}
+
 class _OtpBox extends StatelessWidget {
   const _OtpBox({
     required this.controller,
     required this.focusNode,
     required this.onChanged,
+    required this.onPaste,
   });
 
   final TextEditingController controller;
   final FocusNode focusNode;
   final ValueChanged<String> onChanged;
+  final void Function(String) onPaste;
 
   @override
   Widget build(BuildContext context) {
@@ -351,6 +455,11 @@ class _OtpBox extends StatelessWidget {
         focusNode: focusNode,
         keyboardType: TextInputType.number,
         maxLength: 1,
+        inputFormatters: [
+          _OtpPasteFormatter(onPaste),
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(1),
+        ],
         textAlign: TextAlign.center,
         style: Theme.of(context).textTheme.titleLarge,
         decoration: InputDecoration(
