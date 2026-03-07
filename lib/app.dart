@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:zayer_app/core/fcm/fcm_helper_firebase.dart';
 
 import 'core/config/app_config_provider.dart';
 import 'core/localization/locale_provider.dart';
@@ -33,12 +34,15 @@ class ZayerApp extends ConsumerWidget {
               : null,
         ) ??
         'Eshterely';
-
+ 
     return MaterialApp.router(
       title: appTitle,
       theme: theme,
+      debugShowCheckedModeBanner: false,
       locale: locale,
       builder: (context, child) {
+            NotificationHelper().initialNotification();
+
         final content = Directionality(
           textDirection: textDirection,
           child: child ?? const SizedBox.shrink(),

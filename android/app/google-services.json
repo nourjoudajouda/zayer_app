@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "745743100803",
+    "project_id": "zayer-5f87e",
+    "storage_bucket": "zayer-5f87e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:745743100803:android:68c32ee93eb266406be4b6",
+        "android_client_info": {
+          "package_name": "com.zayer.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGraKWw5CI7LAIyoQ-JJZqLaRGjv0NMAs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

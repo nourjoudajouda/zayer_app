@@ -19,7 +19,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.10.7
+  sdk: ^3.10.4
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -47,6 +47,8 @@ dependencies:
   firebase_messaging: ^15.1.5
   dropdown_search: ^6.0.2
   connectivity_plus: ^6.0.5
+  flutter_local_notifications: ^20.1.0
+
 
 dev_dependencies:
   flutter_test:

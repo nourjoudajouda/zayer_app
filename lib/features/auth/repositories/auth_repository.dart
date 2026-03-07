@@ -2,9 +2,9 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
+import 'package:zayer_app/core/fcm/fcm_helper_firebase.dart';
 
 import '../../../core/auth/token_store.dart';
-import '../../../core/fcm/fcm_service.dart';
 import '../../../core/network/api_client.dart';
 import '../models/auth_result.dart';
 import '../models/country_city.dart';
@@ -36,14 +36,14 @@ abstract class AuthRepository {
 class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl({
     required TokenStore tokenStore,
-    FcmService? fcmService,
+    // FcmService? fcmService,
     Dio? dio,
   })  : _tokenStore = tokenStore,
-        _fcmService = fcmService,
+        // _fcmService = fcmService,
         _dio = dio ?? ApiClient.instance;
 
   final TokenStore _tokenStore;
-  final FcmService? _fcmService;
+  // final FcmService? _fcmService;
   final Dio _dio;
 
   String _extractMessage(DioException e) {
@@ -120,7 +120,10 @@ class AuthRepositoryImpl implements AuthRepository {
     required String password,
   }) async {
     try {
-      final fcmToken = await _fcmService?.getToken();
+      // final fcmToken = await _fcmService?.getToken();
+              String? fcmToken = await NotificationHelper().getToken();
+
+      print('fcmTokenfcmToken $fcmToken');
       final data = <String, dynamic>{
         'phone': phone,
         'password': password,
@@ -175,7 +178,7 @@ class AuthRepositoryImpl implements AuthRepository {
         body['password'] = password;
         body['password_confirmation'] = passwordConfirmation ?? password;
       }
-      final fcmToken = await _fcmService?.getToken();
+              String? fcmToken = await NotificationHelper().getToken();
       if (fcmToken != null && fcmToken.isNotEmpty) {
         body['fcm_token'] = fcmToken;
         body['device_type'] = kIsWeb ? 'web' : 'android';
@@ -259,10 +262,10 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<void> updateFcmToken() async {
-    if (_fcmService == null) return;
+    // if (_fcmService == null) return;
     final token = await _tokenStore.getToken();
     if (token == null || token.isEmpty) return;
-    final fcmToken = await _fcmService.getToken();
+              String? fcmToken = await NotificationHelper().getToken();
     if (fcmToken == null || fcmToken.isEmpty) return;
     try {
       await _dio.patch<Map<String, dynamic>>(
