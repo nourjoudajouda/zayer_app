@@ -7,7 +7,6 @@ import '../../core/config/app_config.dart';
 import '../../core/theme/app_spacing.dart';
 import 'models/address_model.dart';
 import 'providers/profile_providers.dart';
-import 'widgets/badge_pill.dart';
 
 /// Add or edit address form. Two steps: Location (verified country/city, area, street, building), then Details (nickname, type, map). Pops with [true] when saved.
 class AddEditAddressScreen extends ConsumerStatefulWidget {

@@ -122,7 +122,7 @@ class _ProfileContent extends ConsumerWidget {
                 Navigator.pop(context);
                 final picker = ImagePicker();
                 final x = await picker.pickImage(source: ImageSource.gallery);
-                if (x != null && context.mounted) {
+                if (x != null ) {
                   final file = File(x.path);
                   final prev = ref.read(avatarImageProvider);
                   ref.read(avatarImageProvider.notifier).state = (file, prev.$2 + 1);
@@ -149,7 +149,7 @@ class _ProfileContent extends ConsumerWidget {
                 Navigator.pop(context);
                 final picker = ImagePicker();
                 final x = await picker.pickImage(source: ImageSource.camera);
-                if (x != null && context.mounted) {
+                if (x != null) {
                   final file = File(x.path);
                   final prev = ref.read(avatarImageProvider);
                   ref.read(avatarImageProvider.notifier).state = (file, prev.$2 + 1);
