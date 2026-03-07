@@ -88,6 +88,15 @@ class ApiClient {
 
   /// Current base URL in use (for dev screen / debugging).
   static String? get currentBaseUrl => _instance?.options.baseUrl;
+
+  /// Base URL that never throws. Use for resolving asset URLs before ApiClient init.
+  static String? get safeBaseUrl {
+    try {
+      return currentBaseUrl;
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 class _AuthInterceptor extends Interceptor {

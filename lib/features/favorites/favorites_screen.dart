@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/network/api_client.dart';
+import '../../core/network/api_config.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/routing/app_router.dart';
@@ -318,9 +320,12 @@ class _FavoriteCard extends StatelessWidget {
               width: 100,
               height: 100,
               color: AppConfig.borderColor.withValues(alpha: 0.5),
-              child: item.imageUrl != null && item.imageUrl!.isNotEmpty
-                  ? Image.network(item.imageUrl!, fit: BoxFit.cover)
-                  : Icon(Icons.image_outlined, size: 40, color: AppConfig.subtitleColor),
+              child: () {
+                final url = resolveAssetUrl(item.imageUrl, ApiClient.safeBaseUrl);
+                return url != null && url.isNotEmpty
+                    ? Image.network(url, fit: BoxFit.cover)
+                    : Icon(Icons.image_outlined, size: 40, color: AppConfig.subtitleColor);
+              }(),
             ),
           ),
         ],

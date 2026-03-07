@@ -7,6 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/network/api_client.dart';
+import '../../core/network/api_config.dart';
 import '../../core/platform/webview_supported.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
@@ -551,11 +553,13 @@ class _SaveFavoriteSheetState extends State<_SaveFavoriteSheet> {
                     color: AppConfig.borderColor.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
                   ),
-                  child: widget.product.imageUrl != null && widget.product.imageUrl!.isNotEmpty
+                child: () {
+                  final url = resolveAssetUrl(widget.product.imageUrl, ApiClient.safeBaseUrl);
+                  return url != null && url.isNotEmpty
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
                           child: CachedNetworkImage(
-                            imageUrl: widget.product.imageUrl!,
+                            imageUrl: url,
                             width: 64,
                             height: 64,
                             fit: BoxFit.cover,
@@ -576,7 +580,8 @@ class _SaveFavoriteSheetState extends State<_SaveFavoriteSheet> {
                           Icons.image_outlined,
                           color: AppConfig.subtitleColor,
                           size: 32,
-                        ),
+                        );
+                }(),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(

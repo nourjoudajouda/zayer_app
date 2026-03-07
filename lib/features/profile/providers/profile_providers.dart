@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,8 +20,12 @@ final complianceStatusProvider = FutureProvider<ComplianceStatus>((ref) async {
   return ref.read(profileRepositoryProvider).getCompliance();
 });
 
-/// Picked avatar: (file, version). Bump version when setting so UI key changes and image refreshes.
-final avatarImageProvider = StateProvider<(File?, int)>((_) => (null, 0));
+/// Picked avatar preview bytes and version. Bump version when setting so UI key changes and image refreshes.
+/// Uses Uint8List (not File) to support web where dart:io is unavailable.
+final avatarImageProvider = StateProvider<(Uint8List?, int)>((_) => (null, 0));
+
+/// True while avatar is being uploaded to the server.
+final avatarUploadingProvider = StateProvider<bool>((_) => false);
 
 // --- Addresses (from backend)
 final addressRepositoryProvider = Provider<AddressRepository>((ref) {

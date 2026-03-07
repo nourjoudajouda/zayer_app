@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/network/api_client.dart';
+import '../../core/network/api_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../cart/cart_empty_screen.dart';
@@ -176,11 +178,13 @@ class _CartItemCard extends StatelessWidget {
                     color: AppConfig.borderColor.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
                   ),
-                  child: item.imageUrl != null && item.imageUrl!.isNotEmpty
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
-                          child: CachedNetworkImage(
-                            imageUrl: item.imageUrl!,
+                  child: () {
+                    final url = resolveAssetUrl(item.imageUrl, ApiClient.safeBaseUrl);
+                    return url != null && url.isNotEmpty
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                            child: CachedNetworkImage(
+                              imageUrl: url,
                             fit: BoxFit.cover,
                             placeholder: (context, url) => const Center(
                               child: CircularProgressIndicator(strokeWidth: 2),
@@ -191,10 +195,11 @@ class _CartItemCard extends StatelessWidget {
                             ),
                           ),
                         )
-                      : const Icon(
+                    : const Icon(
                           Icons.image_outlined,
                           color: AppConfig.subtitleColor,
-                        ),
+                        );
+              }(),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(

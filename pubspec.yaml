@@ -48,6 +48,7 @@ dependencies:
   dropdown_search: ^6.0.2
   connectivity_plus: ^6.0.5
   flutter_local_notifications: ^20.1.0
+  get: ^4.7.3
 
 
 dev_dependencies:

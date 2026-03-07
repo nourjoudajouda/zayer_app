@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/network/api_client.dart';
+import '../../../core/network/api_config.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../models/detected_product.dart';
 
@@ -257,11 +259,13 @@ class _DetectedProductOverlayState extends State<DetectedProductOverlay>
               color: AppConfig.borderColor.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
             ),
-            child: widget.product.imageUrl != null && widget.product.imageUrl!.isNotEmpty
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
-                    child: Image.network(
-                      widget.product.imageUrl!,
+            child: () {
+              final url = resolveAssetUrl(widget.product.imageUrl, ApiClient.safeBaseUrl);
+              return url != null && url.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                      child: Image.network(
+                        url,
                       width: 72,
                       height: 72,
                       fit: BoxFit.cover,
@@ -291,12 +295,13 @@ class _DetectedProductOverlayState extends State<DetectedProductOverlay>
                       },
                     ),
                   )
-                : const Icon(
+                  : const Icon(
                     Icons.image_outlined,
                     color: AppConfig.subtitleColor,
                     size: 32,
-                  ),
-          ),
+                  );
+            }(),
+            ),
           const SizedBox(width: AppSpacing.md),
           // Product info + CTAs
           Expanded(

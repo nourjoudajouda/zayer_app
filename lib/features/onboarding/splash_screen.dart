@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/auth/auth_providers.dart';
 import '../../core/config/app_config.dart';
+import '../../core/network/api_config.dart';
 import '../../core/config/app_config_provider.dart';
 import '../../core/config/models/app_bootstrap_config.dart';
 import '../../core/localization/locale_provider.dart';
@@ -40,16 +42,20 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     }
   }
 
-  void _navigateAfterDelay(bool onboardingEmpty, bool developmentMode) {
-    Future<void>.delayed(const Duration(milliseconds: 1200), () {
-      if (mounted) {
-        if (developmentMode) {
-          context.go(AppRoutes.underDevelopment);
-        } else {
-          context.go(onboardingEmpty ? AppRoutes.register : AppRoutes.onboarding);
-        }
-      }
-    });
+  void _navigateAfterDelay(WidgetRef ref, bool onboardingEmpty, bool developmentMode) async {
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    if (!mounted) return;
+    final hasToken = await ref.read(tokenStoreProvider).hasToken();
+    if (!mounted) return;
+    if (hasToken) {
+      context.go(AppRoutes.home);
+      return;
+    }
+    if (developmentMode) {
+      context.go(AppRoutes.underDevelopment);
+    } else {
+      context.go(onboardingEmpty ? AppRoutes.register : AppRoutes.onboarding);
+    }
   }
 
   @override
@@ -69,6 +75,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
               if (!_hasScheduledNavigation) {
                 _hasScheduledNavigation = true;
                 _navigateAfterDelay(
+                  ref,
                   config.onboarding.isEmpty,
                   config.developmentMode,
                 );
@@ -201,13 +208,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Widget _buildLogo(String logoUrl) {
-    if (logoUrl.isEmpty) {
+    final resolved = resolveAssetUrl(logoUrl);
+    if (resolved == null || resolved.isEmpty) {
       return _buildLogoPlaceholder();
     }
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppConfig.radiusLarge),
       child: CachedNetworkImage(
-        imageUrl: logoUrl,
+        imageUrl: resolved,
         width: 80,
         height: 80,
         fit: BoxFit.cover,

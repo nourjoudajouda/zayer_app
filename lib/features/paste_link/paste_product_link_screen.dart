@@ -10,6 +10,8 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/network/api_client.dart';
+import '../../core/network/api_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../cart/models/cart_item_model.dart';
@@ -662,8 +664,16 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
-              child: CachedNetworkImage(
-                imageUrl: _result!.imageUrl!,
+              child: Builder(
+                builder: (context) {
+                  final url = resolveAssetUrl(_result!.imageUrl, ApiClient.safeBaseUrl);
+                  if (url == null || url.isEmpty) {
+                    return Center(
+                      child: Icon(Icons.image_not_supported, color: AppConfig.subtitleColor, size: 48),
+                    );
+                  }
+                  return CachedNetworkImage(
+                    imageUrl: url,
                 fit: BoxFit.contain,
                 placeholder: (context, url) => Center(
                   child: CircularProgressIndicator(
@@ -690,10 +700,12 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
                     ],
                   ),
                 ),
+              );
+                },
               ),
             ),
           ),
-        // Image Upload Section - Only in manual mode
+        // Image Upload Section - Only in manual mode - Only in manual mode
         if (showManualFields) ...[
           const SizedBox(height: AppSpacing.md),
           Text(
