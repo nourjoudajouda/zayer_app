@@ -1,8 +1,11 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -124,20 +127,17 @@ class _ProfileContent extends ConsumerWidget {
               leading: const Icon(Icons.photo_library),
               title: const Text('Gallery'),
               onTap: () async {
-                Navigator.pop(context);
                 final picker = ImagePicker();
                 final xFile = await picker.pickImage(source: ImageSource.gallery);
-                if (xFile != null && context.mounted) {
+                if (xFile != null ) {
                   final bytes = await xFile.readAsBytes();
                   ref.read(avatarImageProvider.notifier).state = (bytes, ref.read(avatarImageProvider).$2 + 1);
                   ref.read(avatarUploadingProvider.notifier).state = true;
                   try {
                     await ref.read(profileRepositoryProvider).uploadAvatar(bytes, xFile.name);
-                    if (!context.mounted) return;
-                    ref.invalidate(userProfileProvider);
+                     ref.invalidate(userProfileProvider);
                     await ref.read(userProfileProvider.future);
-                    if (!context.mounted) return;
-                    final prev = ref.read(avatarImageProvider);
+                     final prev = ref.read(avatarImageProvider);
                     ref.read(avatarImageProvider.notifier).state = (null, prev.$2 + 1);
                     await showSuccessDialog(
                       context,
@@ -145,37 +145,35 @@ class _ProfileContent extends ConsumerWidget {
                       message: 'Photo saved successfully',
                     );
                   } catch (_) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
+                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Failed to upload photo')),
                       );
-                    }
+                   
                   } finally {
-                    if (context.mounted) {
-                      ref.read(avatarUploadingProvider.notifier).state = false;
-                    }
+                       ref.read(avatarUploadingProvider.notifier).state = false;
+                  
                   }
                 }
+                Navigator.pop(context);
+
+                
               },
             ),
             ListTile(
               leading: const Icon(Icons.camera_alt),
               title: const Text('Camera'),
               onTap: () async {
-                Navigator.pop(context);
                 final picker = ImagePicker();
                 final xFile = await picker.pickImage(source: ImageSource.camera);
-                if (xFile != null && context.mounted) {
+                if (xFile != null ) {
                   final bytes = await xFile.readAsBytes();
                   ref.read(avatarImageProvider.notifier).state = (bytes, ref.read(avatarImageProvider).$2 + 1);
                   ref.read(avatarUploadingProvider.notifier).state = true;
                   try {
                     await ref.read(profileRepositoryProvider).uploadAvatar(bytes, xFile.name);
-                    if (!context.mounted) return;
-                    ref.invalidate(userProfileProvider);
+                     ref.invalidate(userProfileProvider);
                     await ref.read(userProfileProvider.future);
-                    if (!context.mounted) return;
-                    final prev = ref.read(avatarImageProvider);
+                     final prev = ref.read(avatarImageProvider);
                     ref.read(avatarImageProvider.notifier).state = (null, prev.$2 + 1);
                     await showSuccessDialog(
                       context,
@@ -183,17 +181,16 @@ class _ProfileContent extends ConsumerWidget {
                       message: 'Photo saved successfully',
                     );
                   } catch (_) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
+                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Failed to upload photo')),
                       );
-                    }
+                    
                   } finally {
-                    if (context.mounted) {
-                      ref.read(avatarUploadingProvider.notifier).state = false;
-                    }
-                  }
+                       ref.read(avatarUploadingProvider.notifier).state = false;
+                   }
                 }
+                Navigator.pop(context);
+
               },
             ),
           ],
