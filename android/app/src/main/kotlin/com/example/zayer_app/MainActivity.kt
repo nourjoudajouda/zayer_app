@@ -1,4 +1,4 @@
-package com.example.zayer_app
+package com.zayer.app
 
 import io.flutter.embedding.android.FlutterActivity
 

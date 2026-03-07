@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/config/app_config_provider.dart';
-import '../../core/routing/app_router.dart';
 import '../../core/config/models/app_bootstrap_config.dart';
 import '../../core/localization/app_locale.dart';
 import '../../core/localization/locale_provider.dart';
