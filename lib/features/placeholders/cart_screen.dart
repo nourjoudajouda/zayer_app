@@ -232,6 +232,15 @@ class _CartItemCard extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      if (item.variationText != null && item.variationText!.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          item.variationText!,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppConfig.primaryColor,
+                              ),
+                        ),
+                      ],
                       if (item.storeName != null) ...[
                         const SizedBox(height: 4),
                         Text(

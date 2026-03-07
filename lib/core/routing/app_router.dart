@@ -44,6 +44,7 @@ import '../../features/settings/default_warehouse_screen.dart';
 import '../../features/settings/privacy_policy_screen.dart';
 import '../../features/paste_link/paste_product_link_screen.dart';
 import '../../features/product_import/confirm_product_screen.dart';
+import '../../features/product_import/models/product_variation.dart';
 import '../../features/store_webview/models/detected_product.dart';
 import '../../features/development/dev_mode_screen.dart';
 import '../../features/development/under_development_screen.dart';
@@ -239,6 +240,15 @@ GoRouter _createAppRouter() {
           if (productJson != null && productJson.isNotEmpty) {
             try {
               final productData = jsonDecode(Uri.decodeComponent(productJson)) as Map<String, dynamic>;
+              List<ProductVariation>? variations;
+              final vList = productData['variations'];
+              if (vList is List && vList.isNotEmpty) {
+                variations = vList
+                    .map((e) => e is Map ? ProductVariation.fromJson(Map<String, dynamic>.from(e as Map)) : null)
+                    .whereType<ProductVariation>()
+                    .toList();
+                if (variations.isEmpty) variations = null;
+              }
               product = DetectedProduct(
                 storeKey: productData['storeKey'] as String,
                 storeName: productData['storeName'] as String,
@@ -248,6 +258,7 @@ GoRouter _createAppRouter() {
                 currency: productData['currency'] as String? ?? 'USD',
                 imageUrl: productData['imageUrl'] as String?,
                 productId: productData['productId'] as String?,
+                variations: variations,
               );
             } catch (e) {
               // If parsing fails, product will be null and screen will use mock data

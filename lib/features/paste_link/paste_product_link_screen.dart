@@ -17,6 +17,7 @@ import '../../core/theme/app_spacing.dart';
 import '../cart/models/cart_item_model.dart';
 import '../cart/providers/cart_providers.dart';
 import '../cart/repositories/cart_repository.dart';
+import '../product_import/models/product_variation.dart';
 import 'models/product_import_result.dart';
 import 'providers/paste_link_providers.dart';
 
@@ -64,6 +65,8 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
   double? _unitPrice; // Store unit price (from fetch or from _unitPriceController)
   String _weightUnit = 'lb'; // 'lb' = pounds, 'g' = grams
   String _dimensionUnit = 'in'; // 'in' = inches, 'cm' = cm
+  /// Selected option index per variation (color, size, etc.)
+  final Map<int, int> _selectedVariationIndices = {};
 
   @override
   void initState() {
@@ -175,6 +178,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
         _nameController.text = result.name;
         _unitPrice = result.price;
         _unitPriceController.text = result.price.toStringAsFixed(2);
+        _selectedVariationIndices.clear();
       });
     } on InvalidLinkException catch (e) {
       if (!mounted) return;
@@ -193,6 +197,14 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
         _nameController.clear();
         _unitPriceController.clear();
         _showNormalizedHint = false;
+      });
+    } catch (e, st) {
+      if (!mounted) return;
+      if (currentRequestId != _requestId) return;
+      debugPrint('Import error: $e $st');
+      setState(() {
+        _state = _PasteLinkState.idle;
+        _invalidError = 'Failed to load product. Please try again.';
       });
     }
   }
@@ -247,6 +259,20 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
       return;
     }
 
+    // Build variation text from selections (e.g. "Color: Red, Size: M")
+    String? variationText;
+    if (_result?.variations != null && _result!.variations!.isNotEmpty) {
+      variationText = _result!.variations!
+          .asMap()
+          .entries
+          .map((e) {
+            final idx = _selectedVariationIndices[e.key] ?? 0;
+            final opt = e.value.options.length > idx ? e.value.options[idx] : '';
+            return '${e.value.displayLabel}: $opt';
+          })
+          .join(', ');
+    }
+
     // Build cart item from form data
     final cartItem = CartItem(
       id: generateCartItemId(),
@@ -271,6 +297,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
           ? _dimensionUnit
           : null,
       source: 'paste_link',
+      variationText: variationText,
     );
 
     final cartNotifier = ref.read(cartItemsProvider.notifier);
@@ -304,40 +331,97 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
           ),
         ],
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Paste Product Link',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppConfig.textColor,
-                    ),
+      body: Stack(
+        children: [
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Paste Product Link',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: AppConfig.textColor,
+                        ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    'Paste the product URL from any international store to add it to your Zayer cart.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppConfig.subtitleColor,
+                        ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  _buildUrlInput(),
+                  const SizedBox(height: AppSpacing.md),
+                  if (_state == _PasteLinkState.loading) _buildLoading(),
+                  if (_state == _PasteLinkState.invalid) _buildInvalidError(),
+                  if (_state == _PasteLinkState.success || _state == _PasteLinkState.manual)
+                    _buildStoreCard(),
+                  if (_state == _PasteLinkState.success || _state == _PasteLinkState.manual)
+                    _buildProductDetails(),
+                  const SizedBox(height: AppSpacing.xxl),
+                ],
               ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'Paste the product URL from any international store to add it to your Zayer cart.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppConfig.subtitleColor,
-                    ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              _buildUrlInput(),
-              const SizedBox(height: AppSpacing.md),
-              if (_state == _PasteLinkState.loading) _buildLoading(),
-              if (_state == _PasteLinkState.invalid) _buildInvalidError(),
-              if (_state == _PasteLinkState.success || _state == _PasteLinkState.manual)
-                _buildStoreCard(),
-              if (_state == _PasteLinkState.success || _state == _PasteLinkState.manual)
-                _buildProductDetails(),
-              const SizedBox(height: AppSpacing.xxl),
-            ],
+            ),
           ),
-        ),
+          if (_state == _PasteLinkState.loading)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.3),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.xl,
+                      vertical: AppSpacing.lg,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            color: AppConfig.primaryColor,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        Text(
+                          'Importing product...',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: AppConfig.textColor,
+                              ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          'Fetching details from store',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppConfig.subtitleColor,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
       bottomNavigationBar: _buildBottomBar(),
     );
@@ -369,6 +453,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
       _widthController.clear();
       _heightController.clear();
       _selectedImages.clear();
+      _selectedVariationIndices.clear();
     });
   }
 
@@ -705,6 +790,82 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
               ),
             ),
           ),
+        // Variations (color, size, etc.) when API returns them
+        if (_state == _PasteLinkState.success &&
+            _result?.variations != null &&
+            _result!.variations!.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.md),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppConfig.lightBlueBg.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
+              border: Border.all(color: AppConfig.borderColor),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Options',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppConfig.textColor,
+                      ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                ...List.generate(_result!.variations!.length, (i) {
+                  final v = _result!.variations![i];
+                  final selectedIndex = _selectedVariationIndices[i] ?? 0;
+                  final safeIndex = selectedIndex.clamp(0, v.options.length > 0 ? v.options.length - 1 : 0);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          v.displayLabel,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w500,
+                                color: AppConfig.textColor,
+                              ),
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: List.generate(v.options.length, (j) {
+                            final opt = v.options[j];
+                            final isSelected = safeIndex == j;
+                            final price = v.priceAt(j);
+                            final label = price != null && price > 0
+                                ? '$opt (\$${price.toStringAsFixed(2)})'
+                                : opt;
+                            return ChoiceChip(
+                              label: Text(label),
+                              selected: isSelected,
+                              onSelected: (selected) {
+                                if (!selected) return;
+                                setState(() {
+                                  _selectedVariationIndices[i] = j;
+                                  if (price != null && price > 0) {
+                                    _unitPrice = price;
+                                    _unitPriceController.text = price.toStringAsFixed(2);
+                                  }
+                                });
+                              },
+                              selectedColor: AppConfig.primaryColor.withValues(alpha: 0.3),
+                            );
+                          }),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
         // Image Upload Section - Only in manual mode - Only in manual mode
         if (showManualFields) ...[
           const SizedBox(height: AppSpacing.md),

@@ -1,3 +1,5 @@
+import '../../product_import/models/product_variation.dart';
+
 /// Result of fetching product metadata from a URL.
 class ProductImportResult {
   const ProductImportResult({
@@ -9,6 +11,7 @@ class ProductImportResult {
     this.weight,
     this.dimensions,
     this.canonicalUrl,
+    this.variations,
   });
 
   final String name;
@@ -20,6 +23,8 @@ class ProductImportResult {
   final String? dimensions;
   /// Canonical URL used for fetch (e.g. Amazon /dp/ASIN).
   final String? canonicalUrl;
+  /// Size/color options when API returns them.
+  final List<ProductVariation>? variations;
 }
 
 /// Thrown when the URL is invalid (malformed, not http(s)).

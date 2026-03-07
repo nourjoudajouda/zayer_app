@@ -13,6 +13,7 @@ import '../cart/models/cart_item_model.dart';
 import '../cart/providers/cart_providers.dart';
 import '../cart/repositories/cart_repository.dart';
 import '../store_webview/models/detected_product.dart';
+import 'models/product_variation.dart';
 
 /// Confirm Product screen (MVP mock).
 /// Shows product details and mock shipping/duties before adding to cart.
@@ -32,6 +33,31 @@ class ConfirmProductScreen extends ConsumerStatefulWidget {
 
 class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
   int _quantity = 1;
+  late final TextEditingController _unitPriceController;
+  /// Selected option index per variation (e.g. [0, 1] for first size, second color).
+  final Map<int, int> _selectedVariationIndices = {};
+
+  @override
+  void initState() {
+    super.initState();
+    final p = widget.product?.price ?? 0.0;
+    _unitPriceController = TextEditingController(
+      text: p > 0 ? p.toStringAsFixed(2) : '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _unitPriceController.dispose();
+    super.dispose();
+  }
+
+  /// Current unit price from field (for display and add to cart). Falls back to product price.
+  double get _unitPrice {
+    final parsed = double.tryParse(_unitPriceController.text.trim());
+    if (parsed != null && parsed > 0) return parsed;
+    return widget.product?.price ?? 0.0;
+  }
 
   String _countryFromStoreKey(String storeKey) {
     switch (storeKey) {
@@ -72,18 +98,15 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
     // Use actual product data if available, otherwise use mock data
     final productName = widget.product?.title ?? 'HP 14" Laptop - Intel Core i3 (Mock)';
     final storeName = widget.product?.storeName ?? 'Amazon US';
-    final storePrice = widget.product?.price ?? 499.99;
     final productCurrency = widget.product?.currency ?? 'USD';
     final productImageUrl = widget.product?.imageUrl;
-    
-    // Convert all prices to USD for calculation (estimated rates)
-    // In production, use real-time exchange rates from API
-    final usdPrice = _convertToUSD(storePrice, productCurrency);
+    // User can edit unit price when product has multiple variations (size/color)
+    final usdPrice = _unitPrice;
     const estimatedShipping = 45.0; // Always in USD
     const estimatedDuties = 60.0; // Always in USD
     final total = (usdPrice * _quantity) + estimatedShipping + estimatedDuties;
     
-    // Show warning if currency is not USD
+    // Show warning if currency is not USD (when we use store price elsewhere)
     final showCurrencyWarning = productCurrency != 'USD';
 
     return Scaffold(
@@ -186,7 +209,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                '$productCurrency ${storePrice.toStringAsFixed(2)}',
+                                'USD ${usdPrice.toStringAsFixed(2)}',
                                 style: Theme.of(context)
                                     .textTheme
                                     .titleLarge
@@ -198,7 +221,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                               if (showCurrencyWarning) ...[
                                 const SizedBox(width: 8),
                                 Text(
-                                  '(≈ USD ${usdPrice.toStringAsFixed(2)})',
+                                  '($productCurrency)',
                                   style: Theme.of(context)
                                       .textTheme
                                       .bodySmall
@@ -212,6 +235,122 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                           ),
                         ],
                       ),
+                    ),
+                  ],
+                ),
+              ),
+                    const SizedBox(height: AppSpacing.lg),
+              // Variations (size / color) when available
+              if (widget.product?.variations != null &&
+                  widget.product!.variations!.isNotEmpty) ...[
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
+                    border: Border.all(color: AppConfig.borderColor),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Options',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      ...List.generate(widget.product!.variations!.length, (i) {
+                        final v = widget.product!.variations![i];
+                        final selectedIndex = _selectedVariationIndices[i] ?? 0;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 80,
+                                child: Text(
+                                  v.displayLabel,
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        color: AppConfig.subtitleColor,
+                                      ),
+                                ),
+                              ),
+                              Expanded(
+                                child: DropdownButtonFormField<int>(
+                                  value: selectedIndex.clamp(0, v.options.length - 1),
+                                  decoration: InputDecoration(
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  ),
+                                  items: List.generate(v.options.length, (j) {
+                                    final opt = v.options[j];
+                                    final price = v.priceAt(j);
+                                    final label = price != null
+                                        ? '$opt — \$${price.toStringAsFixed(2)}'
+                                        : opt;
+                                    return DropdownMenuItem(value: j, child: Text(label));
+                                  }),
+                                  onChanged: (int? newIndex) {
+                                    if (newIndex == null) return;
+                                    setState(() {
+                                      _selectedVariationIndices[i] = newIndex;
+                                      final price = v.priceAt(newIndex);
+                                      if (price != null && price > 0) {
+                                        _unitPriceController.text = price.toStringAsFixed(2);
+                                      }
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+              ],
+              // Unit price (user can set exact price when there are multiple variations)
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
+                  border: Border.all(color: AppConfig.borderColor),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Unit price (USD)',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'If this product has multiple options (e.g. size or color), enter the price for your selection.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppConfig.subtitleColor,
+                          ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    TextField(
+                      controller: _unitPriceController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        hintText: '0.00',
+                        prefixText: '\$ ',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      ),
+                      onChanged: (_) => setState(() {}),
                     ),
                   ],
                 ),
@@ -294,9 +433,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                     const SizedBox(height: AppSpacing.md),
                     _buildCostRow(
                       'Product × $_quantity',
-                      showCurrencyWarning
-                          ? '$productCurrency ${(storePrice * _quantity).toStringAsFixed(2)} (≈ USD ${(usdPrice * _quantity).toStringAsFixed(2)})'
-                          : 'USD ${(usdPrice * _quantity).toStringAsFixed(2)}',
+                      'USD ${(usdPrice * _quantity).toStringAsFixed(2)}',
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     _buildCostRow(
@@ -388,7 +525,8 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
   Future<void> _addToCart() async {
     final product = widget.product;
     final productUrl = widget.productUrl ?? product?.productUrl ?? '';
-    
+    final unitPrice = _unitPrice;
+
     if (productUrl.isEmpty || product == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -398,13 +536,34 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
       );
       return;
     }
+    if (unitPrice <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid unit price'),
+          backgroundColor: AppConfig.errorRed,
+        ),
+      );
+      return;
+    }
 
     final country = _countryFromStoreKey(product.storeKey);
+    String? variationText;
+    if (product.variations != null && product.variations!.isNotEmpty) {
+      variationText = product.variations!
+          .asMap()
+          .entries
+          .map((e) {
+            final idx = _selectedVariationIndices[e.key] ?? 0;
+            final opt = e.value.options.length > idx ? e.value.options[idx] : '';
+            return '${e.value.displayLabel}: $opt';
+          })
+          .join(', ');
+    }
     final cartItem = CartItem(
       id: generateCartItemId(),
       productUrl: productUrl,
       name: product.title ?? 'Product',
-      unitPrice: product.price ?? 0.0,
+      unitPrice: unitPrice,
       quantity: _quantity,
       currency: product.currency,
       imageUrl: product.imageUrl,
@@ -413,6 +572,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
       productId: product.productId,
       country: country,
       source: 'webview',
+      variationText: variationText,
     );
 
     final cartNotifier = ref.read(cartItemsProvider.notifier);

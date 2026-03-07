@@ -30,7 +30,11 @@ class CartItem {
     this.syncedToBackend = false,
     this.reviewStatus = CartItemReviewStatus.pendingReview,
     this.shippingCost,
+    this.variationText,
   });
+
+  /// e.g. "Size: M, Color: Red" for display when product has variations.
+  final String? variationText;
 
   /// Local unique id (e.g. uuid).
   final String id;
@@ -85,6 +89,7 @@ class CartItem {
     bool? syncedToBackend,
     CartItemReviewStatus? reviewStatus,
     double? shippingCost,
+    String? variationText,
   }) {
     return CartItem(
       id: id ?? this.id,
@@ -108,6 +113,7 @@ class CartItem {
       syncedToBackend: syncedToBackend ?? this.syncedToBackend,
       reviewStatus: reviewStatus ?? this.reviewStatus,
       shippingCost: shippingCost ?? this.shippingCost,
+      variationText: variationText ?? this.variationText,
     );
   }
 
@@ -134,6 +140,7 @@ class CartItem {
       'source': source,
       'review_status': reviewStatus.name,
       'shipping_cost': shippingCost,
+      'variation_text': variationText,
     };
   }
 
@@ -164,6 +171,7 @@ class CartItem {
       syncedToBackend: json['syncedToBackend'] as bool? ?? false,
       reviewStatus: status,
       shippingCost: (json['shipping_cost'] as num?)?.toDouble(),
+      variationText: json['variation_text'] as String? ?? json['variationText'] as String?,
     );
   }
 }

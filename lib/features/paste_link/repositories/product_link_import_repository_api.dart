@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../../core/import/normalize_url.dart';
 import '../../../core/network/api_client.dart';
+import '../../product_import/models/product_variation.dart';
 import '../models/product_import_result.dart';
 import 'product_link_import_repository.dart';
 
@@ -29,6 +30,16 @@ class ProductLinkImportRepositoryApi implements ProductLinkImportRepository {
     final d = res.data;
     if (d == null) throw UnsupportedLinkException('No product data returned');
 
+    List<ProductVariation>? variations;
+    final vList = d['variations'];
+    if (vList is List && vList.isNotEmpty) {
+      variations = vList
+          .map((e) => e is Map ? ProductVariation.fromJson(Map<String, dynamic>.from(e as Map)) : null)
+          .whereType<ProductVariation>()
+          .toList();
+      if (variations.isEmpty) variations = null;
+    }
+
     return ProductImportResult(
       name: (d['name'] ?? 'Product').toString(),
       price: (d['price'] as num?)?.toDouble() ?? 0,
@@ -36,6 +47,7 @@ class ProductLinkImportRepositoryApi implements ProductLinkImportRepository {
       country: (d['country'] ?? 'Unknown').toString(),
       imageUrl: d['image_url'] as String?,
       canonicalUrl: d['canonical_url'] as String? ?? normalized.canonicalUrl,
+      variations: variations,
     );
   }
 }

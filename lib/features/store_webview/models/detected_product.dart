@@ -1,3 +1,5 @@
+import '../../product_import/models/product_variation.dart';
+
 /// Detected product model for WebView import.
 class DetectedProduct {
   const DetectedProduct({
@@ -9,6 +11,7 @@ class DetectedProduct {
     this.currency = 'USD',
     this.imageUrl,
     this.productId,
+    this.variations,
   });
 
   final String storeKey;
@@ -19,6 +22,8 @@ class DetectedProduct {
   final String currency;
   final String? imageUrl;
   final String? productId;
+  /// e.g. size and color options; when present, user selects on confirm screen.
+  final List<ProductVariation>? variations;
 
   /// Mock factory for Amazon products.
   factory DetectedProduct.mockAmazon(String url, {String? asin}) {

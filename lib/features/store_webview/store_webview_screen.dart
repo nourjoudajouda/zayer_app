@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -12,13 +13,14 @@ import '../../core/network/api_config.dart';
 import '../../core/platform/webview_supported.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../features/paste_link/providers/paste_link_providers.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'extractors/product_data_extractor.dart';
 import 'models/detected_product.dart';
 import 'rules/webview_import_rules.dart';
 import 'widgets/detected_product_overlay.dart';
 
-class StoreWebViewScreen extends StatefulWidget {
+class StoreWebViewScreen extends ConsumerStatefulWidget {
   const StoreWebViewScreen({
     super.key,
     required this.initialUrl,
@@ -27,10 +29,10 @@ class StoreWebViewScreen extends StatefulWidget {
   final String initialUrl;
 
   @override
-  State<StoreWebViewScreen> createState() => _StoreWebViewScreenState();
+  ConsumerState<StoreWebViewScreen> createState() => _StoreWebViewScreenState();
 }
 
-class _StoreWebViewScreenState extends State<StoreWebViewScreen> {
+class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
   WebViewController? _controller;
   bool _isLoading = true;
   DetectedProduct? _detectedProduct;
@@ -111,16 +113,47 @@ class _StoreWebViewScreenState extends State<StoreWebViewScreen> {
         return;
       }
       
-      // Try to extract real product data if extraction script is available
+      // 1) Fetch product from API first (name, image, price in USD) — show loader until done
+      final repo = ref.read(productLinkImportRepositoryProvider);
+      try {
+        final apiResult = await repo.fetchByUrl(url);
+        if (!mounted) {
+          _hideLoader();
+          return;
+        }
+        final updatedFromApi = DetectedProduct(
+          storeKey: result.product!.storeKey,
+          storeName: apiResult.storeName,
+          productUrl: apiResult.canonicalUrl ?? url,
+          title: apiResult.name,
+          price: apiResult.price,
+          currency: 'USD',
+          imageUrl: apiResult.imageUrl,
+          productId: result.product!.productId,
+          variations: apiResult.variations,
+        );
+        setState(() {
+          _detectedProduct = updatedFromApi;
+          _showExtractionLoader = false;
+          _isExtractingProduct = false;
+        });
+        return;
+      } catch (_) {
+        // API failed — fall back to JS extraction or use detected product as-is
+        if (!mounted) {
+          _hideLoader();
+          return;
+        }
+      }
+      
+      // 2) Fallback: try JS extraction if available
       final storeKey = result.product!.storeKey;
       final extractionScript = ProductDataExtractor.getExtractionScript(storeKey);
       
       if (extractionScript != null && _controller != null) {
-        debugPrint('📝 Extraction script found for $storeKey, starting extraction...');
+        debugPrint('📝 Fallback: extraction script for $storeKey');
         await _extractProductData(result.product!, extractionScript);
       } else {
-        debugPrint('⚠️ No extraction script for $storeKey, using detected product as-is');
-        // For stores without extraction script, hide loader and use detected product as-is
         if (mounted) {
           setState(() {
             _showExtractionLoader = false;
@@ -320,6 +353,8 @@ class _StoreWebViewScreenState extends State<StoreWebViewScreen> {
         'currency': _detectedProduct!.currency,
         'imageUrl': _detectedProduct!.imageUrl,
         'productId': _detectedProduct!.productId,
+        if (_detectedProduct!.variations != null && _detectedProduct!.variations!.isNotEmpty)
+          'variations': _detectedProduct!.variations!.map((v) => v.toJson()).toList(),
       });
       
       context.push(

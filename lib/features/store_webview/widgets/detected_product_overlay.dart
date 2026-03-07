@@ -320,7 +320,7 @@ class _DetectedProductOverlayState extends State<DetectedProductOverlay>
                 const SizedBox(height: AppSpacing.xs),
                 if (widget.product.price != null)
                   Text(
-                    '${widget.product.currency} ${widget.product.price!.toStringAsFixed(2)}',
+                    'USD ${widget.product.price!.toStringAsFixed(2)}',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.w700,
                           color: AppConfig.primaryColor,
