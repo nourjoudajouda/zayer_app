@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/network/api_client.dart';
+import '../../../core/network/api_config.dart';
 import '../../../core/routing/app_router.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/config/models/app_bootstrap_config.dart';
@@ -41,11 +43,13 @@ class FeaturedStoreCard extends StatelessWidget {
                 color: AppConfig.borderColor,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: store.logoUrl.isNotEmpty
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: CachedNetworkImage(
-                        imageUrl: store.logoUrl,
+              child: () {
+                final url = resolveAssetUrl(store.logoUrl, ApiClient.safeBaseUrl);
+                return url != null && url.isNotEmpty
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: CachedNetworkImage(
+                          imageUrl: url,
                         fit: BoxFit.cover,
                         placeholder: (context, url) => const Icon(
                           Icons.store,
@@ -59,7 +63,8 @@ class FeaturedStoreCard extends StatelessWidget {
                         ),
                       ),
                     )
-                  : const Icon(Icons.store, color: AppConfig.subtitleColor, size: 28),
+                    : const Icon(Icons.store, color: AppConfig.subtitleColor, size: 28);
+              }(),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(

@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/network/api_client.dart';
+import '../../core/network/api_config.dart';
 import '../../core/widgets/success_dialog.dart';
 import '../auth/providers/auth_providers.dart';
 import '../../core/localization/app_locale.dart';
@@ -33,7 +35,7 @@ class ProfileScreen extends ConsumerWidget {
     final profileAsync = ref.watch(userProfileProvider);
     final complianceAsync = ref.watch(complianceStatusProvider);
     final avatarState = ref.watch(avatarImageProvider);
-    final avatarFile = avatarState.$1;
+    final avatarPreviewBytes = avatarState.$1;
     final avatarVersion = avatarState.$2;
 
     return Directionality(
@@ -71,11 +73,12 @@ class ProfileScreen extends ConsumerWidget {
             data: (profile) => complianceAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Error: $e')),
-              data: (compliance) => _ProfileContent(
+              data: (compliance) =>               _ProfileContent(
                 profile: profile,
                 compliance: compliance,
-                avatarFile: avatarFile,
+                avatarPreviewBytes: avatarPreviewBytes,
                 avatarVersion: avatarVersion,
+                avatarUploading: ref.watch(avatarUploadingProvider),
               ),
             ),
           ),
@@ -89,14 +92,16 @@ class _ProfileContent extends ConsumerWidget {
   const _ProfileContent({
     required this.profile,
     required this.compliance,
-    this.avatarFile,
+    this.avatarPreviewBytes,
     this.avatarVersion = 0,
+    this.avatarUploading = false,
   });
 
   final UserProfile profile;
   final ComplianceStatus compliance;
-  final File? avatarFile;
+  final Uint8List? avatarPreviewBytes;
   final int avatarVersion;
+  final bool avatarUploading;
 
   void _showAvatarPicker(BuildContext context, WidgetRef ref) {
     showModalBottomSheet(
@@ -121,24 +126,35 @@ class _ProfileContent extends ConsumerWidget {
               onTap: () async {
                 Navigator.pop(context);
                 final picker = ImagePicker();
-                final x = await picker.pickImage(source: ImageSource.gallery);
-                if (x != null && context.mounted) {
-                  final file = File(x.path);
-                  final prev = ref.read(avatarImageProvider);
-                  ref.read(avatarImageProvider.notifier).state = (file, prev.$2 + 1);
+                final xFile = await picker.pickImage(source: ImageSource.gallery);
+                if (xFile != null && context.mounted) {
+                  final bytes = await xFile.readAsBytes();
+                  ref.read(avatarImageProvider.notifier).state = (bytes, ref.read(avatarImageProvider).$2 + 1);
+                  ref.read(avatarUploadingProvider.notifier).state = true;
                   try {
-                    await ref.read(profileRepositoryProvider).uploadAvatar(file);
+                    await ref.read(profileRepositoryProvider).uploadAvatar(bytes, xFile.name);
                     if (!context.mounted) return;
                     ref.invalidate(userProfileProvider);
-                    ref.read(avatarImageProvider.notifier).state = (null, prev.$2 + 2);
                     await ref.read(userProfileProvider.future);
-                  } catch (_) {}
-                  if (!context.mounted) return;
-                  await showSuccessDialog(
-                    context,
-                    title: 'Success',
-                    message: 'Photo saved successfully',
-                  );
+                    if (!context.mounted) return;
+                    final prev = ref.read(avatarImageProvider);
+                    ref.read(avatarImageProvider.notifier).state = (null, prev.$2 + 1);
+                    await showSuccessDialog(
+                      context,
+                      title: 'Success',
+                      message: 'Photo saved successfully',
+                    );
+                  } catch (_) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Failed to upload photo')),
+                      );
+                    }
+                  } finally {
+                    if (context.mounted) {
+                      ref.read(avatarUploadingProvider.notifier).state = false;
+                    }
+                  }
                 }
               },
             ),
@@ -148,24 +164,35 @@ class _ProfileContent extends ConsumerWidget {
               onTap: () async {
                 Navigator.pop(context);
                 final picker = ImagePicker();
-                final x = await picker.pickImage(source: ImageSource.camera);
-                if (x != null && context.mounted) {
-                  final file = File(x.path);
-                  final prev = ref.read(avatarImageProvider);
-                  ref.read(avatarImageProvider.notifier).state = (file, prev.$2 + 1);
+                final xFile = await picker.pickImage(source: ImageSource.camera);
+                if (xFile != null && context.mounted) {
+                  final bytes = await xFile.readAsBytes();
+                  ref.read(avatarImageProvider.notifier).state = (bytes, ref.read(avatarImageProvider).$2 + 1);
+                  ref.read(avatarUploadingProvider.notifier).state = true;
                   try {
-                    await ref.read(profileRepositoryProvider).uploadAvatar(file);
+                    await ref.read(profileRepositoryProvider).uploadAvatar(bytes, xFile.name);
                     if (!context.mounted) return;
                     ref.invalidate(userProfileProvider);
-                    ref.read(avatarImageProvider.notifier).state = (null, prev.$2 + 2);
                     await ref.read(userProfileProvider.future);
-                  } catch (_) {}
-                  if (!context.mounted) return;
-                  await showSuccessDialog(
-                    context,
-                    title: 'Success',
-                    message: 'Photo saved successfully',
-                  );
+                    if (!context.mounted) return;
+                    final prev = ref.read(avatarImageProvider);
+                    ref.read(avatarImageProvider.notifier).state = (null, prev.$2 + 1);
+                    await showSuccessDialog(
+                      context,
+                      title: 'Success',
+                      message: 'Photo saved successfully',
+                    );
+                  } catch (_) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Failed to upload photo')),
+                      );
+                    }
+                  } finally {
+                    if (context.mounted) {
+                      ref.read(avatarUploadingProvider.notifier).state = false;
+                    }
+                  }
                 }
               },
             ),
@@ -186,8 +213,9 @@ class _ProfileContent extends ConsumerWidget {
         children: [
           _ProfileHeader(
             profile: profile,
-            avatarFile: avatarFile,
+            avatarPreviewBytes: avatarPreviewBytes,
             avatarVersion: avatarVersion,
+            avatarUploading: avatarUploading,
             onCameraTap: () => _showAvatarPicker(context, ref),
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -336,14 +364,16 @@ class _ProfileContent extends ConsumerWidget {
 class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader({
     required this.profile,
-    this.avatarFile,
+    this.avatarPreviewBytes,
     this.avatarVersion = 0,
+    this.avatarUploading = false,
     required this.onCameraTap,
   });
 
   final UserProfile profile;
-  final File? avatarFile;
+  final Uint8List? avatarPreviewBytes;
   final int avatarVersion;
+  final bool avatarUploading;
   final VoidCallback onCameraTap;
 
   @override
@@ -359,21 +389,33 @@ class _ProfileHeader extends StatelessWidget {
                 key: ValueKey<int>(avatarVersion),
                 radius: 55,
                 backgroundColor: AppConfig.borderColor,
-                backgroundImage: avatarFile != null
-                    ? FileImage(avatarFile!) as ImageProvider
-                    : (profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty
-                        ? CachedNetworkImageProvider(profile.avatarUrl!)
+                backgroundImage: avatarUploading
+                    ? null
+                    : (avatarPreviewBytes != null
+                        ? MemoryImage(avatarPreviewBytes!) as ImageProvider
+                        : () {
+                            final url = resolveAssetUrl(
+                              profile.avatarUrl,
+                              ApiClient.safeBaseUrl,
+                            );
+                            return url != null && url.isNotEmpty
+                                ? CachedNetworkImageProvider(url)
+                                : null;
+                          }()),
+                child: avatarUploading
+                    ? const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : (avatarPreviewBytes == null &&
+                            (profile.avatarUrl == null || profile.avatarUrl!.isEmpty)
+                        ? const Icon(Icons.person, size: 56, color: AppConfig.subtitleColor)
                         : null),
-                child: avatarFile == null &&
-                        (profile.avatarUrl == null || profile.avatarUrl!.isEmpty)
-                    ? const Icon(Icons.person, size: 56, color: AppConfig.subtitleColor)
-                    : null,
               ),
               Positioned(
                 right: 0,
                 bottom: 0,
                 child: GestureDetector(
-                  onTap: onCameraTap,
+                  onTap: avatarUploading ? null : onCameraTap,
                   child: Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(

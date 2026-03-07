@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/network/api_client.dart';
+import '../../core/network/api_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../cart/models/cart_item_model.dart';
@@ -125,11 +127,13 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                         borderRadius:
                             BorderRadius.circular(AppConfig.radiusSmall),
                       ),
-                      child: productImageUrl != null && productImageUrl.isNotEmpty
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
-                              child: CachedNetworkImage(
-                                imageUrl: productImageUrl,
+                      child: () {
+                        final url = resolveAssetUrl(productImageUrl, ApiClient.safeBaseUrl);
+                        return url != null && url.isNotEmpty
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                                child: CachedNetworkImage(
+                                  imageUrl: url,
                                 width: 80,
                                 height: 80,
                                 fit: BoxFit.cover,
@@ -146,11 +150,12 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                                 ),
                               ),
                             )
-                          : const Icon(
+                            : const Icon(
                               Icons.image_outlined,
                               color: AppConfig.subtitleColor,
                               size: 40,
-                            ),
+                            );
+                      }(),
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(

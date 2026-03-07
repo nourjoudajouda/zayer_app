@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 
 import '../models/user_profile_model.dart';
 
@@ -10,6 +10,6 @@ abstract class ProfileRepository {
     String? displayName,
     String? dateOfBirth,
   });
-  Future<void> uploadAvatar(File file);
+  Future<void> uploadAvatar(Uint8List bytes, String filename);
   Future<ComplianceStatus> getCompliance();
 }

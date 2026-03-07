@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
@@ -36,9 +36,9 @@ class ProfileRepositoryImpl implements ProfileRepository {
   }
 
   @override
-  Future<void> uploadAvatar(File file) async {
+  Future<void> uploadAvatar(Uint8List bytes, String filename) async {
     final formData = FormData.fromMap({
-      'avatar': await MultipartFile.fromFile(file.path),
+      'avatar': MultipartFile.fromBytes(bytes, filename: filename),
     });
     final res = await _dio.post<Map<String, dynamic>>(
       '/api/me/avatar',

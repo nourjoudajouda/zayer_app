@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/config/models/app_bootstrap_config.dart';
+import '../../../core/network/api_config.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 
@@ -64,6 +65,7 @@ class OnboardingPageWidget extends StatelessWidget {
     final screenHeight = MediaQuery.sizeOf(context).height;
     final imageHeight =
         (screenHeight * 0.35).clamp(_imageMinHeight, _imageMaxHeight);
+    final resolved = resolveAssetUrl(imageUrl);
 
     return Container(
       height: imageHeight,
@@ -74,10 +76,10 @@ class OnboardingPageWidget extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppConfig.radiusLarge),
-        child: imageUrl.isEmpty
+        child: resolved == null || resolved.isEmpty
             ? _buildImagePlaceholder()
             : CachedNetworkImage(
-                imageUrl: imageUrl,
+                imageUrl: resolved,
                 fit: BoxFit.contain,
                 width: double.infinity,
                 height: double.infinity,
