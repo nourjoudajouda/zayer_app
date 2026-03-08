@@ -29,6 +29,9 @@ final favoritesFilterProvider = StateProvider<FavoritesFilter>((ref) {
   return FavoritesFilter.all;
 });
 
+/// ID of the favorite item currently being removed (for button/card loader).
+final loadingFavoriteIdProvider = StateProvider<String?>((ref) => null);
+
 final filteredFavoritesProvider = Provider<AsyncValue<List<FavoriteItem>>>((ref) {
   final async = ref.watch(favoritesListProvider);
   final filter = ref.watch(favoritesFilterProvider);

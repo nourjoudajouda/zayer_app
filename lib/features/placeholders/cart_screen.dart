@@ -136,7 +136,19 @@ class CartScreen extends ConsumerWidget {
     final loadingItemId = ref.watch(loadingCartItemIdProvider);
 
     if (cartItems.isEmpty) {
-      return const CartEmptyScreen();
+      return RefreshIndicator(
+        onRefresh: () => ref.read(cartItemsProvider.notifier).loadItems(),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: MediaQuery.of(context).size.height -
+                  (MediaQuery.of(context).padding.top + kToolbarHeight),
+            ),
+            child: const CartEmptyScreen(),
+          ),
+        ),
+      );
     }
 
     return Scaffold(

@@ -13,6 +13,7 @@ import '../../core/network/api_config.dart';
 import '../../core/platform/webview_supported.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../features/favorites/providers/favorites_providers.dart';
 import '../../features/paste_link/providers/paste_link_providers.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'extractors/product_data_extractor.dart';
@@ -374,7 +375,7 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _SaveFavoriteSheet(product: _detectedProduct!),
+      builder: (context) => _SaveFavoriteSheet(product: _detectedProduct!, ref: ref),
     );
   }
 
@@ -535,11 +536,12 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
   }
 }
 
-/// Mock Save Favorite sheet (UI only).
+/// Save product to favorites via API.
 class _SaveFavoriteSheet extends StatefulWidget {
-  const _SaveFavoriteSheet({required this.product});
+  const _SaveFavoriteSheet({required this.product, required this.ref});
 
   final DetectedProduct product;
+  final WidgetRef ref;
 
   @override
   State<_SaveFavoriteSheet> createState() => _SaveFavoriteSheetState();
@@ -547,6 +549,47 @@ class _SaveFavoriteSheet extends StatefulWidget {
 
 class _SaveFavoriteSheetState extends State<_SaveFavoriteSheet> {
   bool _isFavorited = false;
+  bool _isSaving = false;
+
+  Future<void> _save() async {
+    if (!_isFavorited) {
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      await ApiClient.instance.post<Map<String, dynamic>>(
+        '/api/favorites',
+        data: {
+          'source_key': widget.product.storeKey,
+          'source_label': widget.product.storeName,
+          'title': widget.product.title ?? 'Product',
+          'price': widget.product.price ?? 0,
+          'currency': widget.product.currency,
+          'image_url': widget.product.imageUrl,
+          'product_url': widget.product.productUrl,
+        },
+      );
+      widget.ref.invalidate(favoritesListProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Added to favorites'),
+            backgroundColor: AppConfig.successGreen,
+          ),
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to add to favorites')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -652,16 +695,7 @@ class _SaveFavoriteSheetState extends State<_SaveFavoriteSheet> {
             ),
             const SizedBox(height: AppSpacing.lg),
             FilledButton(
-              onPressed: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      _isFavorited ? 'Added to favorites (mock)' : 'Saved (mock)',
-                    ),
-                  ),
-                );
-              },
+              onPressed: _isSaving ? null : _save,
               style: FilledButton.styleFrom(
                 backgroundColor: AppConfig.primaryColor,
                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -669,7 +703,13 @@ class _SaveFavoriteSheetState extends State<_SaveFavoriteSheet> {
                   borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
                 ),
               ),
-              child: const Text('Save'),
+              child: _isSaving
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : Text(_isFavorited ? 'Add to favorites' : 'Cancel'),
             ),
           ],
         ),

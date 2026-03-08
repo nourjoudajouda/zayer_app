@@ -174,13 +174,39 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-class _FavoriteCard extends StatelessWidget {
+class _FavoriteCard extends ConsumerWidget {
   const _FavoriteCard({required this.item});
 
   final FavoriteItem item;
 
+  Future<void> _removeFavorite(WidgetRef ref, BuildContext context) async {
+    ref.read(loadingFavoriteIdProvider.notifier).state = item.id;
+    try {
+      await ApiClient.instance.delete<void>('/api/favorites/${item.id}');
+      ref.invalidate(favoritesListProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Removed from favorites'),
+            backgroundColor: AppConfig.successGreen,
+          ),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to remove from favorites')),
+        );
+      }
+    } finally {
+      ref.read(loadingFavoriteIdProvider.notifier).state = null;
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isRemoving = ref.watch(loadingFavoriteIdProvider) == item.id;
+    void onRemove() => _removeFavorite(ref, context);
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -319,20 +345,37 @@ class _FavoriteCard extends StatelessWidget {
             ),
             ),
           ),
-          const SizedBox(width: AppSpacing.md),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
-            child: Container(
-              width: 100,
-              height: 100,
-              color: AppConfig.borderColor.withValues(alpha: 0.5),
-              child: () {
-                final url = resolveAssetUrl(item.imageUrl, ApiClient.safeBaseUrl);
-                return url != null && url.isNotEmpty
-                    ? Image.network(url, fit: BoxFit.cover)
-                    : Icon(Icons.image_outlined, size: 40, color: AppConfig.subtitleColor);
-              }(),
-            ),
+          const SizedBox(width: AppSpacing.sm),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                onPressed: isRemoving ? null : onRemove,
+                icon: isRemoving
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(Icons.favorite, color: AppConfig.primaryColor, size: 24),
+                tooltip: 'Remove from favorites',
+              ),
+              const SizedBox(height: 4),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  color: AppConfig.borderColor.withValues(alpha: 0.5),
+                  child: () {
+                    final url = resolveAssetUrl(item.imageUrl, ApiClient.safeBaseUrl);
+                    return url != null && url.isNotEmpty
+                        ? Image.network(url, fit: BoxFit.cover)
+                        : Icon(Icons.image_outlined, size: 32, color: AppConfig.subtitleColor);
+                  }(),
+                ),
+              ),
+            ],
           ),
         ],
       ),

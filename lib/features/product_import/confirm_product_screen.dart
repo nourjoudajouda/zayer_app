@@ -585,18 +585,36 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
 
       if (mounted) {
         if (added) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Added to cart'),
-              backgroundColor: AppConfig.successGreen,
-            ),
-          );
-          // Pop confirm screen and store webview to return to store landing
-          Navigator.of(context).popUntil((route) {
-            return route.isFirst ||
-                route.settings.name == AppRoutes.storeLanding ||
-                route.settings.name == AppRoutes.home;
+          final choice = await showDialog<String>(context: context, barrierDismissible: false, builder: (ctx) {
+            return AlertDialog(
+              title: const Text('Added to cart'),
+              content: const Text(
+                'Do you want to continue shopping in this store or go to your cart?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop('continue'),
+                  child: const Text('Continue shopping'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(ctx).pop('cart'),
+                  child: const Text('Go to cart'),
+                ),
+              ],
+            );
           });
+          if (!mounted) return;
+          if (choice == 'cart') {
+            Navigator.of(context).popUntil((route) {
+              return route.isFirst ||
+                  route.settings.name == AppRoutes.storeLanding ||
+                  route.settings.name == AppRoutes.home;
+            });
+            if (context.mounted) context.go(AppRoutes.cart);
+          } else {
+            // Continue shopping: pop confirm screen only, stay in store webview
+            Navigator.of(context).pop();
+          }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
