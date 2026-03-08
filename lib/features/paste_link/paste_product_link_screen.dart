@@ -180,8 +180,9 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
         _unitPrice = result.price;
         _unitPriceController.text = result.price.toStringAsFixed(2);
         _selectedVariationIndices.clear();
-        if (result.weight != null && result.weight! > 0) {
-          _weightController.text = result.weight.toStringAsFixed(2);
+        final w = result.weight;
+        if (w != null && w > 0) {
+          _weightController.text = w.toStringAsFixed(2);
         }
       });
     } on InvalidLinkException catch (e) {

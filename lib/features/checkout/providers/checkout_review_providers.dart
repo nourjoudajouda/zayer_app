@@ -6,7 +6,7 @@ import '../../cart/providers/cart_providers.dart';
 import '../../profile/providers/profile_providers.dart';
 import '../models/checkout_review_model.dart';
 
-Future<String> _getPrimaryAddressShort(WidgetRef ref) async {
+Future<String> _getPrimaryAddressShort(Ref ref) async {
   try {
     final profile = await ref.read(userProfileProvider.future);
     if (profile.primaryAddress.trim().isNotEmpty) return profile.primaryAddress;
