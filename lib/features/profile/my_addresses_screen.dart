@@ -89,10 +89,15 @@ class _MyAddressesContent extends ConsumerWidget {
   }
 
   Future<void> _onSetDefault(BuildContext context, WidgetRef ref, String addressId) async {
-    await ref.read(addressRepositoryProvider).setDefaultAddress(addressId);
-    ref.invalidate(addressesProvider);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Default address updated')));
+    ref.read(setDefaultAddressLoadingIdProvider.notifier).state = addressId;
+    try {
+      await ref.read(addressRepositoryProvider).setDefaultAddress(addressId);
+      ref.invalidate(addressesProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Default address updated')));
+      }
+    } finally {
+      ref.read(setDefaultAddressLoadingIdProvider.notifier).state = null;
     }
   }
 
@@ -168,9 +173,15 @@ class _MyAddressesContent extends ConsumerWidget {
       );
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-      child: Column(
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(addressesProvider);
+        await ref.read(addressesProvider.future);
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // PRIMARY RESIDENCE
@@ -185,6 +196,7 @@ class _MyAddressesContent extends ConsumerWidget {
             const SizedBox(height: AppSpacing.sm),
             _PrimaryResidenceCard(
               address: defaultAddress,
+              isLoadingSetDefault: ref.watch(setDefaultAddressLoadingIdProvider) == defaultAddress.id,
               onEdit: () => _onEdit(context, ref, defaultAddress),
               onSetDefault: () => _onSetDefault(context, ref, defaultAddress.id),
               onCopy: () => _onCopy(context, defaultAddress),
@@ -241,6 +253,7 @@ class _MyAddressesContent extends ConsumerWidget {
           const SizedBox(height: AppSpacing.lg),
         ],
       ),
+    ),
     );
   }
 }
@@ -252,6 +265,7 @@ class _PrimaryResidenceCard extends StatelessWidget {
     required this.onSetDefault,
     required this.onCopy,
     required this.onUsage,
+    this.isLoadingSetDefault = false,
   });
 
   final Address address;
@@ -259,6 +273,7 @@ class _PrimaryResidenceCard extends StatelessWidget {
   final VoidCallback onSetDefault;
   final VoidCallback onCopy;
   final VoidCallback onUsage;
+  final bool isLoadingSetDefault;
 
   @override
   Widget build(BuildContext context) {
@@ -357,7 +372,12 @@ class _PrimaryResidenceCard extends StatelessWidget {
                   const SizedBox(height: AppSpacing.md),
                   Row(
                     children: [
-                      _ActionChip(icon: Icons.check_circle_outline, label: 'Default', onTap: onSetDefault),
+                      _ActionChip(
+                        icon: Icons.check_circle_outline,
+                        label: 'Default',
+                        onTap: isLoadingSetDefault ? null : onSetDefault,
+                        isLoading: isLoadingSetDefault,
+                      ),
                       const SizedBox(width: AppSpacing.md),
                       _ActionChip(icon: Icons.copy_outlined, label: 'Copy', onTap: onCopy),
                       const SizedBox(width: AppSpacing.md),
@@ -375,23 +395,31 @@ class _PrimaryResidenceCard extends StatelessWidget {
 }
 
 class _ActionChip extends StatelessWidget {
-  const _ActionChip({required this.icon, required this.label, required this.onTap});
+  const _ActionChip({required this.icon, required this.label, required this.onTap, this.isLoading = false});
 
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
+      onTap: isLoading ? null : onTap,
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 18, color: AppConfig.subtitleColor),
+            if (isLoading)
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: AppConfig.primaryColor),
+              )
+            else
+              Icon(icon, size: 18, color: AppConfig.subtitleColor),
             const SizedBox(width: 6),
             Text(
               label,

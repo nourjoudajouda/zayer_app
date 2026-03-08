@@ -135,6 +135,11 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
         return _ReviewPayContent(
           review: r,
           walletEnabled: walletEnabled,
+          confirming: _confirming,
+          onRefresh: () async {
+            ref.invalidate(checkoutReviewProvider);
+            await ref.read(checkoutReviewProvider.future);
+          },
           onWalletToggle: (v) =>
               ref.read(checkoutWalletEnabledProvider.notifier).state = v,
           onConfirm: _confirming
@@ -170,14 +175,18 @@ class _ReviewPayContent extends StatelessWidget {
   const _ReviewPayContent({
     required this.review,
     required this.walletEnabled,
+    required this.confirming,
     required this.onWalletToggle,
     this.onConfirm,
+    this.onRefresh,
   });
 
   final CheckoutReviewModel review;
   final bool walletEnabled;
+  final bool confirming;
   final ValueChanged<bool> onWalletToggle;
   final VoidCallback? onConfirm;
+  final Future<void> Function()? onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -194,8 +203,11 @@ class _ReviewPayContent extends StatelessWidget {
         child: Column(
           children: [
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: RefreshIndicator(
+                onRefresh: onRefresh ?? () async {},
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -226,7 +238,8 @@ class _ReviewPayContent extends StatelessWidget {
                 ),
               ),
             ),
-                    _ConfirmPayBar(total: review.total, onConfirm: onConfirm),
+            ),
+                    _ConfirmPayBar(total: review.total, onConfirm: onConfirm, isLoading: confirming),
           ],
         ),
       ),
@@ -621,10 +634,11 @@ class _PromoCodeField extends StatelessWidget {
 }
 
 class _ConfirmPayBar extends StatelessWidget {
-  const _ConfirmPayBar({required this.total, this.onConfirm});
+  const _ConfirmPayBar({required this.total, this.onConfirm, this.isLoading = false});
 
   final String total;
   final VoidCallback? onConfirm;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -642,9 +656,15 @@ class _ConfirmPayBar extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: onConfirm,
-                icon: const Icon(Icons.lock, size: 20, color: Colors.white),
-                label: Text('Confirm & Pay $total'),
+                onPressed: isLoading ? null : onConfirm,
+                icon: isLoading
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.lock, size: 20, color: Colors.white),
+                label: Text(isLoading ? 'Processing...' : 'Confirm & Pay $total'),
                 style: FilledButton.styleFrom(
                   backgroundColor: AppConfig.primaryColor,
                   foregroundColor: Colors.white,

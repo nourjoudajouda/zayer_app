@@ -27,8 +27,10 @@ class CartScreen extends ConsumerWidget {
 
   static List<Widget> _buildGroupedSections(
     BuildContext context,
+    WidgetRef ref,
     List<CartItem> cartItems,
     CartNotifier cartNotifier,
+    String? loadingItemId,
   ) {
     final byCountry = _groupByCountry(cartItems);
     final widgets = <Widget>[];
@@ -76,14 +78,48 @@ class CartScreen extends ConsumerWidget {
                     ),
               ),
               const SizedBox(height: AppSpacing.sm),
-              ...items.map((item) => Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: _CartItemCard(
-                      item: item,
-                      onRemove: () => cartNotifier.removeItem(item.id),
-                      onQuantityChanged: (q) => cartNotifier.updateQuantity(item.id, q),
-                    ),
-                  )),
+              ...items.map((item) {
+                final isLoading = loadingItemId == item.id;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                  child: _CartItemCard(
+                    item: item,
+                    isLoading: isLoading,
+                    onRemove: () async {
+                      ref.read(loadingCartItemIdProvider.notifier).state = item.id;
+                      try {
+                        await cartNotifier.removeItem(item.id);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Removed from cart'),
+                              backgroundColor: AppConfig.successGreen,
+                            ),
+                          );
+                        }
+                      } finally {
+                        ref.read(loadingCartItemIdProvider.notifier).state = null;
+                      }
+                    },
+                    onQuantityChanged: (q) async {
+                      ref.read(loadingCartItemIdProvider.notifier).state = item.id;
+                      try {
+                        await cartNotifier.updateQuantity(item.id, q);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Cart updated'),
+                              backgroundColor: AppConfig.successGreen,
+                            ),
+                          );
+                        }
+                      } finally {
+                        ref.read(loadingCartItemIdProvider.notifier).state = null;
+                      }
+                    },
+                  ),
+                );
+              }),
             ],
           ),
         ),
@@ -97,6 +133,8 @@ class CartScreen extends ConsumerWidget {
     final cartItems = ref.watch(cartItemsProvider);
     final cartNotifier = ref.read(cartItemsProvider.notifier);
 
+    final loadingItemId = ref.watch(loadingCartItemIdProvider);
+
     if (cartItems.isEmpty) {
       return const CartEmptyScreen();
     }
@@ -106,42 +144,74 @@ class CartScreen extends ConsumerWidget {
         title: const Text('Cart'),
         actions: [
           if (cartItems.isNotEmpty)
-            TextButton(
-              onPressed: () async {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Clear Cart'),
-                    content: const Text('Are you sure you want to remove all items?'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Clear'),
-                      ),
-                    ],
-                  ),
+            Consumer(
+              builder: (context, ref, _) {
+                final isClearing = ref.watch(clearingCartProvider);
+                return TextButton(
+                  onPressed: isClearing
+                      ? null
+                      : () async {
+                          final confirmed = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Clear Cart'),
+                              content: const Text('Are you sure you want to remove all items?'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text('Clear'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirmed == true) {
+                            ref.read(clearingCartProvider.notifier).state = true;
+                            try {
+                              await cartNotifier.clear();
+                            } finally {
+                              ref.read(clearingCartProvider.notifier).state = false;
+                            }
+                          }
+                        },
+                  child: isClearing
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Clear'),
                 );
-                if (confirmed == true) {
-                  await cartNotifier.clear();
-                }
               },
-              child: const Text('Clear'),
             ),
         ],
       ),
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              children: _buildGroupedSections(context, cartItems, cartNotifier),
-            ),
+          Column(
+            children: [
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () => ref.read(cartItemsProvider.notifier).loadItems(),
+                  child: ListView(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    children: _buildGroupedSections(context, ref, cartItems, cartNotifier, loadingItemId),
+                  ),
+                ),
+              ),
+              _CartSummary(cartNotifier: cartNotifier, cartItems: cartItems),
+            ],
           ),
-          _CartSummary(cartNotifier: cartNotifier, cartItems: cartItems),
+          if (ref.watch(clearingCartProvider))
+            Positioned.fill(
+              child: Container(
+                color: Colors.black26,
+                child: const Center(child: CircularProgressIndicator()),
+              ),
+            ),
         ],
       ),
     );
@@ -153,11 +223,13 @@ class _CartItemCard extends StatelessWidget {
     required this.item,
     required this.onRemove,
     required this.onQuantityChanged,
+    this.isLoading = false,
   });
 
   final CartItem item;
-  final VoidCallback onRemove;
-  final ValueChanged<int> onQuantityChanged;
+  final Future<void> Function() onRemove;
+  final Future<void> Function(int) onQuantityChanged;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -288,9 +360,15 @@ class _CartItemCard extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.delete_outline),
+                  icon: isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppConfig.errorRed),
+                        )
+                      : const Icon(Icons.delete_outline),
                   color: AppConfig.errorRed,
-                  onPressed: onRemove,
+                  onPressed: isLoading ? null : () => onRemove(),
                 ),
               ],
             ),
@@ -305,42 +383,49 @@ class _CartItemCard extends StatelessWidget {
                       ),
                 ),
                 const Spacer(),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton.filled(
-                      onPressed: item.quantity > 1
-                          ? () => onQuantityChanged(item.quantity - 1)
-                          : null,
-                      icon: const Icon(Icons.remove, size: 18),
-                      style: IconButton.styleFrom(
-                        backgroundColor: AppConfig.borderColor,
-                        foregroundColor: AppConfig.textColor,
-                        padding: const EdgeInsets.all(8),
-                        minimumSize: const Size(36, 36),
+                if (isLoading)
+                  const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton.filled(
+                        onPressed: item.quantity > 1
+                            ? () => onQuantityChanged(item.quantity - 1)
+                            : null,
+                        icon: const Icon(Icons.remove, size: 18),
+                        style: IconButton.styleFrom(
+                          backgroundColor: AppConfig.borderColor,
+                          foregroundColor: AppConfig.textColor,
+                          padding: const EdgeInsets.all(8),
+                          minimumSize: const Size(36, 36),
+                        ),
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        '${item.quantity}',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          '${item.quantity}',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
                       ),
-                    ),
-                    IconButton.filled(
-                      onPressed: () => onQuantityChanged(item.quantity + 1),
-                      icon: const Icon(Icons.add, size: 18),
-                      style: IconButton.styleFrom(
-                        backgroundColor: AppConfig.primaryColor,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.all(8),
-                        minimumSize: const Size(36, 36),
+                      IconButton.filled(
+                        onPressed: () => onQuantityChanged(item.quantity + 1),
+                        icon: const Icon(Icons.add, size: 18),
+                        style: IconButton.styleFrom(
+                          backgroundColor: AppConfig.primaryColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.all(8),
+                          minimumSize: const Size(36, 36),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
               ],
             ),
           ],
@@ -445,19 +530,37 @@ class _CartSummary extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: AppSpacing.md),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () {
-                  context.push(AppRoutes.reviewPay);
-                },
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppConfig.primaryColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: const Text('Proceed to Checkout'),
-              ),
+            Consumer(
+              builder: (context, ref, _) {
+                final isProceeding = ref.watch(proceedingToCheckoutProvider);
+                return SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: isProceeding
+                        ? null
+                        : () async {
+                            ref.read(proceedingToCheckoutProvider.notifier).state = true;
+                            try {
+                              await context.push(AppRoutes.reviewPay);
+                            } finally {
+                              ref.read(proceedingToCheckoutProvider.notifier).state = false;
+                            }
+                          },
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppConfig.primaryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: isProceeding
+                        ? const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Text('Proceed to Checkout'),
+                  ),
+                );
+              },
             ),
           ],
         ),

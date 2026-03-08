@@ -203,11 +203,18 @@ class _ProfileContent extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(userProfileProvider);
+        ref.invalidate(complianceStatusProvider);
+        await ref.read(userProfileProvider.future);
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
           _ProfileHeader(
             profile: profile,
             avatarPreviewBytes: avatarPreviewBytes,
@@ -310,20 +317,38 @@ class _ProfileContent extends ConsumerWidget {
             onTap: () => context.push(AppRoutes.wallet),
           ),
           const SizedBox(height: AppSpacing.xl),
-          OutlinedButton(
-            onPressed: () async {
-              await ref.read(authRepositoryProvider).logout();
-              if (context.mounted) context.go(AppRoutes.login);
+          Consumer(
+            builder: (context, ref, _) {
+              final isLoggingOut = ref.watch(authLoggingOutProvider);
+              return OutlinedButton(
+                onPressed: isLoggingOut
+                    ? null
+                    : () async {
+                        ref.read(authLoggingOutProvider.notifier).state = true;
+                        try {
+                          await ref.read(authRepositoryProvider).logout();
+                          if (context.mounted) context.go(AppRoutes.login);
+                        } finally {
+                          ref.read(authLoggingOutProvider.notifier).state = false;
+                        }
+                      },
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  foregroundColor: AppConfig.textColor,
+                  side: const BorderSide(color: AppConfig.borderColor),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
+                  ),
+                ),
+                child: isLoggingOut
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(l10n.logout),
+              );
             },
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              foregroundColor: AppConfig.textColor,
-              side: const BorderSide(color: AppConfig.borderColor),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
-              ),
-            ),
-            child: Text(l10n.logout),
           ),
           const SizedBox(height: AppSpacing.sm),
           OutlinedButton.icon(
@@ -354,6 +379,7 @@ class _ProfileContent extends ConsumerWidget {
           const SizedBox(height: AppSpacing.lg),
         ],
       ),
+    ),
     );
   }
 }

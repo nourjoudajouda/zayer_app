@@ -67,6 +67,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
   String _dimensionUnit = 'in'; // 'in' = inches, 'cm' = cm
   /// Selected option index per variation (color, size, etc.)
   final Map<int, int> _selectedVariationIndices = {};
+  bool _isAddingToCart = false;
 
   @override
   void initState() {
@@ -179,6 +180,9 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
         _unitPrice = result.price;
         _unitPriceController.text = result.price.toStringAsFixed(2);
         _selectedVariationIndices.clear();
+        if (result.weight != null && result.weight! > 0) {
+          _weightController.text = result.weight.toStringAsFixed(2);
+        }
       });
     } on InvalidLinkException catch (e) {
       if (!mounted) return;
@@ -300,17 +304,31 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
       variationText: variationText,
     );
 
-    final cartNotifier = ref.read(cartItemsProvider.notifier);
-    await cartNotifier.addItem(cartItem);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Added to cart'),
-          backgroundColor: AppConfig.successGreen,
-        ),
-      );
-      context.pop();
+    if (!mounted) return;
+    setState(() => _isAddingToCart = true);
+    try {
+      final cartNotifier = ref.read(cartItemsProvider.notifier);
+      final added = await cartNotifier.addItem(cartItem);
+      if (mounted) {
+        if (added) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Added to cart'),
+              backgroundColor: AppConfig.successGreen,
+            ),
+          );
+          context.pop();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('This item is already in your cart'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _isAddingToCart = false);
     }
   }
 
@@ -1049,7 +1067,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
           controller: _unitPriceController,
           decoration: _inputDecoration('Unit Price (USD)'),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          enabled: _fieldsEnabled,
+          enabled: _state == _PasteLinkState.manual,
           onChanged: (_) => _updateTotalPrice(),
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -1210,13 +1228,23 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
   }
 
   Widget _buildBottomBar() {
+    final loading = _isAddingToCart;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
         child: FilledButton.icon(
-          onPressed: _canAddToCart ? _addToCart : null,
-          icon: const Icon(Icons.shopping_cart_outlined, size: 22),
-          label: const Text('Add to Cart'),
+          onPressed: (!loading && _canAddToCart) ? _addToCart : null,
+          icon: loading
+              ? SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.shopping_cart_outlined, size: 22),
+          label: Text(loading ? 'Adding...' : 'Add to Cart'),
           style: FilledButton.styleFrom(
             backgroundColor: AppConfig.primaryColor,
             foregroundColor: Colors.white,

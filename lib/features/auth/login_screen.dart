@@ -35,6 +35,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   List<CountryItem> _countries = [];
   bool _loadingCountries = true;
   bool _countriesLoadError = false;
+  bool _isLoggingIn = false;
 
   CountryItem? _countryById(String? id) {
     if (id == null || id.isEmpty) return null;
@@ -119,19 +120,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final digits = _phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
     final phone = _countryCode + digits;
     if (phone.isEmpty) return;
-    final repo = ref.read(authRepositoryProvider);
-    final result = await repo.login(
-      phone: phone,
-      password: _passwordController.text,
-    );
-    if (!mounted) return;
-    switch (result) {
-      case AuthSuccess():
-        context.go(AppRoutes.home);
-      case AuthRequiresOtp():
-        break; // Not used for login
-      case AuthFailure(:final message):
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    setState(() => _isLoggingIn = true);
+    try {
+      final repo = ref.read(authRepositoryProvider);
+      final result = await repo.login(
+        phone: phone,
+        password: _passwordController.text,
+      );
+      if (!mounted) return;
+      switch (result) {
+        case AuthSuccess():
+          context.go(AppRoutes.home);
+        case AuthRequiresOtp():
+          break; // Not used for login
+        case AuthFailure(:final message):
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoggingIn = false);
     }
   }
 
@@ -284,14 +290,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed: _login,
+                    onPressed: _isLoggingIn ? null : _login,
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(AppConfig.radiusXLarge),
                       ),
                     ),
-                    child: Text(l10n.login),
+                    child: _isLoggingIn
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : Text(l10n.login),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),

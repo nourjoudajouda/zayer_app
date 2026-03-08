@@ -25,6 +25,7 @@ class SplashScreen extends ConsumerStatefulWidget {
 class _SplashScreenState extends ConsumerState<SplashScreen> {
   double _progress = 0;
   bool _hasScheduledNavigation = false;
+  bool _isRetrying = false;
 
   @override
   void initState() {
@@ -134,6 +135,17 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     );
   }
 
+  Future<void> _retryBootstrap() async {
+    if (_isRetrying) return;
+    setState(() => _isRetrying = true);
+    try {
+      bootstrapConfigRefresh(ref);
+      await ref.read(bootstrapConfigProvider.future);
+    } finally {
+      if (mounted) setState(() => _isRetrying = false);
+    }
+  }
+
   Widget _buildError(BuildContext context, Object error) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -159,11 +171,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
           ),
           const SizedBox(height: AppSpacing.xl),
           FilledButton.icon(
-            onPressed: () {
-              bootstrapConfigRefresh(ref);
-            },
-            icon: const Icon(Icons.refresh),
-            label: const Text('Retry'),
+            onPressed: _isRetrying ? null : _retryBootstrap,
+            icon: _isRetrying
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.refresh),
+            label: Text(_isRetrying ? 'Retrying...' : 'Retry'),
           ),
         ],
       ),

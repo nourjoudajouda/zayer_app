@@ -153,14 +153,20 @@ class _NotificationsListScreenState
             ),
             const SizedBox(height: AppSpacing.md),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                children: [
-                  ..._buildSection('IMPORTANT', _byFilter(_importantFrom(items)), true),
-                  ..._buildSection('TODAY', _byFilter(_todayFrom(items)), false),
-                  ..._buildSection('YESTERDAY', _byFilter(_yesterdayFrom(items)), false),
-                  const SizedBox(height: AppSpacing.xxl),
-                ],
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  ref.invalidate(notificationsListProvider);
+                  await ref.read(notificationsListProvider.future);
+                },
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                  children: [
+                    ..._buildSection('IMPORTANT', _byFilter(_importantFrom(items)), true),
+                    ..._buildSection('TODAY', _byFilter(_todayFrom(items)), false),
+                    ..._buildSection('YESTERDAY', _byFilter(_yesterdayFrom(items)), false),
+                    const SizedBox(height: AppSpacing.xxl),
+                  ],
+                ),
               ),
             ),
           ],

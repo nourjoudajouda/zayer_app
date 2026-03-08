@@ -39,6 +39,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _loadingCountries = true;
   bool _loadingCities = false;
   bool _countriesLoadError = false;
+  bool _isCreatingAccount = false;
 
   @override
   void initState() {
@@ -161,26 +162,31 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final digits = _phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
     final phone = _countryCode + digits;
     if (phone.isEmpty) return;
-    final repo = ref.read(authRepositoryProvider);
-    final result = await repo.register(
-      phone: phone,
-      fullName: _fullNameController.text.trim(),
-      password: _passwordController.text,
-      countryId: _selectedCountryId,
-      cityId: _selectedCityId,
-    );
-    if (!mounted) return;
-    switch (result) {
-      case AuthSuccess():
-        context.go(AppRoutes.home);
-      case AuthRequiresOtp(:final phone, :final devOtp):
-        var path = '${AppRoutes.otp}?phone=${Uri.encodeComponent(phone)}&mode=signup';
-        if (devOtp != null && devOtp.isNotEmpty) {
-          path += '&dev_otp=${Uri.encodeComponent(devOtp)}';
-        }
-        context.go(path);
-      case AuthFailure(:final message):
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    setState(() => _isCreatingAccount = true);
+    try {
+      final repo = ref.read(authRepositoryProvider);
+      final result = await repo.register(
+        phone: phone,
+        fullName: _fullNameController.text.trim(),
+        password: _passwordController.text,
+        countryId: _selectedCountryId,
+        cityId: _selectedCityId,
+      );
+      if (!mounted) return;
+      switch (result) {
+        case AuthSuccess():
+          context.go(AppRoutes.home);
+        case AuthRequiresOtp(:final phone, :final devOtp):
+          var path = '${AppRoutes.otp}?phone=${Uri.encodeComponent(phone)}&mode=signup';
+          if (devOtp != null && devOtp.isNotEmpty) {
+            path += '&dev_otp=${Uri.encodeComponent(devOtp)}';
+          }
+          context.go(path);
+        case AuthFailure(:final message):
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      }
+    } finally {
+      if (mounted) setState(() => _isCreatingAccount = false);
     }
   }
 
@@ -451,14 +457,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed: _createAccount,
+                    onPressed: _isCreatingAccount ? null : _createAccount,
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(AppConfig.radiusXLarge),
                       ),
                     ),
-                    child: Text(l10n.createAccount),
+                    child: _isCreatingAccount
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : Text(l10n.createAccount),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),

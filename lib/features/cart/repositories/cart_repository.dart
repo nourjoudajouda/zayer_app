@@ -51,6 +51,13 @@ class CartRepositoryImpl implements CartRepository {
         if (item.productId != null) 'product_id': item.productId,
         if (item.country != null) 'country': item.country,
         'source': item.source,
+        if (item.variationText != null && item.variationText!.isNotEmpty) 'variation_text': item.variationText,
+        if (item.weight != null) 'weight': item.weight,
+        if (item.weightUnit != null) 'weight_unit': item.weightUnit,
+        if (item.length != null) 'length': item.length,
+        if (item.width != null) 'width': item.width,
+        if (item.height != null) 'height': item.height,
+        if (item.dimensionUnit != null) 'dimension_unit': item.dimensionUnit,
       };
 
   @override

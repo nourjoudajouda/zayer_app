@@ -8,3 +8,6 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
     tokenStore: ref.watch(tokenStoreProvider),
   );
 });
+
+/// True while logout API is in progress (e.g. for loader on profile logout button).
+final authLoggingOutProvider = StateProvider<bool>((ref) => false);

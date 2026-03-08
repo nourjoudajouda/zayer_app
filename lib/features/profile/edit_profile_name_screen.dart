@@ -26,6 +26,7 @@ class _EditProfileNameScreenState extends ConsumerState<EditProfileNameScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _fullLegalNameController;
   late final TextEditingController _displayNameController;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -43,19 +44,24 @@ class _EditProfileNameScreenState extends ConsumerState<EditProfileNameScreen> {
 
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    final repo = ref.read(profileRepositoryProvider);
-    await repo.updateProfile(
-      fullLegalName: _fullLegalNameController.text.trim(),
-      displayName: _displayNameController.text.trim(),
-    );
-    ref.invalidate(userProfileProvider);
-    if (mounted) {
-      await showSuccessDialog(
-        context,
-        title: 'Success',
-        message: 'Profile updated successfully',
+    setState(() => _isSaving = true);
+    try {
+      final repo = ref.read(profileRepositoryProvider);
+      await repo.updateProfile(
+        fullLegalName: _fullLegalNameController.text.trim(),
+        displayName: _displayNameController.text.trim(),
       );
-      if (mounted) Navigator.of(context).pop(true);
+      ref.invalidate(userProfileProvider);
+      if (mounted) {
+        await showSuccessDialog(
+          context,
+          title: 'Success',
+          message: 'Profile updated successfully',
+        );
+        if (mounted) Navigator.of(context).pop(true);
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -102,12 +108,18 @@ class _EditProfileNameScreenState extends ConsumerState<EditProfileNameScreen> {
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 FilledButton(
-                  onPressed: _save,
+                  onPressed: _isSaving ? null : _save,
                   style: FilledButton.styleFrom(
                     backgroundColor: AppConfig.primaryColor,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  child: const Text('Save'),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Save'),
                 ),
               ],
             ),

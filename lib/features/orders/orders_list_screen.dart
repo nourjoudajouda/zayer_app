@@ -178,6 +178,10 @@ class OrdersListScreen extends ConsumerWidget {
             activeFilter: statusFilter,
             originFilter: originFilter,
             sortOption: sortOption,
+            onRefresh: () async {
+              ref.invalidate(ordersProvider);
+              await ref.read(ordersProvider.future);
+            },
             onFilterChanged: (f) => ref.read(ordersFilterProvider.notifier).state = f,
             onOriginChanged: (f) => ref.read(ordersOriginFilterProvider.notifier).state = f,
             onSortChanged: (s) => ref.read(ordersSortProvider.notifier).state = s,
@@ -196,6 +200,7 @@ class _OrdersListContent extends StatelessWidget {
     required this.activeFilter,
     required this.originFilter,
     required this.sortOption,
+    required this.onRefresh,
     required this.onFilterChanged,
     required this.onOriginChanged,
     required this.onSortChanged,
@@ -205,6 +210,7 @@ class _OrdersListContent extends StatelessWidget {
   final OrdersFilter activeFilter;
   final OrdersOriginFilter originFilter;
   final OrdersSortOption sortOption;
+  final Future<void> Function() onRefresh;
   final ValueChanged<OrdersFilter> onFilterChanged;
   final ValueChanged<OrdersOriginFilter> onOriginChanged;
   final ValueChanged<OrdersSortOption> onSortChanged;
@@ -248,15 +254,18 @@ class _OrdersListContent extends StatelessWidget {
             Expanded(
               child: orders.isEmpty
                   ? _FilterEmptyState(activeFilter: activeFilter)
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      itemCount: orders.length,
-                      itemBuilder: (context, index) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                          child: _OrderCard(order: orders[index]),
-                        );
-                      },
+                  : RefreshIndicator(
+                      onRefresh: onRefresh,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        itemCount: orders.length,
+                        itemBuilder: (context, index) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                            child: _OrderCard(order: orders[index]),
+                          );
+                        },
+                      ),
                     ),
             ),
           ],

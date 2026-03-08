@@ -44,3 +44,6 @@ final citiesProvider = FutureProvider.family<List<CityOption>, String>((ref, cou
 final addressesProvider = FutureProvider<List<Address>>((ref) async {
   return ref.read(addressRepositoryProvider).getAddresses();
 });
+
+/// Address id while "Set as default" API is in progress (for loader on Default chip).
+final setDefaultAddressLoadingIdProvider = StateProvider<String?>((ref) => null);

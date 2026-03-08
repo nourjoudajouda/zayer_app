@@ -36,6 +36,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
   late final TextEditingController _unitPriceController;
   /// Selected option index per variation (e.g. [0, 1] for first size, second color).
   final Map<int, int> _selectedVariationIndices = {};
+  bool _isAddingToCart = false;
 
   @override
   void initState() {
@@ -342,6 +343,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                     TextField(
                       controller: _unitPriceController,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      readOnly: widget.product != null,
                       decoration: InputDecoration(
                         hintText: '0.00',
                         prefixText: '\$ ',
@@ -575,35 +577,58 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
       variationText: variationText,
     );
 
-    final cartNotifier = ref.read(cartItemsProvider.notifier);
-    await cartNotifier.addItem(cartItem);
+    if (!mounted) return;
+    setState(() => _isAddingToCart = true);
+    try {
+      final cartNotifier = ref.read(cartItemsProvider.notifier);
+      final added = await cartNotifier.addItem(cartItem);
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Added to cart'),
-          backgroundColor: AppConfig.successGreen,
-        ),
-      );
-      
-      // Pop confirm screen and store webview to return to store landing
-      Navigator.of(context).popUntil((route) {
-        // Pop until we reach the store landing or home screen
-        return route.isFirst || 
-               route.settings.name == AppRoutes.storeLanding ||
-               route.settings.name == AppRoutes.home;
-      });
+      if (mounted) {
+        if (added) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Added to cart'),
+              backgroundColor: AppConfig.successGreen,
+            ),
+          );
+          // Pop confirm screen and store webview to return to store landing
+          Navigator.of(context).popUntil((route) {
+            return route.isFirst ||
+                route.settings.name == AppRoutes.storeLanding ||
+                route.settings.name == AppRoutes.home;
+          });
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('This item is already in your cart'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _isAddingToCart = false);
     }
   }
 
   Widget _buildBottomBar(BuildContext context) {
+    final loading = _isAddingToCart;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
         child: FilledButton.icon(
-          onPressed: _addToCart,
-          icon: const Icon(Icons.check_circle_outline, size: 22),
-          label: const Text('Confirm & Add to Cart'),
+          onPressed: loading ? null : _addToCart,
+          icon: loading
+              ? SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.check_circle_outline, size: 22),
+          label: Text(loading ? 'Adding...' : 'Confirm & Add to Cart'),
           style: FilledButton.styleFrom(
             backgroundColor: AppConfig.primaryColor,
             foregroundColor: Colors.white,

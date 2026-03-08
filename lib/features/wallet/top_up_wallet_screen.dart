@@ -22,6 +22,7 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
   int _selectedPresetIndex = 1;
   final TextEditingController _customAmountController = TextEditingController(text: '100.00');
   bool _useCustom = false;
+  bool _isConfirming = false;
 
   @override
   void initState() {
@@ -57,6 +58,7 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
   Future<void> _confirmTopUp() async {
     final amount = _selectedAmount;
     if (amount == null || amount <= 0) return;
+    setState(() => _isConfirming = true);
     try {
       await ApiClient.instance.post('/api/wallet/top-up', data: {'amount': amount});
       ref.invalidate(walletBalanceProvider);
@@ -69,6 +71,8 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Top-up failed')));
       }
+    } finally {
+      if (mounted) setState(() => _isConfirming = false);
     }
   }
 
@@ -264,9 +268,15 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
               SizedBox(
                 height: 52,
                 child: FilledButton.icon(
-                  onPressed: amount != null ? _confirmTopUp : null,
-                  icon: const Icon(Icons.lock_outline, size: 20),
-                  label: const Text('Confirm Top Up'),
+                  onPressed: (amount != null && !_isConfirming) ? _confirmTopUp : null,
+                  icon: _isConfirming
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.lock_outline, size: 20),
+                  label: Text(_isConfirming ? 'Processing...' : 'Confirm Top Up'),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppConfig.primaryColor,
                     foregroundColor: Colors.white,

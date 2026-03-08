@@ -49,9 +49,16 @@ class WalletScreen extends ConsumerWidget {
         ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-          child: Column(
+        child: RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(walletBalanceProvider);
+            ref.invalidate(walletTransactionsProvider);
+            await ref.read(walletBalanceProvider.future);
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: AppSpacing.sm),
@@ -165,6 +172,7 @@ class WalletScreen extends ConsumerWidget {
               const SizedBox(height: AppSpacing.xxl),
             ],
           ),
+        ),
         ),
       ),
     );

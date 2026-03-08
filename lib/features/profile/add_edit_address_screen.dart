@@ -67,6 +67,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
   double? _lat;
   double? _lng;
   GoogleMapController? _mapController;
+  bool _isSaving = false;
   static const LatLng _defaultCenter = LatLng(25.0760, 55.3093); // Dubai
 
   @override
@@ -117,37 +118,42 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
 
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    final countryId = _selectedCountryId ?? 'ae';
-    final countryName = _countryName;
-    final cityId = _selectedCityId;
-    final cityName = _cityName;
-    final street = _streetAddressController.text.trim();
-    final building = _buildingController.text.trim();
-    final area = _areaDistrictController.text.trim();
-    final addressLine = [street, building.isNotEmpty ? building : null, area, cityName, countryName]
-        .where((e) => e != null && e.isNotEmpty)
-        .join(', ');
-    final repo = ref.read(addressRepositoryProvider);
-    await repo.saveAddress(
-      id: widget.addressId,
-      addressLine: addressLine.isEmpty ? '${_cityName}, $countryName' : addressLine,
-      countryId: countryId,
-      countryName: countryName,
-      cityId: cityId?.isEmpty == true ? null : cityId,
-      cityName: cityName.isEmpty ? null : cityName,
-      phone: widget.initialPhone?.trim().isEmpty == true ? null : widget.initialPhone,
-      isDefault: _isDefault,
-      nickname: _nicknameController.text.trim().isEmpty ? null : _nicknameController.text.trim(),
-      addressType: _addressType,
-      areaDistrict: _areaDistrictController.text.trim().isEmpty ? null : _areaDistrictController.text.trim(),
-      streetAddress: street.isEmpty ? null : street,
-      buildingVillaSuite: building.isEmpty ? null : building,
-      isVerified: true,
-      isResidential: _addressType == AddressType.home,
-      lat: _lat,
-      lng: _lng,
-    );
-    if (mounted) Navigator.of(context).pop(true);
+    setState(() => _isSaving = true);
+    try {
+      final countryId = _selectedCountryId ?? 'ae';
+      final countryName = _countryName;
+      final cityId = _selectedCityId;
+      final cityName = _cityName;
+      final street = _streetAddressController.text.trim();
+      final building = _buildingController.text.trim();
+      final area = _areaDistrictController.text.trim();
+      final addressLine = [street, building.isNotEmpty ? building : null, area, cityName, countryName]
+          .where((e) => e != null && e.isNotEmpty)
+          .join(', ');
+      final repo = ref.read(addressRepositoryProvider);
+      await repo.saveAddress(
+        id: widget.addressId,
+        addressLine: addressLine.isEmpty ? '${_cityName}, $countryName' : addressLine,
+        countryId: countryId,
+        countryName: countryName,
+        cityId: cityId?.isEmpty == true ? null : cityId,
+        cityName: cityName.isEmpty ? null : cityName,
+        phone: widget.initialPhone?.trim().isEmpty == true ? null : widget.initialPhone,
+        isDefault: _isDefault,
+        nickname: _nicknameController.text.trim().isEmpty ? null : _nicknameController.text.trim(),
+        addressType: _addressType,
+        areaDistrict: _areaDistrictController.text.trim().isEmpty ? null : _areaDistrictController.text.trim(),
+        streetAddress: street.isEmpty ? null : street,
+        buildingVillaSuite: building.isEmpty ? null : building,
+        isVerified: true,
+        isResidential: _addressType == AddressType.home,
+        lat: _lat,
+        lng: _lng,
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   List<CountryOption>? _countries;
@@ -212,9 +218,15 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   FilledButton.icon(
-                    onPressed: _save,
-                    icon: const Icon(Icons.save_outlined, size: 20),
-                    label: const Text('Save Address'),
+                    onPressed: _isSaving ? null : _save,
+                    icon: _isSaving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.save_outlined, size: 20),
+                    label: Text(_isSaving ? 'Saving...' : 'Save Address'),
                     style: FilledButton.styleFrom(
                       backgroundColor: AppConfig.primaryColor,
                       padding: const EdgeInsets.symmetric(vertical: 14),

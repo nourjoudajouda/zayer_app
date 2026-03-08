@@ -3,10 +3,29 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
 import '../../cart/models/cart_item_model.dart';
 import '../../cart/providers/cart_providers.dart';
+import '../../profile/providers/profile_providers.dart';
 import '../models/checkout_review_model.dart';
 
+Future<String> _getPrimaryAddressShort(WidgetRef ref) async {
+  try {
+    final profile = await ref.read(userProfileProvider.future);
+    if (profile.primaryAddress.trim().isNotEmpty) return profile.primaryAddress;
+  } catch (_) {}
+  try {
+    final addresses = await ref.read(addressesProvider.future);
+    final defaultAddr = addresses.where((a) => a.isDefault).firstOrNull;
+    if (defaultAddr != null && defaultAddr.addressLine.trim().isNotEmpty) {
+      return defaultAddr.addressLine;
+    }
+    if (addresses.isNotEmpty && addresses.first.addressLine.trim().isNotEmpty) {
+      return addresses.first.addressLine;
+    }
+  } catch (_) {}
+  return 'No address set';
+}
+
 /// Builds review from current cart. Replace with GET /api/checkout/review later.
-CheckoutReviewModel _buildReviewFromCart(List<CartItem> cartItems) {
+CheckoutReviewModel _buildReviewFromCart(List<CartItem> cartItems, String primaryAddressShort) {
   if (cartItems.isEmpty) {
     return const CheckoutReviewModel(
       shipments: [],
@@ -68,7 +87,7 @@ CheckoutReviewModel _buildReviewFromCart(List<CartItem> cartItems) {
   final total = subtotal + shipping + insurance - consolidationSavings - walletBalance;
 
   return CheckoutReviewModel(
-    shippingAddressShort: '123 Logistics Way, New Yor...',
+    shippingAddressShort: primaryAddressShort,
     consolidationSavings: '\$${consolidationSavings.toStringAsFixed(2)}',
     walletBalance: '\$${walletBalance.toStringAsFixed(2)} Available',
     subtotal: '\$${subtotal.toStringAsFixed(2)}',
@@ -79,14 +98,20 @@ CheckoutReviewModel _buildReviewFromCart(List<CartItem> cartItems) {
   );
 }
 
-/// Checkout review from API: GET /api/checkout/review. Fallback to cart-built.
+/// Checkout review from API: GET /api/checkout/review. Fallback to cart-built. Uses profile/addresses for shipping address when API omits it.
 final checkoutReviewProvider = FutureProvider<CheckoutReviewModel>((ref) async {
+  final addressFallback = _getPrimaryAddressShort(ref);
   try {
     final res = await ApiClient.instance.get<Map<String, dynamic>>('/api/checkout/review');
-    if (res.data != null) return CheckoutReviewModel.fromJson(res.data!);
+    if (res.data != null) {
+      final data = Map<String, dynamic>.from(res.data!);
+      final short = (data['shipping_address_short'] ?? '').toString().trim();
+      if (short.isEmpty) data['shipping_address_short'] = await addressFallback;
+      return CheckoutReviewModel.fromJson(data);
+    }
   } catch (_) {}
   final cartItems = ref.watch(cartItemsProvider);
-  return _buildReviewFromCart(cartItems);
+  return _buildReviewFromCart(cartItems, await addressFallback);
 });
 
 /// Toggle wallet balance usage. Include in POST /api/checkout/confirm.

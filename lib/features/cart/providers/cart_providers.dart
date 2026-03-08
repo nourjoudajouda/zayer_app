@@ -12,6 +12,15 @@ final cartItemsProvider = StateNotifierProvider<CartNotifier, List<CartItem>>((r
   return CartNotifier(repo);
 });
 
+/// ID of the cart item currently being updated/removed (for button loader).
+final loadingCartItemIdProvider = StateProvider<String?>((ref) => null);
+
+/// True while clear-cart API is in progress (full-screen loader on cart).
+final clearingCartProvider = StateProvider<bool>((ref) => false);
+
+/// True while navigating to checkout / payment (loader on Proceed to Checkout button).
+final proceedingToCheckoutProvider = StateProvider<bool>((ref) => false);
+
 class CartNotifier extends StateNotifier<List<CartItem>> {
   CartNotifier(this._repository) : super([]) {
     loadItems();
@@ -24,9 +33,21 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     state = List.from(_repository.items);
   }
 
-  Future<void> addItem(CartItem item) async {
+  /// Returns true if item was added, false if same product+variation already in cart.
+  Future<bool> addItem(CartItem item) async {
+    if (_isDuplicate(item)) return false;
     await _repository.addItem(item);
     state = List.from(_repository.items);
+    return true;
+  }
+
+  static String _normVariation(String? v) => (v ?? '').trim();
+
+  bool _isDuplicate(CartItem item) {
+    final url = item.productUrl.trim();
+    final variation = _normVariation(item.variationText);
+    return state.any((e) =>
+        e.productUrl.trim() == url && _normVariation(e.variationText) == variation);
   }
 
   Future<void> updateQuantity(String id, int quantity) async {

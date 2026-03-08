@@ -23,6 +23,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
   bool _hasRedirectedEmpty = false;
+  bool _isRetrying = false;
 
   @override
   void dispose() {
@@ -83,6 +84,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
+  Future<void> _retryBootstrap() async {
+    if (_isRetrying) return;
+    setState(() => _isRetrying = true);
+    try {
+      bootstrapConfigRefresh(ref);
+      await ref.read(bootstrapConfigProvider.future);
+    } finally {
+      if (mounted) setState(() => _isRetrying = false);
+    }
+  }
+
   Widget _buildError(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -110,9 +122,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           ),
           const SizedBox(height: 24),
           FilledButton.icon(
-            onPressed: () => bootstrapConfigRefresh(ref),
-            icon: const Icon(Icons.refresh),
-            label: const Text('Retry'),
+            onPressed: _isRetrying ? null : _retryBootstrap,
+            icon: _isRetrying
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.refresh),
+            label: Text(_isRetrying ? 'Retrying...' : 'Retry'),
           ),
         ],
       ),

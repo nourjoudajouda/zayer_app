@@ -8,6 +8,7 @@ import 'core/localization/locale_provider.dart';
 import 'core/network/connectivity_provider.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'core/widgets/no_internet_screen.dart';
 import 'generated/l10n/app_localizations.dart';
 
 class ZayerApp extends ConsumerWidget {
@@ -52,33 +53,14 @@ class ZayerApp extends ConsumerWidget {
           children: [
             content,
             if (isOffline)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: Material(
-                  elevation: 4,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                    color: Colors.orange.shade700,
-                    child: SafeArea(
-                      bottom: false,
-                      child: Text(
-                        'No internet connection',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ),
+              Positioned.fill(
+                child: NoInternetScreen(
+                  onRetry: () => ref.invalidate(connectivityProvider),
                 ),
               ),
             if (devMode)
               Positioned(
-                top: isOffline ? 52 : 0,
+                top: 0,
                 left: 0,
                 right: 0,
                 child: Material(

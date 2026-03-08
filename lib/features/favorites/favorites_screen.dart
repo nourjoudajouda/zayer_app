@@ -110,11 +110,17 @@ class FavoritesScreen extends ConsumerWidget {
               ),
             ),
             Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-                itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
-                itemBuilder: (context, index) => _FavoriteCard(item: items[index]),
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  ref.invalidate(favoritesListProvider);
+                  await ref.read(favoritesListProvider.future);
+                },
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                  itemCount: items.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
+                  itemBuilder: (context, index) => _FavoriteCard(item: items[index]),
+                ),
               ),
             ),
           ],

@@ -21,6 +21,7 @@ class EditDateOfBirthScreen extends ConsumerStatefulWidget {
 class _EditDateOfBirthScreenState extends ConsumerState<EditDateOfBirthScreen> {
   static final _displayFormat = DateFormat('MMM d, yyyy');
   DateTime? _selectedDate;
+  bool _isSaving = false;
 
   DateTime _parseInitial() {
     if (widget.initialDateOfBirth == null || widget.initialDateOfBirth!.isEmpty) {
@@ -47,18 +48,23 @@ class _EditDateOfBirthScreenState extends ConsumerState<EditDateOfBirthScreen> {
   }
 
   Future<void> _save() async {
-    final date = _selectedDate ?? _parseInitial();
-    final formatted = _displayFormat.format(date);
-    final repo = ref.read(profileRepositoryProvider);
-    await repo.updateProfile(dateOfBirth: formatted);
-    ref.invalidate(userProfileProvider);
-    if (mounted) {
-      await showSuccessDialog(
-        context,
-        title: 'Success',
-        message: 'Date of birth updated successfully',
-      );
-      if (mounted) Navigator.of(context).pop(true);
+    setState(() => _isSaving = true);
+    try {
+      final date = _selectedDate ?? _parseInitial();
+      final formatted = _displayFormat.format(date);
+      final repo = ref.read(profileRepositoryProvider);
+      await repo.updateProfile(dateOfBirth: formatted);
+      ref.invalidate(userProfileProvider);
+      if (mounted) {
+        await showSuccessDialog(
+          context,
+          title: 'Success',
+          message: 'Date of birth updated successfully',
+        );
+        if (mounted) Navigator.of(context).pop(true);
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -97,12 +103,18 @@ class _EditDateOfBirthScreenState extends ConsumerState<EditDateOfBirthScreen> {
               ),
               const SizedBox(height: AppSpacing.xl),
               FilledButton(
-                onPressed: _save,
+                onPressed: _isSaving ? null : _save,
                 style: FilledButton.styleFrom(
                   backgroundColor: AppConfig.primaryColor,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                child: const Text('Save'),
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Save'),
               ),
             ],
           ),

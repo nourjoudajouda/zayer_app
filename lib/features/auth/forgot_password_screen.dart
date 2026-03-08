@@ -11,7 +11,6 @@ import '../../core/localization/app_locale.dart';
 import '../../core/localization/locale_provider.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
-import '../../core/ui/zayer_primary_button.dart';
 import '../../core/ui/zayer_text_field.dart';
 import '../../generated/l10n/app_localizations.dart';
 
@@ -27,6 +26,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final _phoneController = TextEditingController();
   String _countryCode = '966';
   List<CountryItem> _countries = [];
+  bool _isSending = false;
 
   @override
   void initState() {
@@ -57,20 +57,25 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     final digits = _phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
     final phone = _countryCode + digits;
     if (phone.isEmpty) return;
-    final repo = ref.read(authRepositoryProvider);
-    final result = await repo.forgotPassword(phone: phone);
-    if (!mounted) return;
-    switch (result) {
-      case AuthSuccess():
-        context.go(AppRoutes.home);
-      case AuthRequiresOtp(:final phone, :final devOtp):
-        var path = '${AppRoutes.otp}?phone=${Uri.encodeComponent(phone)}&mode=reset';
-        if (devOtp != null && devOtp.isNotEmpty) {
-          path += '&dev_otp=${Uri.encodeComponent(devOtp)}';
-        }
-        context.go(path);
-      case AuthFailure(:final message):
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    setState(() => _isSending = true);
+    try {
+      final repo = ref.read(authRepositoryProvider);
+      final result = await repo.forgotPassword(phone: phone);
+      if (!mounted) return;
+      switch (result) {
+        case AuthSuccess():
+          context.go(AppRoutes.home);
+        case AuthRequiresOtp(:final phone, :final devOtp):
+          var path = '${AppRoutes.otp}?phone=${Uri.encodeComponent(phone)}&mode=reset';
+          if (devOtp != null && devOtp.isNotEmpty) {
+            path += '&dev_otp=${Uri.encodeComponent(devOtp)}';
+          }
+          context.go(path);
+        case AuthFailure(:final message):
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
     }
   }
 
@@ -169,9 +174,26 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                     ],
                   ),
                   const SizedBox(height: AppSpacing.xl),
-                  ZayerPrimaryButton(
-                    label: l10n.sendResetCode,
-                    onPressed: _sendResetCode,
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _isSending ? null : _sendResetCode,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppConfig.primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppConfig.radiusXLarge),
+                        ),
+                      ),
+                      child: _isSending
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : Text(l10n.sendResetCode),
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   Center(
