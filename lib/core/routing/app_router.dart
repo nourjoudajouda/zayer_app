@@ -87,7 +87,7 @@ class AppRoutes {
   static const String notifications = '/notifications';
   static const String notificationSettings = '/notification-settings';
   static const String reviewPay = '/review-pay';
-  static const String paymentWebView = '/payment';
+  static const String paymentWebView = '/payment-webview';
   static const String paymentMethods = '/payment-methods';
   static const String supportInbox = '/support-inbox';
   static const String contactSupport = '/contact-support';
@@ -369,7 +369,7 @@ GoRouter _createAppRouter() {
       GoRoute(
         path: AppRoutes.paymentWebView,
         builder: (context, state) {
-          final checkoutUrl = state.uri.queryParameters['url'] ?? '';
+          final checkoutUrl = state.extra is String ? state.extra as String : '';
           return PaymentWebViewScreen(checkoutUrl: checkoutUrl);
         },
       ),

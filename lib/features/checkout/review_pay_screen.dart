@@ -7,6 +7,7 @@ import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import 'models/checkout_review_model.dart';
+import 'payment_webview_screen.dart';
 import '../cart/providers/cart_providers.dart';
 import '../orders/providers/orders_providers.dart';
 import '../wallet/providers/wallet_providers.dart';
@@ -170,7 +171,28 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
                   setState(() => _confirming = false);
                   if (paymentResult.checkoutUrl != null) {
                     context.go('${AppRoutes.orderDetail}/$orderId');
-                    context.push('${AppRoutes.paymentWebView}?url=${Uri.encodeComponent(paymentResult.checkoutUrl!)}');
+                    final webViewResult = await context.push<PaymentWebViewResult>(
+                      AppRoutes.paymentWebView,
+                      extra: paymentResult.checkoutUrl!,
+                    );
+                    if (!context.mounted) return;
+                    ref.invalidate(orderByIdProvider(orderId));
+                    ref.invalidate(ordersProvider);
+                    try {
+                      await ref.read(orderByIdProvider(orderId).future);
+                    } catch (_) {
+                      // Network or API failure while refreshing; do not crash
+                    }
+                    if (!context.mounted) return;
+                    if (webViewResult == PaymentWebViewResult.failedToLoad) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Payment page could not load. Please try again or use another device.')),
+                      );
+                    } else if (webViewResult == PaymentWebViewResult.maybeCompleted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Payment status updated.')),
+                      );
+                    }
                   } else {
                     context.go('${AppRoutes.orderDetail}/$orderId');
                     ScaffoldMessenger.of(context).showSnackBar(

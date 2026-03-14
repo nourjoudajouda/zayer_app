@@ -7,8 +7,18 @@ import '../../core/platform/webview_supported.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 
+/// Result returned when the user leaves the payment WebView.
+enum PaymentWebViewResult {
+  /// User tapped close/back without completing (or from error/unsupported screen).
+  closed,
+  /// User closed from the payment page; they may have completed payment (refresh order).
+  maybeCompleted,
+  /// WebView failed to load the checkout URL.
+  failedToLoad,
+}
+
 /// In-app WebView for Square checkout. Opens [checkoutUrl] and lets the user
-/// complete or cancel payment. Close button returns to previous screen.
+/// complete or cancel payment. Close button returns to previous screen with a result.
 class PaymentWebViewScreen extends StatefulWidget {
   const PaymentWebViewScreen({
     super.key,
@@ -26,10 +36,18 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
   bool _isLoading = true;
   String? _loadError;
 
+  void _popWithResult(PaymentWebViewResult result) {
+    if (mounted) Navigator.of(context).pop(result);
+  }
+
   @override
   void initState() {
     super.initState();
-    if (isWebViewSupported && widget.checkoutUrl.trim().isNotEmpty) {
+    if (widget.checkoutUrl.trim().isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _popWithResult(PaymentWebViewResult.failedToLoad));
+      return;
+    }
+    if (isWebViewSupported) {
       _controller = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
         ..setNavigationDelegate(
@@ -62,7 +80,7 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
     } else {
       setState(() {
         _isLoading = false;
-        _loadError = isWebViewSupported ? null : 'Payment is not supported on this device.';
+        _loadError = 'Payment is not supported on this device.';
       });
     }
   }
@@ -90,7 +108,14 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.close),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            final result = _loadError != null
+                ? PaymentWebViewResult.failedToLoad
+                : !isWebViewSupported
+                    ? PaymentWebViewResult.closed
+                    : PaymentWebViewResult.maybeCompleted;
+            Navigator.of(context).pop(result);
+          },
         ),
       ),
       body: _buildBody(),
