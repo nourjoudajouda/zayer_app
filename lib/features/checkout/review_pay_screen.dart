@@ -148,20 +148,33 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
                   setState(() => _confirming = true);
                   final result = await confirmCheckout(ref, useWallet: walletEnabled);
                   if (!mounted) return;
-                  setState(() => _confirming = false);
-                  if (result.ok) {
-                    ref.invalidate(cartItemsProvider);
-                    ref.invalidate(ordersProvider);
-                    ref.invalidate(walletBalanceProvider);
-                    ref.invalidate(walletTransactionsProvider);
-                    if (result.orderId != null) {
-                      context.go('${AppRoutes.orderDetail}/${result.orderId}');
-                    } else {
-                      context.go(AppRoutes.orders);
-                    }
-                  } else {
+                  if (!result.ok) {
+                    setState(() => _confirming = false);
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Checkout failed')),
+                    );
+                    return;
+                  }
+                  ref.invalidate(cartItemsProvider);
+                  ref.invalidate(ordersProvider);
+                  ref.invalidate(walletBalanceProvider);
+                  ref.invalidate(walletTransactionsProvider);
+                  final orderId = result.orderId;
+                  if (orderId == null || orderId.isEmpty) {
+                    setState(() => _confirming = false);
+                    context.go(AppRoutes.orders);
+                    return;
+                  }
+                  final paymentResult = await startOrderPayment(orderId);
+                  if (!mounted) return;
+                  setState(() => _confirming = false);
+                  if (paymentResult.checkoutUrl != null) {
+                    context.go('${AppRoutes.orderDetail}/$orderId');
+                    context.push('${AppRoutes.paymentWebView}?url=${Uri.encodeComponent(paymentResult.checkoutUrl!)}');
+                  } else {
+                    context.go('${AppRoutes.orderDetail}/$orderId');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(paymentResult.error ?? 'Could not start payment')),
                     );
                   }
                 },

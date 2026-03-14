@@ -14,6 +14,7 @@ import '../../features/cart/cart_empty_screen.dart';
 import '../../features/placeholders/cart_screen.dart';
 import '../../features/favorites/favorites_screen.dart';
 import '../../features/markets/markets_screen.dart';
+import '../../features/checkout/payment_webview_screen.dart';
 import '../../features/checkout/review_pay_screen.dart';
 import '../../features/notifications/notification_settings_screen.dart';
 import '../../features/notifications/notifications_list_screen.dart';
@@ -86,6 +87,7 @@ class AppRoutes {
   static const String notifications = '/notifications';
   static const String notificationSettings = '/notification-settings';
   static const String reviewPay = '/review-pay';
+  static const String paymentWebView = '/payment';
   static const String paymentMethods = '/payment-methods';
   static const String supportInbox = '/support-inbox';
   static const String contactSupport = '/contact-support';
@@ -363,6 +365,13 @@ GoRouter _createAppRouter() {
       GoRoute(
         path: AppRoutes.reviewPay,
         builder: (context, state) => const ReviewPayScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.paymentWebView,
+        builder: (context, state) {
+          final checkoutUrl = state.uri.queryParameters['url'] ?? '';
+          return PaymentWebViewScreen(checkoutUrl: checkoutUrl);
+        },
       ),
       GoRoute(
         path: AppRoutes.paymentMethods,
