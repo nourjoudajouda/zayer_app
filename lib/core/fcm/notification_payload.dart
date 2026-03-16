@@ -1,0 +1,54 @@
+/// Normalized target for notification-driven navigation.
+/// Built from backend payload fields: target_type, target_id, route_key, meta.
+class NotificationNavigationTarget {
+  const NotificationNavigationTarget({
+    required this.route,
+    required this.targetType,
+    this.targetId,
+    this.meta,
+  });
+
+  /// GoRouter path (e.g. /order-detail/123, /wallet).
+  final String route;
+
+  /// Backend target_type (order, support_ticket, wallet, etc.).
+  final String targetType;
+
+  /// Backend target_id when applicable.
+  final String? targetId;
+
+  /// Optional extra payload for the screen.
+  final Map<String, dynamic>? meta;
+
+  @override
+  String toString() =>
+      'NotificationNavigationTarget(route: $route, targetType: $targetType, targetId: $targetId)';
+}
+
+/// Raw FCM/data payload from backend.
+/// Supports target_type, target_id, route_key, and meta/payload.
+class AppNotificationPayload {
+  AppNotificationPayload.fromMap(Map<String, dynamic> map)
+      : targetType = _string(map['target_type']),
+        targetId = _string(map['target_id']),
+        routeKey = _string(map['route_key']),
+        meta = map['meta'] is Map<String, dynamic>
+            ? map['meta'] as Map<String, dynamic>
+            : (map['payload'] is Map<String, dynamic>
+                ? map['payload'] as Map<String, dynamic>
+                : null);
+
+  final String? targetType;
+  final String? targetId;
+  final String? routeKey;
+  final Map<String, dynamic>? meta;
+
+  static String? _string(dynamic v) {
+    if (v == null) return null;
+    final s = v.toString().trim();
+    return s.isEmpty ? null : s;
+  }
+
+  bool get hasTarget => (targetType != null && targetType!.isNotEmpty) ||
+      (routeKey != null && routeKey!.isNotEmpty);
+}

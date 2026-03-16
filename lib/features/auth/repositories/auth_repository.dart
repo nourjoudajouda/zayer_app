@@ -2,7 +2,8 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
-import 'package:zayer_app/core/fcm/fcm_helper_firebase.dart';
+import 'package:zayer_app/core/fcm/fcm_service.dart';
+import 'package:zayer_app/core/platform/device_platform.dart';
 
 import '../../../core/auth/token_store.dart';
 import '../../../core/network/api_client.dart';
@@ -120,8 +121,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String password,
   }) async {
     try {
-      // final fcmToken = await _fcmService?.getToken();
-              String? fcmToken = await NotificationHelper().getToken();
+      final fcmToken = await FcmService.getToken();
 
       print('fcmTokenfcmToken $fcmToken');
       final data = <String, dynamic>{
@@ -130,7 +130,7 @@ class AuthRepositoryImpl implements AuthRepository {
       };
       if (fcmToken != null && fcmToken.isNotEmpty) {
         data['fcm_token'] = fcmToken;
-        data['device_type'] = kIsWeb ? 'web' : 'android';
+        data['device_type'] = kIsWeb ? 'web' : deviceType;
       }
       final res = await _dio.post<Map<String, dynamic>>(
         '/api/auth/login',
@@ -178,10 +178,10 @@ class AuthRepositoryImpl implements AuthRepository {
         body['password'] = password;
         body['password_confirmation'] = passwordConfirmation ?? password;
       }
-              String? fcmToken = await NotificationHelper().getToken();
+      final fcmToken = await FcmService.getToken();
       if (fcmToken != null && fcmToken.isNotEmpty) {
         body['fcm_token'] = fcmToken;
-        body['device_type'] = kIsWeb ? 'web' : 'android';
+        body['device_type'] = kIsWeb ? 'web' : deviceType;
       }
       final res = await _dio.post<Map<String, dynamic>>(
         '/api/auth/verify-otp',
@@ -262,21 +262,22 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<void> updateFcmToken() async {
-    // if (_fcmService == null) return;
     final token = await _tokenStore.getToken();
     if (token == null || token.isEmpty) return;
-              String? fcmToken = await NotificationHelper().getToken();
+    final fcmToken = await FcmService.getToken();
     if (fcmToken == null || fcmToken.isEmpty) return;
     try {
       await _dio.patch<Map<String, dynamic>>(
         '/api/me/fcm-token',
         data: {
           'fcm_token': fcmToken,
-          'device_type': kIsWeb ? 'web' : 'android',
+          'device_type': kIsWeb ? 'web' : deviceType,
         },
         options: Options(validateStatus: (s) => s != null && s < 500),
       );
-    } catch (_) {}
+    } catch (_) {
+      // Do not block app; token registration is best-effort
+    }
   }
 
   @override

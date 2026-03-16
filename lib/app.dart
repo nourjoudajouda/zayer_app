@@ -1,15 +1,51 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:zayer_app/core/fcm/fcm_helper_firebase.dart';
 
+import 'core/auth/auth_providers.dart';
 import 'core/config/app_config_provider.dart';
+import 'core/fcm/fcm_service.dart';
+import 'core/fcm/notification_payload.dart';
+import 'core/fcm/pending_notification_provider.dart';
 import 'core/localization/locale_provider.dart';
 import 'core/network/connectivity_provider.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/no_internet_screen.dart';
+import 'features/auth/providers/auth_providers.dart';
 import 'generated/l10n/app_localizations.dart';
+
+void _setupFcmOnce(WidgetRef ref) {
+  FcmService.setup(
+    onNotificationTap: (target) {
+      ref.read(pendingNotificationTargetProvider.notifier).setTarget(target);
+    },
+    onTokenReady: (_) {
+      ref.read(authRepositoryProvider).updateFcmToken();
+    },
+  );
+}
+
+void _listenPendingNotification(BuildContext context, WidgetRef ref) {
+  ref.listen<NotificationNavigationTarget?>(
+    pendingNotificationTargetProvider,
+    (prev, next) {
+      if (next == null) return;
+      ref.read(tokenStoreProvider).hasToken().then((hasToken) {
+        if (!hasToken) {
+          ref.read(pendingNotificationTargetProvider.notifier).clear();
+          return;
+        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (context.mounted) {
+            context.go(next.route);
+            ref.read(pendingNotificationTargetProvider.notifier).clear();
+          }
+        });
+      });
+    },
+  );
+}
 
 class ZayerApp extends ConsumerWidget {
   const ZayerApp({super.key});
@@ -42,7 +78,8 @@ class ZayerApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       locale: locale,
       builder: (context, child) {
-            NotificationHelper().initialNotification();
+        _setupFcmOnce(ref);
+        _listenPendingNotification(context, ref);
 
         final content = Directionality(
           textDirection: textDirection,

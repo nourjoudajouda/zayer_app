@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth/auth_providers.dart';
 import '../../core/config/app_config.dart';
+import '../../core/fcm/pending_notification_provider.dart';
 import '../../core/network/api_config.dart';
 import '../../core/config/app_config_provider.dart';
 import '../../core/config/models/app_bootstrap_config.dart';
@@ -46,6 +47,18 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   void _navigateAfterDelay(WidgetRef ref, bool onboardingEmpty, bool developmentMode) async {
     await Future<void>.delayed(const Duration(milliseconds: 1200));
     if (!mounted) return;
+    final pending = ref.read(pendingNotificationTargetProvider);
+    if (pending != null) {
+      ref.read(pendingNotificationTargetProvider.notifier).clear();
+      final hasToken = await ref.read(tokenStoreProvider).hasToken();
+      if (!mounted) return;
+      if (hasToken) {
+        context.go(pending.route);
+      } else {
+        context.go(onboardingEmpty ? AppRoutes.register : AppRoutes.onboarding);
+      }
+      return;
+    }
     final hasToken = await ref.read(tokenStoreProvider).hasToken();
     if (!mounted) return;
     if (hasToken) {
