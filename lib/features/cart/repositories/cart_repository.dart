@@ -64,7 +64,8 @@ class CartRepositoryImpl implements CartRepository {
   Future<void> addItem(CartItem item) async {
     final res = await _dio.post<Map<String, dynamic>>('/api/cart/items', data: _addPayload(item));
     if (res.statusCode == 201 && res.data != null) {
-      _items.add(CartItem.fromJson({...res.data!, 'id': res.data!['id']?.toString()}));
+      final id = res.data!['id']?.toString() ?? generateCartItemId();
+      _items.add(CartItem.fromJson({...res.data!, 'id': id}));
     }
   }
 
