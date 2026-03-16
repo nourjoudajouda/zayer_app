@@ -122,8 +122,13 @@ class AuthRepositoryImpl implements AuthRepository {
   }) async {
     try {
       final fcmToken = await FcmService.getToken();
-
-      print('fcmTokenfcmToken $fcmToken');
+      if (kDebugMode && fcmToken != null && fcmToken.isNotEmpty) {
+        final preview =
+            fcmToken.length > 10 ? '${fcmToken.substring(0, 10)}…' : fcmToken;
+        // Debug-only preview of FCM token; do not log full token in production.
+        // ignore: avoid_print
+        print('FCM token (preview): $preview');
+      }
       final data = <String, dynamic>{
         'phone': phone,
         'password': password,
