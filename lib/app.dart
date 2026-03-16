@@ -60,7 +60,7 @@ void _listenPendingNotification(BuildContext context, WidgetRef ref) {
             return;
           }
           try {
-            final current = GoRouter.of(context).location;
+            final current = GoRouter.of(context).state.matchedLocation;
             if (current != route) {
               context.go(route);
             }
