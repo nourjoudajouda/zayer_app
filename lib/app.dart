@@ -33,60 +33,94 @@ void _setupFcmOnce(WidgetRef ref) {
   );
 }
 
-void _listenPendingNotification(BuildContext context, WidgetRef ref) {
-  ref.listen<NotificationNavigationTarget?>(
-    pendingNotificationTargetProvider,
-    (prev, next) {
-      if (next == null) return;
-      final notificationId = next.notificationId;
-      if (notificationId != null && notificationId.isNotEmpty) {
-        ref
-            .read(locallyReadNotificationIdsProvider.notifier)
-            .markRead(notificationId);
-        // Best-effort backend sync.
-        NotificationsRepositoryImpl().markRead(notificationId);
-        ref.invalidate(notificationsListProvider);
+/// Handles a single pending notification target: mark read, then navigate if logged in.
+void _handlePendingNotification(
+  BuildContext context,
+  WidgetRef ref,
+  NotificationNavigationTarget? next,
+) {
+  if (next == null) return;
+  final notificationId = next.notificationId;
+  if (notificationId != null && notificationId.isNotEmpty) {
+    ref
+        .read(locallyReadNotificationIdsProvider.notifier)
+        .markRead(notificationId);
+    // Best-effort backend sync.
+    NotificationsRepositoryImpl().markRead(notificationId);
+    ref.invalidate(notificationsListProvider);
+  }
+  ref.read(tokenStoreProvider).hasToken().then((hasToken) {
+    if (!hasToken) {
+      ref.read(pendingNotificationTargetProvider.notifier).clear();
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      final route = next.route.trim();
+      if (route.isEmpty) {
+        ref.read(pendingNotificationTargetProvider.notifier).clear();
+        return;
       }
-      ref.read(tokenStoreProvider).hasToken().then((hasToken) {
-        if (!hasToken) {
-          ref.read(pendingNotificationTargetProvider.notifier).clear();
-          return;
+      try {
+        final current = GoRouter.of(context).state.matchedLocation;
+        if (current != route) {
+          context.go(route);
         }
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!context.mounted) return;
-          final route = next.route.trim();
-          if (route.isEmpty) {
-            ref.read(pendingNotificationTargetProvider.notifier).clear();
-            return;
-          }
-          try {
-            final current = GoRouter.of(context).state.matchedLocation;
-            if (current != route) {
-              context.go(route);
-            }
-          } catch (_) {
-            try {
-              context.go(route);
-            } catch (_) {
-              context.go(AppRoutes.notifications);
-            }
-          }
-          ref.read(pendingNotificationTargetProvider.notifier).clear();
-        });
-      });
-    },
-  );
+      } catch (_) {
+        try {
+          context.go(route);
+        } catch (_) {
+          context.go(AppRoutes.notifications);
+        }
+      }
+      ref.read(pendingNotificationTargetProvider.notifier).clear();
+    });
+  });
 }
 
-class ZayerApp extends ConsumerWidget {
+class ZayerApp extends ConsumerStatefulWidget {
   const ZayerApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ZayerApp> createState() => _ZayerAppState();
+}
+
+class _ZayerAppState extends ConsumerState<ZayerApp> {
+  bool _fcmSetupDone = false;
+
+  /// Lifecycle-safe subscription to pending notification target; closed in [dispose].
+  ProviderSubscription<NotificationNavigationTarget?>? _pendingSubscription;
+
+  @override
+  void dispose() {
+    _pendingSubscription?.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = this.ref;
     final locale = ref.watch(localeProvider);
     final configAsync = ref.watch(bootstrapConfigProvider);
     final connectivity = ref.watch(connectivityProvider);
     final devMode = ref.watch(developmentModeProvider);
+
+    // One-time FCM setup: run once after first frame, outside the router builder.
+    if (!_fcmSetupDone) {
+      _fcmSetupDone = true;
+      Future.microtask(() => _setupFcmOnce(ref));
+    }
+
+    // One-time pending notification listener: register once and dispose in [dispose].
+    if (_pendingSubscription == null) {
+      _pendingSubscription = ref.listenManual<NotificationNavigationTarget?>(
+        pendingNotificationTargetProvider,
+        (prev, next) {
+          if (next == null) return;
+          _handlePendingNotification(context, ref, next);
+        },
+      );
+    }
 
     final theme = configAsync.whenOrNull(
           data: (config) => AppTheme.fromConfig(config.theme),
@@ -102,16 +136,14 @@ class ZayerApp extends ConsumerWidget {
               : null,
         ) ??
         'Eshterely';
- 
+
     return MaterialApp.router(
       title: appTitle,
       theme: theme,
       debugShowCheckedModeBanner: false,
       locale: locale,
       builder: (context, child) {
-        _setupFcmOnce(ref);
-        _listenPendingNotification(context, ref);
-
+        // Builder only builds UI; no side effects here.
         final content = Directionality(
           textDirection: textDirection,
           child: child ?? const SizedBox.shrink(),
@@ -137,13 +169,15 @@ class ZayerApp extends ConsumerWidget {
                     onTap: () => context.push(AppRoutes.devMode),
                     child: Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 10, horizontal: 16),
                       color: Colors.deepPurple.shade700,
                       child: SafeArea(
                         bottom: false,
                         child: Row(
                           children: [
-                            Icon(Icons.developer_mode, color: Colors.white, size: 20),
+                            Icon(Icons.developer_mode,
+                                color: Colors.white, size: 20),
                             const SizedBox(width: 8),
                             Text(
                               'وضع التطوير',
@@ -154,7 +188,8 @@ class ZayerApp extends ConsumerWidget {
                               ),
                             ),
                             const Spacer(),
-                            Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 14),
+                            Icon(Icons.arrow_forward_ios,
+                                color: Colors.white70, size: 14),
                           ],
                         ),
                       ),
