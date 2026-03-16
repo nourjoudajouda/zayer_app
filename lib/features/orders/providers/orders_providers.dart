@@ -65,7 +65,8 @@ final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
           case OrdersFilter.all:
             break;
           case OrdersFilter.inProgress:
-            if (o.status != OrderStatus.inTransit) return false;
+            if (o.status == OrderStatus.delivered ||
+                o.status == OrderStatus.cancelled) return false;
             break;
           case OrdersFilter.delivered:
             if (o.status != OrderStatus.delivered) return false;

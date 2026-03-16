@@ -75,6 +75,14 @@ class _TwoFactorScreenState extends ConsumerState<TwoFactorScreen> {
                                   color: AppConfig.subtitleColor,
                                 ),
                           ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Status is managed by your account settings when this is supported.',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: AppConfig.subtitleColor,
+                                  fontSize: 11,
+                                ),
+                          ),
                         ],
                       ),
                     ),

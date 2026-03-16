@@ -53,17 +53,25 @@ void _listenPendingNotification(BuildContext context, WidgetRef ref) {
           return;
         }
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (context.mounted) {
-            try {
-              final current = GoRouter.of(context).location;
-              if (current != next.route) {
-                context.go(next.route);
-              }
-            } catch (_) {
-              context.go(next.route);
-            }
+          if (!context.mounted) return;
+          final route = next.route.trim();
+          if (route.isEmpty) {
             ref.read(pendingNotificationTargetProvider.notifier).clear();
+            return;
           }
+          try {
+            final current = GoRouter.of(context).location;
+            if (current != route) {
+              context.go(route);
+            }
+          } catch (_) {
+            try {
+              context.go(route);
+            } catch (_) {
+              context.go(AppRoutes.notifications);
+            }
+          }
+          ref.read(pendingNotificationTargetProvider.notifier).clear();
         });
       });
     },

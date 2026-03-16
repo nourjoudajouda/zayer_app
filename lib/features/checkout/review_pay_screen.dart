@@ -122,7 +122,24 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
       ),
       error: (_, __) => Scaffold(
         appBar: AppBar(title: const Text('Review & Pay')),
-        body: const Center(child: Text('Failed to load checkout')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Couldn\'t load checkout.'),
+                const SizedBox(height: AppSpacing.md),
+                FilledButton(
+                  onPressed: () {
+                    ref.invalidate(checkoutReviewProvider);
+                  },
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
       data: (r) {
         if (r.shipments.isEmpty) {
@@ -178,6 +195,7 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
                     if (!context.mounted) return;
                     ref.invalidate(orderByIdProvider(orderId));
                     ref.invalidate(ordersProvider);
+                    ref.invalidate(checkoutReviewProvider);
                     try {
                       await ref.read(orderByIdProvider(orderId).future);
                     } catch (_) {

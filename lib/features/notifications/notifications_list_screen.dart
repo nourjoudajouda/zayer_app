@@ -66,7 +66,7 @@ class _NotificationsListScreenState
       _repo.markRead(item.id);
     }
 
-    final route = _routeForItem(item);
+    final route = _routeForItem(item)?.trim();
     if (route == null || route.isEmpty) {
       if (context.mounted) context.go(AppRoutes.notifications);
       return;

@@ -16,6 +16,7 @@ class WalletScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final balanceAsync = ref.watch(walletBalanceProvider);
     final balance = balanceAsync.valueOrNull ?? const WalletBalance(available: 0, pending: 0, promo: 0);
+    final balanceLoading = balanceAsync.isLoading;
     final visible = ref.watch(walletBalanceVisibleProvider);
     final transactionsAsync = ref.watch(walletFilteredTransactionsProvider);
     final transactions = transactionsAsync.valueOrNull ?? [];
@@ -94,13 +95,26 @@ class WalletScreen extends ConsumerWidget {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        visible ? balance.availableFormatted : '••••••••',
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: AppConfig.textColor,
+                      if (balanceLoading)
+                        SizedBox(
+                          width: 120,
+                          height: 32,
+                          child: Center(
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppConfig.primaryColor),
                             ),
-                      ),
+                          ),
+                        )
+                      else
+                        Text(
+                          visible ? balance.availableFormatted : '••••••••',
+                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: AppConfig.textColor,
+                              ),
+                        ),
                       const SizedBox(height: 4),
                       Text(
                         'AVAILABLE BALANCE',

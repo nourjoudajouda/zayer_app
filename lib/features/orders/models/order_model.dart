@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 
 /// Order list item model. API: GET /api/orders later.
+/// Status values align with backend and user-facing labels.
 enum OrderStatus {
+  pendingReview,
+  pendingPayment,
+  paid,
+  processing,
+  shipped,
   inTransit,
   delivered,
   cancelled,
@@ -149,22 +155,52 @@ class OrderModel {
 
   String get statusLabel {
     switch (status) {
+      case OrderStatus.pendingReview:
+        return 'Pending review';
+      case OrderStatus.pendingPayment:
+        return 'Pending payment';
+      case OrderStatus.paid:
+        return 'Paid';
+      case OrderStatus.processing:
+        return 'Processing';
+      case OrderStatus.shipped:
+        return 'Shipped';
       case OrderStatus.inTransit:
-        return 'IN TRANSIT';
+        return 'In transit';
       case OrderStatus.delivered:
-        return 'DELIVERED';
+        return 'Delivered';
       case OrderStatus.cancelled:
-        return 'CANCELLED';
+        return 'Cancelled';
     }
   }
 
-  bool get canTrack => status == OrderStatus.inTransit;
+  bool get canTrack =>
+      status == OrderStatus.shipped || status == OrderStatus.inTransit;
   bool get canBuyAgain => status == OrderStatus.delivered;
 
   static OrderStatus _statusFrom(String? s) {
-    if (s == 'delivered') return OrderStatus.delivered;
-    if (s == 'cancelled') return OrderStatus.cancelled;
-    return OrderStatus.inTransit;
+    if (s == null || s.isEmpty) return OrderStatus.pendingPayment;
+    final lower = s.toString().toLowerCase().replaceAll('-', '_');
+    switch (lower) {
+      case 'pending_review':
+        return OrderStatus.pendingReview;
+      case 'pending_payment':
+        return OrderStatus.pendingPayment;
+      case 'paid':
+        return OrderStatus.paid;
+      case 'processing':
+        return OrderStatus.processing;
+      case 'shipped':
+        return OrderStatus.shipped;
+      case 'in_transit':
+        return OrderStatus.inTransit;
+      case 'delivered':
+        return OrderStatus.delivered;
+      case 'cancelled':
+        return OrderStatus.cancelled;
+      default:
+        return OrderStatus.pendingPayment;
+    }
   }
 
   static OrderOrigin _originFrom(String? s) {
@@ -179,6 +215,20 @@ class OrderModel {
             ?.map((s) => _shipmentFromJson(s as Map<String, dynamic>))
             .toList() ??
         [];
+    final priceLinesList = j['price_lines'] as List<dynamic>?;
+    final priceLines = priceLinesList
+            ?.map((e) {
+              final m = e is Map<String, dynamic> ? e : null;
+              if (m == null) return null;
+              return OrderPriceLine(
+                label: (m['label'] ?? '').toString(),
+                amount: (m['amount'] ?? '').toString(),
+                isDiscount: m['is_discount'] == true,
+              );
+            })
+            .whereType<OrderPriceLine>()
+            .toList() ??
+        [];
     return OrderModel(
       id: (j['id'] ?? '').toString(),
       origin: _originFrom(j['origin'] as String?),
@@ -191,6 +241,12 @@ class OrderModel {
       estimatedDelivery: j['estimated_delivery'] as String?,
       shippingAddress: j['shipping_address'] as String?,
       shipments: shipments,
+      priceLines: priceLines,
+      consolidationSavings: j['consolidation_savings'] as String?,
+      paymentMethodLabel: j['payment_method_label'] as String?,
+      paymentMethodLastFour: j['payment_method_last_four'] as String?,
+      invoiceIssueDate: j['invoice_issue_date'] as String?,
+      transactionId: j['transaction_id'] as String?,
     );
   }
 

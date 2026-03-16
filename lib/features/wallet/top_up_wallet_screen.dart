@@ -69,7 +69,11 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Top-up failed')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Top-up failed. Please try again or use another payment method.'),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _isConfirming = false);
@@ -157,16 +161,7 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Payment Method', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                  TextButton(
-                    onPressed: () {},
-                    child: Text('Change', style: TextStyle(color: AppConfig.primaryColor, fontWeight: FontWeight.w500)),
-                  ),
-                ],
-              ),
+              Text('Payment Method', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
               const SizedBox(height: AppSpacing.sm),
               Container(
                 padding: const EdgeInsets.all(AppSpacing.md),
@@ -177,66 +172,26 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
                 ),
                 child: Row(
                   children: [
-                    Container(
-                      width: 48,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFB74D),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Center(child: Text('VISA', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700))),
-                    ),
+                    Icon(Icons.credit_card_outlined, size: 32, color: AppConfig.primaryColor.withValues(alpha: 0.8)),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Text('Visa ending in 4242', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppConfig.successGreen.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text('DEFAULT', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppConfig.successGreen, fontWeight: FontWeight.w600)),
-                              ),
-                            ],
+                          Text(
+                            'Card on file',
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                           ),
-                          Text('Expires 12/26', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor)),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Your saved payment method will be charged when you confirm. Add or change payment methods in your account settings when available.',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
+                          ),
                         ],
                       ),
                     ),
                     Icon(Icons.check_circle, color: AppConfig.primaryColor, size: 26),
                   ],
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.warning_amber_rounded, size: 20, color: AppConfig.warningOrange),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Selecting a different method may incur a small transaction fee from your provider.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              OutlinedButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.add, size: 20),
-                label: const Text('ADD NEW METHOD'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppConfig.primaryColor,
-                  side: BorderSide(color: AppConfig.borderColor, style: BorderStyle.solid),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConfig.radiusSmall)),
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -252,7 +207,7 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
                 child: Column(
                   children: [
                     _SummaryRow('Top-up Amount', amount != null ? '\$${amount.toStringAsFixed(2)}' : '—'),
-                    _SummaryRow('Payment Method', 'Visa **** 4242'),
+                    _SummaryRow('Payment Method', 'Card on file'),
                     const SizedBox(height: AppSpacing.sm),
                     Row(
                       children: [

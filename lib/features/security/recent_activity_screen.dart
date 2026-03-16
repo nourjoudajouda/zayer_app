@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 
-/// Single login event. API: GET /api/me/login-history.
+/// Single login event. API: GET /api/me/login-history when supported.
 class LoginActivityItem {
   const LoginActivityItem({
     required this.id,
@@ -20,36 +21,35 @@ class LoginActivityItem {
   final String device;
   final String timestamp;
   final String? ipAddress;
+
+  static LoginActivityItem? fromJson(Map<String, dynamic>? j) {
+    if (j == null) return null;
+    final id = (j['id'] ?? '').toString();
+    if (id.isEmpty) return null;
+    return LoginActivityItem(
+      id: id,
+      location: (j['location'] ?? j['city'] ?? '—').toString(),
+      device: (j['device'] ?? j['device_name'] ?? '—').toString(),
+      timestamp: (j['timestamp'] ?? j['last_active'] ?? '').toString(),
+      ipAddress: j['ip_address'] as String?,
+    );
+  }
 }
 
+/// Fetches from API when available; returns empty list otherwise so we don't show fake data.
 final _loginActivityProvider = FutureProvider<List<LoginActivityItem>>((ref) async {
-  await Future<void>.delayed(const Duration(milliseconds: 80));
-  return const [
-    LoginActivityItem(
-      id: '1',
-      location: 'London, UK',
-      device: 'iPhone 15',
-      timestamp: 'Today, 10:24 AM',
-    ),
-    LoginActivityItem(
-      id: '2',
-      location: 'Dubai, UAE',
-      device: 'Safari on macOS',
-      timestamp: 'Yesterday, 2:30 PM',
-    ),
-    LoginActivityItem(
-      id: '3',
-      location: 'Riyadh, Saudi Arabia',
-      device: 'Zayer App v2.4',
-      timestamp: 'Dec 12, 9:15 AM',
-    ),
-    LoginActivityItem(
-      id: '4',
-      location: 'London, UK',
-      device: 'Chrome on Windows',
-      timestamp: 'Dec 10, 4:00 PM',
-    ),
-  ];
+  try {
+    final res = await ApiClient.instance.get<List<dynamic>>('/api/me/login-history');
+    final list = res.data;
+    if (list != null && list.isNotEmpty) {
+      return list
+          .whereType<Map<String, dynamic>>()
+          .map((e) => LoginActivityItem.fromJson(e))
+          .whereType<LoginActivityItem>()
+          .toList();
+    }
+  } catch (_) {}
+  return [];
 });
 
 /// Recent Activity: list of locations/devices where login was performed.
@@ -71,8 +71,28 @@ class RecentActivityScreen extends ConsumerWidget {
       ),
       body: activityAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (items) => _RecentActivityContent(items: items),
+        error: (_, __) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Text(
+              'Recent activity will appear here when available.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodyMedium(AppConfig.subtitleColor),
+            ),
+          ),
+        ),
+        data: (items) => items.isEmpty
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Text(
+                    'Recent activity will appear here when available.',
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.bodyMedium(AppConfig.subtitleColor),
+                  ),
+                ),
+              )
+            : _RecentActivityContent(items: items),
       ),
     );
   }

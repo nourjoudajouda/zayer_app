@@ -26,7 +26,15 @@ class OrderDetailScreen extends ConsumerWidget {
       ),
       error: (e, _) => Scaffold(
         appBar: AppBar(title: const Text('Order Details')),
-        body: Center(child: Text('Error: $e')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Text(
+              'Couldn\'t load this order. Check your connection and try again.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
       ),
       data: (order) {
         if (order == null) {
@@ -48,11 +56,14 @@ class _OrderDetailContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = order.status == OrderStatus.inTransit
-        ? AppConfig.primaryColor
-        : order.status == OrderStatus.delivered
-            ? AppConfig.successGreen
-            : AppConfig.subtitleColor;
+    final statusColor = order.status == OrderStatus.delivered
+        ? AppConfig.successGreen
+        : order.status == OrderStatus.cancelled
+            ? AppConfig.errorRed
+            : order.status == OrderStatus.pendingPayment ||
+                    order.status == OrderStatus.pendingReview
+                ? AppConfig.warningOrange
+                : AppConfig.primaryColor;
 
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,

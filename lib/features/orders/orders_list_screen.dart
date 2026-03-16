@@ -386,12 +386,15 @@ class _OrderCard extends StatelessWidget {
 
   Color get _statusColor {
     switch (order.status) {
-      case OrderStatus.inTransit:
-        return AppConfig.primaryColor;
       case OrderStatus.delivered:
         return AppConfig.successGreen;
       case OrderStatus.cancelled:
         return AppConfig.subtitleColor;
+      case OrderStatus.pendingReview:
+      case OrderStatus.pendingPayment:
+        return AppConfig.warningOrange;
+      default:
+        return AppConfig.primaryColor;
     }
   }
 
@@ -459,7 +462,7 @@ class _OrderCard extends StatelessWidget {
             placedText,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
           ),
-          if (order.status == OrderStatus.inTransit && order.estimatedDelivery != null) ...[
+          if ((order.status == OrderStatus.inTransit || order.status == OrderStatus.shipped) && order.estimatedDelivery != null) ...[
             const SizedBox(height: AppSpacing.md),
             _MapPlaceholder(),
             const SizedBox(height: AppSpacing.sm),
@@ -612,7 +615,7 @@ class _ActionButtons extends StatelessWidget {
       );
     }
 
-    if (order.status == OrderStatus.inTransit) {
+    if (order.canTrack) {
       return Row(
         children: [
           Expanded(
@@ -675,6 +678,18 @@ class _ActionButtons extends StatelessWidget {
       );
     }
 
-    return const SizedBox.shrink();
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        onPressed: () => context.push('${AppRoutes.orderDetail}/${order.id}'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppConfig.subtitleColor,
+          side: BorderSide(color: AppConfig.borderColor),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConfig.radiusSmall)),
+        ),
+        child: const Text('View Details'),
+      ),
+    );
   }
 }
