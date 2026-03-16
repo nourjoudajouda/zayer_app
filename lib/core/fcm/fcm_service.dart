@@ -70,7 +70,10 @@ class FcmService {
           'fcm_foreground_channel',
           'Notifications',
           description: 'App notifications',
-          importance: Importance.defaultImportance,
+          importance: Importance.high,
+          playSound: true,
+          enableVibration: true,
+          showBadge: true,
         );
         await _localNotifications
             .resolvePlatformSpecificImplementation<
@@ -126,8 +129,12 @@ class FcmService {
             route: '/notifications',
             targetType: 'fallback',
           );
+      if (kDebugMode) {
+        debugPrint('FCM: notification tap -> route: ${target.route}, targetType: ${target.targetType}');
+      }
       _onNotificationTap?.call(target);
-    } catch (_) {
+    } catch (e) {
+      if (kDebugMode) debugPrint('FCM: tap payload parse error: $e');
       _onNotificationTap?.call(const NotificationNavigationTarget(
         route: '/notifications',
         targetType: 'fallback',
@@ -138,6 +145,9 @@ class FcmService {
   static void _handleForegroundMessage(RemoteMessage message) {
     final data = message.data;
     if (data.isEmpty) return;
+    if (kDebugMode) {
+      debugPrint('FCM: foreground message received; data keys: ${data.keys.join(", ")}');
+    }
     final title = message.notification?.title ?? 'Notification';
     final body = message.notification?.body ?? '';
     _showLocalNotification(
@@ -145,6 +155,13 @@ class FcmService {
       body: body,
       payload: data,
     );
+    try {
+      final appPayload = AppNotificationPayload.fromMap(data);
+      final target = mapPayloadToTarget(appPayload);
+      if (kDebugMode) {
+        debugPrint('FCM: payload parsed -> target: ${target?.route ?? "fallback"}');
+      }
+    } catch (_) {}
     _onForegroundMessageCallback?.call(message);
   }
 
@@ -162,8 +179,13 @@ class FcmService {
     if (data.isEmpty) return null;
     try {
       final payload = AppNotificationPayload.fromMap(data);
-      return mapPayloadToTarget(payload);
-    } catch (_) {
+      final target = mapPayloadToTarget(payload);
+      if (kDebugMode && target != null) {
+        debugPrint('FCM: route target resolved -> ${target.route} (${target.targetType})');
+      }
+      return target;
+    } catch (e) {
+      if (kDebugMode) debugPrint('FCM: parseMessageData error: $e');
       return null;
     }
   }
@@ -190,8 +212,11 @@ class FcmService {
       'fcm_foreground_channel',
       'Notifications',
       channelDescription: 'App notifications',
-      importance: Importance.defaultImportance,
-      priority: Priority.defaultPriority,
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      visibility: NotificationVisibility.public,
     );
     const ios = DarwinNotificationDetails();
     const details = NotificationDetails(android: android, iOS: ios);

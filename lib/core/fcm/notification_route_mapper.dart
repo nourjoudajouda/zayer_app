@@ -5,27 +5,44 @@ import 'package:zayer_app/core/routing/app_router.dart';
 /// Extensible for future target types (payment_success, order_processing,
 /// tracking_assigned, shipment_delivered, support_reply, admin_broadcast).
 NotificationNavigationTarget? mapPayloadToTarget(AppNotificationPayload payload) {
-  if (!payload.hasTarget) return null;
-
   final type = payload.targetType?.toLowerCase();
   final id = payload.targetId;
   final routeKey = payload.routeKey?.toLowerCase();
+  final actionRoute = payload.actionRoute?.trim();
   final meta = payload.meta;
   final notificationId = payload.notificationId;
 
-  // Prefer route_key if it maps to a known route
+  // 1) Prefer route_key if it maps to a known route
   if (routeKey != null && routeKey.isNotEmpty) {
     final byKey = _routeFromRouteKey(routeKey, id, notificationId);
     if (byKey != null) return byKey;
   }
 
-  // Then target_type + target_id
+  // 2) Then target_type + target_id
   if (type != null && type.isNotEmpty) {
     final byType = _routeFromTargetType(type, id, meta, notificationId);
     if (byType != null) return byType;
   }
 
-  // Fallback: notifications list
+  // 3) Admin-defined action_route (safe path only: starts with /, no protocol)
+  if (actionRoute != null &&
+      actionRoute.isNotEmpty &&
+      actionRoute.startsWith('/') &&
+      !actionRoute.contains('://') &&
+      !actionRoute.contains('..')) {
+    final targetType = type ?? 'action';
+    return NotificationNavigationTarget(
+      route: actionRoute,
+      targetType: targetType,
+      targetId: id,
+      notificationId: notificationId,
+      meta: meta,
+    );
+  }
+
+  // 4) No target info: fallback to notifications list
+  if (!payload.hasTarget) return null;
+
   return NotificationNavigationTarget(
     route: AppRoutes.notifications,
     targetType: 'fallback',

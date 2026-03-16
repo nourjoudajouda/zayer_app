@@ -30,22 +30,24 @@ class NotificationNavigationTarget {
 }
 
 /// Raw FCM/data payload from backend.
-/// Supports target_type, target_id, route_key, and meta/payload.
+/// Supports target_type, target_id, route_key, action_label, action_route, and meta/payload.
 class AppNotificationPayload {
   AppNotificationPayload.fromMap(Map<String, dynamic> map)
       : targetType = _string(map['target_type']),
         targetId = _string(map['target_id']),
         routeKey = _string(map['route_key']),
+        actionLabel = _string(map['action_label']),
+        actionRoute = _string(map['action_route']),
         notificationId = _string(map['notification_id'] ?? map['notificationId'] ?? map['id']),
-        meta = map['meta'] is Map<String, dynamic>
-            ? map['meta'] as Map<String, dynamic>
-            : (map['payload'] is Map<String, dynamic>
-                ? map['payload'] as Map<String, dynamic>
-                : null);
+        meta = _safeMap(map['meta']) ?? _safeMap(map['payload']);
 
   final String? targetType;
   final String? targetId;
   final String? routeKey;
+  /// Optional label for the notification action (e.g. "View order").
+  final String? actionLabel;
+  /// Optional explicit route path from admin (e.g. "/order-detail/123").
+  final String? actionRoute;
   final String? notificationId;
   final Map<String, dynamic>? meta;
 
@@ -55,6 +57,17 @@ class AppNotificationPayload {
     return s.isEmpty ? null : s;
   }
 
-  bool get hasTarget => (targetType != null && targetType!.isNotEmpty) ||
-      (routeKey != null && routeKey!.isNotEmpty);
+  static Map<String, dynamic>? _safeMap(dynamic v) {
+    if (v == null) return null;
+    try {
+      if (v is Map<String, dynamic>) return v;
+      if (v is Map) return Map<String, dynamic>.from(v);
+    } catch (_) {}
+    return null;
+  }
+
+  bool get hasTarget =>
+      (targetType != null && targetType!.isNotEmpty) ||
+      (routeKey != null && routeKey!.isNotEmpty) ||
+      (actionRoute != null && actionRoute!.isNotEmpty);
 }
