@@ -13,6 +13,9 @@ import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/no_internet_screen.dart';
 import 'features/auth/providers/auth_providers.dart';
+import 'features/notifications/providers/notifications_list_provider.dart';
+import 'features/notifications/providers/notifications_state_provider.dart';
+import 'features/notifications/repositories/notifications_repository.dart';
 import 'generated/l10n/app_localizations.dart';
 
 void _setupFcmOnce(WidgetRef ref) {
@@ -23,6 +26,10 @@ void _setupFcmOnce(WidgetRef ref) {
     onTokenReady: (_) {
       ref.read(authRepositoryProvider).updateFcmToken();
     },
+    onForegroundMessage: (_) {
+      // Best-effort: refresh the in-app notification center to reflect new events.
+      ref.invalidate(notificationsListProvider);
+    },
   );
 }
 
@@ -31,6 +38,15 @@ void _listenPendingNotification(BuildContext context, WidgetRef ref) {
     pendingNotificationTargetProvider,
     (prev, next) {
       if (next == null) return;
+      final notificationId = next.notificationId;
+      if (notificationId != null && notificationId.isNotEmpty) {
+        ref
+            .read(locallyReadNotificationIdsProvider.notifier)
+            .markRead(notificationId);
+        // Best-effort backend sync.
+        NotificationsRepositoryImpl().markRead(notificationId);
+        ref.invalidate(notificationsListProvider);
+      }
       ref.read(tokenStoreProvider).hasToken().then((hasToken) {
         if (!hasToken) {
           ref.read(pendingNotificationTargetProvider.notifier).clear();
@@ -38,7 +54,14 @@ void _listenPendingNotification(BuildContext context, WidgetRef ref) {
         }
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (context.mounted) {
-            context.go(next.route);
+            try {
+              final current = GoRouter.of(context).location;
+              if (current != next.route) {
+                context.go(next.route);
+              }
+            } catch (_) {
+              context.go(next.route);
+            }
             ref.read(pendingNotificationTargetProvider.notifier).clear();
           }
         });

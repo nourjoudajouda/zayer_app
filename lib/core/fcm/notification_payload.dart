@@ -5,6 +5,7 @@ class NotificationNavigationTarget {
     required this.route,
     required this.targetType,
     this.targetId,
+    this.notificationId,
     this.meta,
   });
 
@@ -17,12 +18,15 @@ class NotificationNavigationTarget {
   /// Backend target_id when applicable.
   final String? targetId;
 
+  /// Backend notification identifier (if provided) for read-state sync.
+  final String? notificationId;
+
   /// Optional extra payload for the screen.
   final Map<String, dynamic>? meta;
 
   @override
   String toString() =>
-      'NotificationNavigationTarget(route: $route, targetType: $targetType, targetId: $targetId)';
+      'NotificationNavigationTarget(route: $route, targetType: $targetType, targetId: $targetId, notificationId: $notificationId)';
 }
 
 /// Raw FCM/data payload from backend.
@@ -32,6 +36,7 @@ class AppNotificationPayload {
       : targetType = _string(map['target_type']),
         targetId = _string(map['target_id']),
         routeKey = _string(map['route_key']),
+        notificationId = _string(map['notification_id'] ?? map['notificationId'] ?? map['id']),
         meta = map['meta'] is Map<String, dynamic>
             ? map['meta'] as Map<String, dynamic>
             : (map['payload'] is Map<String, dynamic>
@@ -41,6 +46,7 @@ class AppNotificationPayload {
   final String? targetType;
   final String? targetId;
   final String? routeKey;
+  final String? notificationId;
   final Map<String, dynamic>? meta;
 
   static String? _string(dynamic v) {

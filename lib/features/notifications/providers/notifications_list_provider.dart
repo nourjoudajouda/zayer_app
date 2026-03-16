@@ -1,21 +1,22 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/network/api_client.dart';
 import '../models/notification_item.dart';
+import '../repositories/notifications_repository.dart';
+import 'notifications_state_provider.dart';
 
 /// Notifications from API: GET /api/notifications
 /// Response: [{ id, type, title, subtitle, time_ago, read, important, action_label, action_route }, ...]
 final notificationsListProvider =
     FutureProvider<List<NotificationItem>>((ref) async {
   try {
-    final res = await ApiClient.instance.get<List<dynamic>>('/api/notifications');
-    final list = res.data;
-    if (list == null) return [];
-    return list
-        .whereType<Map<String, dynamic>>()
-        .map(NotificationItem.fromJson)
-        .where((n) => n.id.isNotEmpty)
-        .toList();
+    final repo = NotificationsRepositoryImpl();
+    final list = await repo.fetchNotifications();
+    final locallyReadIds = ref.watch(locallyReadNotificationIdsProvider);
+    if (locallyReadIds.isEmpty) return list;
+    return [
+      for (final n in list)
+        n.copyWith(read: n.read || locallyReadIds.contains(n.id)),
+    ];
   } catch (_) {}
   return [];
 });

@@ -19,6 +19,7 @@ import '../../core/localization/locale_provider.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../generated/l10n/app_localizations.dart';
+import '../notifications/providers/unread_notifications_count_provider.dart';
 import 'models/user_profile_model.dart';
 import 'providers/profile_providers.dart';
 import 'widgets/action_card.dart';
@@ -298,10 +299,31 @@ class _ProfileContent extends ConsumerWidget {
             onTap: () => context.push(AppRoutes.favorites),
           ),
           const SizedBox(height: AppSpacing.sm),
-          ZayerTile(
-            icon: Icons.notifications_outlined,
-            title: l10n.notifications,
-            onTap: () => context.push(AppRoutes.notifications),
+          Consumer(
+            builder: (context, ref, _) {
+              final unreadCount = ref.watch(unreadNotificationsCountProvider);
+              return ZayerTile(
+                icon: Icons.notifications_outlined,
+                title: l10n.notifications,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (unreadCount > 0)
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: AppConfig.primaryColor,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    const SizedBox(width: 6),
+                    const Icon(Icons.chevron_right, color: AppConfig.subtitleColor),
+                  ],
+                ),
+                onTap: () => context.push(AppRoutes.notifications),
+              );
+            },
           ),
           const SizedBox(height: AppSpacing.sm),
           ZayerTile(

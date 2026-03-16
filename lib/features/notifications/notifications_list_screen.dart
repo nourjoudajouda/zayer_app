@@ -9,6 +9,9 @@ import '../../core/theme/app_text_styles.dart';
 import '../../core/widgets/empty_state_scaffold.dart';
 import 'models/notification_item.dart';
 import 'providers/notifications_list_provider.dart';
+import 'providers/notifications_state_provider.dart';
+import 'repositories/notifications_repository.dart';
+import 'utils/notification_action_route_resolver.dart';
 
 /// Notifications list with filters (All | Orders | Shipments | Promo) and sections.
 /// Data from GET /api/notifications.
@@ -23,6 +26,7 @@ class NotificationsListScreen extends ConsumerStatefulWidget {
 class _NotificationsListScreenState
     extends ConsumerState<NotificationsListScreen> {
   NotificationFilterType _filter = NotificationFilterType.all;
+  final NotificationsRepository _repo = NotificationsRepositoryImpl();
 
   static List<NotificationItem> _importantFrom(List<NotificationItem> items) =>
       items.where((e) => e.important).toList();
@@ -44,8 +48,34 @@ class _NotificationsListScreenState
     }
   }
 
-  void _markAllRead() {
+  Future<void> _markAllRead(List<NotificationItem> items) async {
+    final ids = items.map((e) => e.id);
+    ref.read(locallyReadNotificationIdsProvider.notifier).markAllRead(ids);
+    // Best-effort backend call; do not block UI.
+    try {
+      await _repo.markAllRead();
+    } catch (_) {}
     ref.invalidate(notificationsListProvider);
+  }
+
+  void _openNotification(NotificationItem item) {
+    // Update local read state immediately for better UX.
+    if (!item.read) {
+      ref.read(locallyReadNotificationIdsProvider.notifier).markRead(item.id);
+      // Best-effort backend update.
+      _repo.markRead(item.id);
+    }
+
+    final route = _routeForItem(item);
+    if (route == null || route.isEmpty) {
+      if (context.mounted) context.go(AppRoutes.notifications);
+      return;
+    }
+    if (context.mounted) context.go(route);
+  }
+
+  String? _routeForItem(NotificationItem item) {
+    return resolveNotificationActionRoute(item.actionRoute);
   }
 
   @override
@@ -104,7 +134,7 @@ class _NotificationsListScreenState
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert),
             onSelected: (v) {
-              if (v == 'mark_read') _markAllRead();
+              if (v == 'mark_read') _markAllRead(items);
             },
             itemBuilder: (context) => [
               const PopupMenuItem(value: 'mark_read', child: Text('Mark all as read')),
@@ -188,7 +218,7 @@ class _NotificationsListScreenState
           ),
           if (header == 'TODAY')
             TextButton(
-              onPressed: _markAllRead,
+              onPressed: () => _markAllRead(list),
               child: Text(
                 'Mark all as read',
                 style: AppTextStyles.bodySmall(AppConfig.primaryColor),
@@ -197,7 +227,12 @@ class _NotificationsListScreenState
         ],
       ),
       const SizedBox(height: AppSpacing.sm),
-      ...list.map((e) => _NotificationCard(item: e, isImportant: isImportant)),
+      ...list.map((e) => _NotificationCard(
+            item: e,
+            isImportant: isImportant,
+            onTap: () => _openNotification(e),
+            onActionTap: e.actionLabel != null ? () => _openNotification(e) : null,
+          )),
       const SizedBox(height: AppSpacing.lg),
     ];
   }
@@ -239,38 +274,48 @@ class _FilterChip extends StatelessWidget {
 }
 
 class _NotificationCard extends StatelessWidget {
-  const _NotificationCard({required this.item, required this.isImportant});
+  const _NotificationCard({
+    required this.item,
+    required this.isImportant,
+    required this.onTap,
+    this.onActionTap,
+  });
 
   final NotificationItem item;
   final bool isImportant;
+  final VoidCallback onTap;
+  final VoidCallback? onActionTap;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: isImportant
-              ? Colors.amber.withValues(alpha: 0.15)
-              : AppConfig.cardColor,
-          border: Border.all(
-            color: isImportant
-                ? Colors.amber.withValues(alpha: 0.5)
-                : AppConfig.borderColor,
-          ),
+      child: Material(
+        color: isImportant
+            ? Colors.amber.withValues(alpha: 0.15)
+            : AppConfig.cardColor,
+        borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: isImportant
+                    ? Colors.amber.withValues(alpha: 0.5)
+                    : AppConfig.borderColor,
+              ),
+              borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+            ),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
                   _iconForType(item.type),
                   size: 24,
-                  color: isImportant ? Colors.amber.shade800 : AppConfig.subtitleColor,
+                  color:
+                      isImportant ? Colors.amber.shade800 : AppConfig.subtitleColor,
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 if (!item.read)
@@ -288,22 +333,39 @@ class _NotificationCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        item.title,
-                        style: AppTextStyles.titleMedium(AppConfig.textColor),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item.title,
+                              style: item.read
+                                  ? AppTextStyles.titleMedium(AppConfig.textColor)
+                                  : AppTextStyles.titleMedium(AppConfig.textColor)
+                                      .copyWith(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Text(
+                            item.timeAgo,
+                            style:
+                                AppTextStyles.bodySmall(AppConfig.subtitleColor),
+                          ),
+                        ],
                       ),
+                      const SizedBox(height: 2),
                       Text(
                         item.subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
                       ),
-                      Text(
-                        item.timeAgo,
-                        style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
-                      ),
-                      if (item.actionLabel != null) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      _TypePill(type: item.type, category: item.category),
+                      if (item.actionLabel != null && onActionTap != null) ...[
                         const SizedBox(height: AppSpacing.sm),
                         TextButton(
-                          onPressed: () {},
+                          onPressed: onActionTap,
                           style: TextButton.styleFrom(
                             padding: EdgeInsets.zero,
                             minimumSize: Size.zero,
@@ -320,7 +382,7 @@ class _NotificationCard extends StatelessWidget {
                 ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -337,5 +399,37 @@ class _NotificationCard extends StatelessWidget {
       case NotificationFilterType.all:
         return Icons.notifications_outlined;
     }
+  }
+}
+
+class _TypePill extends StatelessWidget {
+  const _TypePill({required this.type, required this.category});
+
+  final NotificationFilterType type;
+  final String category;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, bg) = switch (type) {
+      NotificationFilterType.orders => ('Orders', AppConfig.lightBlueBg),
+      NotificationFilterType.shipments => (
+          'Shipments',
+          AppConfig.borderColor.withValues(alpha: 0.25)
+        ),
+      NotificationFilterType.promo => ('Promo', Colors.orange.withValues(alpha: 0.15)),
+      NotificationFilterType.all => ('Notification', AppConfig.borderColor.withValues(alpha: 0.2)),
+    };
+    final display = category.trim().isEmpty ? label : category;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        display,
+        style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+      ),
+    );
   }
 }

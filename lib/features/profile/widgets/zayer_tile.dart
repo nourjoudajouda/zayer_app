@@ -12,6 +12,7 @@ class ZayerTile extends StatelessWidget {
     this.value,
     this.subtitle,
     this.valueColor,
+    this.trailing,
     required this.onTap,
   });
 
@@ -20,6 +21,7 @@ class ZayerTile extends StatelessWidget {
   final String? value;
   final String? subtitle;
   final Color? valueColor;
+  final Widget? trailing;
   final VoidCallback onTap;
 
   @override
@@ -81,7 +83,7 @@ class ZayerTile extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: AppConfig.subtitleColor),
+              trailing ?? const Icon(Icons.chevron_right, color: AppConfig.subtitleColor),
             ],
           ),
         ),

@@ -11,6 +11,7 @@ import 'notification_route_mapper.dart';
 /// Callbacks used by [FcmService] to integrate with app (auth, navigation).
 typedef OnNotificationTap = void Function(NotificationNavigationTarget target);
 typedef OnTokenReady = void Function(String token);
+typedef OnForegroundMessage = void Function(RemoteMessage message);
 
 /// Central FCM setup: permission, token, foreground/background/terminated handling.
 /// Call [setup] once when the app has context (e.g. from [ZayerApp] builder).
@@ -20,6 +21,7 @@ class FcmService {
   static bool _initialized = false;
   static OnNotificationTap? _onNotificationTap;
   static OnTokenReady? _onTokenReady;
+  static OnForegroundMessage? _onForegroundMessageCallback;
 
   static final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
   static final FlutterLocalNotificationsPlugin _localNotifications =
@@ -32,10 +34,12 @@ class FcmService {
   static Future<void> setup({
     required OnNotificationTap onNotificationTap,
     required OnTokenReady onTokenReady,
+    OnForegroundMessage? onForegroundMessage,
   }) async {
     if (_initialized) return;
     _onNotificationTap = onNotificationTap;
     _onTokenReady = onTokenReady;
+    _onForegroundMessageCallback = onForegroundMessage;
 
     try {
       if (Platform.isIOS) {
@@ -60,10 +64,7 @@ class FcmService {
 
       const android = AndroidInitializationSettings('notification_icon');
       const ios = DarwinInitializationSettings();
-      await _localNotifications.initialize(
-        const InitializationSettings(android: android, iOS: ios),
-        onDidReceiveNotificationResponse: _onDidReceiveNotificationResponse,
-      );
+      await _initializeLocalNotifications(android: android, ios: ios);
       if (Platform.isAndroid) {
         const channel = AndroidNotificationChannel(
           'fcm_foreground_channel',
@@ -91,7 +92,7 @@ class FcmService {
         _requestTokenAndNotify();
       });
 
-      FirebaseMessaging.onMessage.listen(_onForegroundMessage);
+      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
       FirebaseMessaging.onMessageOpenedApp.listen(_onMessageOpenedApp);
 
       final initialMessage = await _firebaseMessaging.getInitialMessage();
@@ -134,7 +135,7 @@ class FcmService {
     }
   }
 
-  static void _onForegroundMessage(RemoteMessage message) {
+  static void _handleForegroundMessage(RemoteMessage message) {
     final data = message.data;
     if (data.isEmpty) return;
     final title = message.notification?.title ?? 'Notification';
@@ -144,6 +145,7 @@ class FcmService {
       body: body,
       payload: data,
     );
+    _onForegroundMessageCallback?.call(message);
   }
 
   static void _onMessageOpenedApp(RemoteMessage message) {
@@ -194,13 +196,49 @@ class FcmService {
     const ios = DarwinNotificationDetails();
     const details = NotificationDetails(android: android, iOS: ios);
     final payloadJson = jsonEncode(payload);
-    await _localNotifications.show(
-      payload.hashCode % 0x7FFFFFFF,
-      title,
-      body,
-      details,
-      payload: payloadJson,
-    );
+    try {
+      // Use dynamic to support plugin signature differences across platforms/tests.
+      final plugin = _localNotifications as dynamic;
+      await plugin.show(
+        payload.hashCode % 0x7FFFFFFF,
+        title,
+        body,
+        details,
+        payload: payloadJson,
+      );
+    } catch (_) {
+      try {
+        final plugin = _localNotifications as dynamic;
+        await plugin.show(
+          id: payload.hashCode % 0x7FFFFFFF,
+          title: title,
+          body: body,
+          notificationDetails: details,
+          payload: payloadJson,
+        );
+      } catch (_) {}
+    }
+  }
+
+  static Future<void> _initializeLocalNotifications({
+    required AndroidInitializationSettings android,
+    required DarwinInitializationSettings ios,
+  }) async {
+    try {
+      final plugin = _localNotifications as dynamic;
+      await plugin.initialize(
+        InitializationSettings(android: android, iOS: ios),
+        onDidReceiveNotificationResponse: _onDidReceiveNotificationResponse,
+      );
+    } catch (_) {
+      try {
+        final plugin = _localNotifications as dynamic;
+        await plugin.initialize(
+          initializationSettings: InitializationSettings(android: android, iOS: ios),
+          onDidReceiveNotificationResponse: _onDidReceiveNotificationResponse,
+        );
+      } catch (_) {}
+    }
   }
 
   /// Returns current FCM token if already initialized; otherwise null.

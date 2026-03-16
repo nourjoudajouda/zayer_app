@@ -11,11 +11,13 @@ class HomeHeader extends StatelessWidget {
     required this.greeting,
     this.onProfileTap,
     this.onNotificationTap,
+    this.showNotificationDot = false,
   });
 
   final String greeting;
   final VoidCallback? onProfileTap;
   final VoidCallback? onNotificationTap;
+  final bool showNotificationDot;
 
   @override
   Widget build(BuildContext context) {
@@ -84,9 +86,30 @@ class HomeHeader extends StatelessWidget {
             child: InkWell(
               onTap: onNotificationTap,
               customBorder: const CircleBorder(),
-              child: const Padding(
-                padding: EdgeInsets.all(12),
-                child: Icon(Icons.notifications_outlined, size: 22, color: AppConfig.textColor),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(
+                      Icons.notifications_outlined,
+                      size: 22,
+                      color: AppConfig.textColor,
+                    ),
+                    if (showNotificationDot)
+                      const Positioned(
+                        top: -2,
+                        right: -2,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: AppConfig.primaryColor,
+                            shape: BoxShape.circle,
+                          ),
+                          child: SizedBox(width: 8, height: 8),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),

@@ -7,6 +7,7 @@ import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/ui/section_header.dart';
 import '../../generated/l10n/app_localizations.dart';
+import '../notifications/providers/unread_notifications_count_provider.dart';
 import 'providers/home_providers.dart';
 import 'widgets/consolidation_savings_card.dart';
 import 'widgets/flash_sale_carousel.dart';
@@ -49,6 +50,8 @@ class HomeScreen extends ConsumerWidget {
                       greeting: greeting,
                       onProfileTap: () => context.go(AppRoutes.account),
                       onNotificationTap: () => context.push(AppRoutes.notifications),
+                      showNotificationDot:
+                          ref.watch(unreadNotificationsCountProvider) > 0,
                     ),
                     const SizedBox(height: AppSpacing.md),
                     const SizedBox(height: AppSpacing.lg),

@@ -3,6 +3,7 @@ class NotificationItem {
   const NotificationItem({
     required this.id,
     required this.type,
+    required this.category,
     required this.title,
     required this.subtitle,
     required this.timeAgo,
@@ -14,6 +15,8 @@ class NotificationItem {
 
   final String id;
   final NotificationFilterType type;
+  /// Original category/type string from backend (future-ready).
+  final String category;
   final String title;
   final String subtitle;
   final String timeAgo;
@@ -22,18 +25,50 @@ class NotificationItem {
   final String? actionLabel;
   final String? actionRoute;
 
+  NotificationItem copyWith({
+    String? id,
+    NotificationFilterType? type,
+    String? category,
+    String? title,
+    String? subtitle,
+    String? timeAgo,
+    bool? read,
+    bool? important,
+    String? actionLabel,
+    String? actionRoute,
+  }) {
+    return NotificationItem(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      category: category ?? this.category,
+      title: title ?? this.title,
+      subtitle: subtitle ?? this.subtitle,
+      timeAgo: timeAgo ?? this.timeAgo,
+      read: read ?? this.read,
+      important: important ?? this.important,
+      actionLabel: actionLabel ?? this.actionLabel,
+      actionRoute: actionRoute ?? this.actionRoute,
+    );
+  }
+
   /// From API: type (orders|shipments|promo), title, subtitle, time_ago, read, important, action_label, action_route
   static NotificationItem fromJson(Map<String, dynamic> json) {
     final typeStr = json['type'] as String? ?? 'orders';
-    final type = switch (typeStr.toLowerCase()) {
-      'orders' => NotificationFilterType.orders,
-      'shipments' => NotificationFilterType.shipments,
-      'promo' => NotificationFilterType.promo,
-      _ => NotificationFilterType.orders,
+    final normalized = typeStr.toLowerCase();
+    final type = switch (normalized) {
+      'orders' || 'order' || 'order_update' || 'payment_update' => NotificationFilterType.orders,
+      'shipments' || 'shipment' || 'shipment_update' || 'tracking_update' => NotificationFilterType.shipments,
+      'promo' || 'promotion' => NotificationFilterType.promo,
+      _ => normalized.contains('ship') || normalized.contains('track')
+          ? NotificationFilterType.shipments
+          : (normalized.contains('promo') || normalized.contains('offer')
+              ? NotificationFilterType.promo
+              : NotificationFilterType.orders),
     };
     return NotificationItem(
       id: json['id']?.toString() ?? '',
       type: type,
+      category: typeStr,
       title: json['title'] as String? ?? '',
       subtitle: json['subtitle'] as String? ?? '',
       timeAgo: json['time_ago'] as String? ?? '',
