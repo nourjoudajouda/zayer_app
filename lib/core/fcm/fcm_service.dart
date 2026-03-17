@@ -62,6 +62,10 @@ class FcmService {
         }
       }
 
+      if (Platform.isAndroid) {
+        await _requestAndroidNotificationPermission();
+      }
+
       const android = AndroidInitializationSettings('notification_icon');
       const ios = DarwinInitializationSettings();
       await _initializeLocalNotifications(android: android, ios: ios);
@@ -187,6 +191,38 @@ class FcmService {
     } catch (e) {
       if (kDebugMode) debugPrint('FCM: parseMessageData error: $e');
       return null;
+    }
+  }
+
+  /// Requests notification permission on Android 13+ (API 33+).
+  /// Uses Firebase Messaging's requestPermission which triggers the system
+  /// POST_NOTIFICATIONS dialog. No-op on older Android; FCM token flow continues either way.
+  static Future<void> _requestAndroidNotificationPermission() async {
+    try {
+      if (kDebugMode) {
+        debugPrint('FCM: Requesting Android notification permission');
+      }
+      final settings = await _firebaseMessaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        announcement: false,
+        carPlay: false,
+        criticalAlert: false,
+        provisional: false,
+      );
+      if (kDebugMode) {
+        if (settings.authorizationStatus == AuthorizationStatus.authorized ||
+            settings.authorizationStatus == AuthorizationStatus.provisional) {
+          debugPrint('FCM: Android notification permission granted');
+        } else {
+          debugPrint('FCM: Android notification permission denied or not determined');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('FCM: Android notification permission request error: $e');
+      }
     }
   }
 
