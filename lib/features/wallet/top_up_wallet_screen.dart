@@ -6,6 +6,7 @@ import '../../core/config/app_config.dart';
 import '../../core/network/api_client.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
+import '../checkout/payment_webview_screen.dart';
 import 'models/wallet_model.dart';
 import 'providers/wallet_providers.dart';
 
@@ -60,12 +61,49 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
     if (amount == null || amount <= 0) return;
     setState(() => _isConfirming = true);
     try {
-      await ApiClient.instance.post('/api/wallet/top-up', data: {'amount': amount});
-      ref.invalidate(walletBalanceProvider);
-      ref.invalidate(walletTransactionsProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('+\$${amount.toStringAsFixed(2)} added to wallet')));
+      final res = await ApiClient.instance.post<Map<String, dynamic>>(
+        '/api/wallet/top-up',
+        data: {'amount': amount},
+      );
+      final data = res.data ?? const <String, dynamic>{};
+      final checkoutUrl = (data['checkout_url'] ??
+              (data['data'] is Map ? (data['data'] as Map)['checkout_url'] : null))
+          ?.toString()
+          .trim();
+
+      // If backend provides a real payment URL, launch Square flow.
+      if (checkoutUrl != null && checkoutUrl.isNotEmpty) {
+        final result = await context.push<PaymentWebViewResult>(
+          AppRoutes.paymentWebView,
+          extra: checkoutUrl,
+        );
+        if (!mounted) return;
+        ref.invalidate(walletBalanceProvider);
+        ref.invalidate(walletTransactionsProvider);
+        if (result == PaymentWebViewResult.failedToLoad) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Payment page could not load. Please try again or use another device.')),
+          );
+          return;
+        }
+        // On close/maybeCompleted, refresh wallet and leave the screen.
+        await ref.read(walletBalanceProvider.future);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Wallet updated.')),
+        );
         context.pop();
+        return;
+      }
+
+      // No checkout URL returned: do not pretend the top-up completed.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Top-up payment is not available right now. Please try again later.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
       }
     } catch (_) {
       if (mounted) {

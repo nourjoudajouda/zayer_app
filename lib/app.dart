@@ -104,9 +104,10 @@ class _ZayerAppState extends ConsumerState<ZayerApp> {
     final configAsync = ref.watch(bootstrapConfigProvider);
     final connectivity = ref.watch(connectivityProvider);
     final devMode = ref.watch(developmentModeProvider);
+    const isFlutterTest = bool.fromEnvironment('FLUTTER_TEST');
 
     // One-time FCM setup: run once after first frame, outside the router builder.
-    if (!_fcmSetupDone) {
+    if (!isFlutterTest && !_fcmSetupDone) {
       _fcmSetupDone = true;
       Future.microtask(() => _setupFcmOnce(ref));
     }

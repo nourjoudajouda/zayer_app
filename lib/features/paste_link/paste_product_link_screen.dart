@@ -14,6 +14,7 @@ import '../../core/network/api_client.dart';
 import '../../core/network/api_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/widgets/add_to_cart_success_sheet.dart';
 import '../cart/models/cart_item_model.dart';
 import '../cart/providers/cart_providers.dart';
 import '../cart/repositories/cart_repository.dart';
@@ -228,6 +229,14 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
 
   Future<void> _addToCart() async {
     if (!_canAddToCart) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter required details to add this item.'),
+            backgroundColor: AppConfig.errorRed,
+          ),
+        );
+      }
       return;
     }
 
@@ -312,13 +321,16 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
       final added = await cartNotifier.addItem(cartItem);
       if (mounted) {
         if (added) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Added to cart'),
-              backgroundColor: AppConfig.successGreen,
-            ),
+          final action = await showAddToCartSuccessSheet(
+            context,
+            message: 'Your item is ready in your cart.',
           );
-          context.pop();
+          if (!mounted) return;
+          if (action == AddToCartSuccessAction.goToCart) {
+            context.go(AppRoutes.cart);
+          } else {
+            context.pop();
+          }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -327,6 +339,15 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
             ),
           );
         }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not add to cart. ${e.toString()}'),
+            backgroundColor: AppConfig.errorRed,
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _isAddingToCart = false);
@@ -1230,32 +1251,49 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
 
   Widget _buildBottomBar() {
     final loading = _isAddingToCart;
+    final showHint = !loading && _fieldsEnabled && !_canAddToCart;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
-        child: FilledButton.icon(
-          onPressed: (!loading && _canAddToCart) ? _addToCart : null,
-          icon: loading
-              ? SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Icon(Icons.shopping_cart_outlined, size: 22),
-          label: Text(loading ? 'Adding...' : 'Add to Cart'),
-          style: FilledButton.styleFrom(
-            backgroundColor: AppConfig.primaryColor,
-            foregroundColor: Colors.white,
-            disabledBackgroundColor: AppConfig.borderColor,
-            disabledForegroundColor: AppConfig.subtitleColor,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (showHint)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                child: Text(
+                  'Enter a name and unit price to continue.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppConfig.subtitleColor,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            FilledButton.icon(
+              onPressed: (!loading && _canAddToCart) ? _addToCart : null,
+              icon: loading
+                  ? SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.shopping_cart_outlined, size: 22),
+              label: Text(loading ? 'Adding...' : 'Add to Cart'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppConfig.primaryColor,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: AppConfig.borderColor,
+                disabledForegroundColor: AppConfig.subtitleColor,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

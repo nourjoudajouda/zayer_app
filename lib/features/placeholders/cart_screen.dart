@@ -37,14 +37,15 @@ class CartScreen extends ConsumerWidget {
     for (final entry in byCountry.entries) {
       final countryLabel = '${entry.key} Shipment';
       final items = entry.value;
-      double groupShipping = 0;
-      for (final item in items) {
-        final cost = item.shippingCost ?? 0;
-        groupShipping += cost * item.quantity;
-      }
-      if (groupShipping == 0 && items.isNotEmpty) {
-        groupShipping = 12.0 * items.length; // placeholder
-      }
+      final allReviewed = items.every((i) => i.isReviewed);
+      final hasAllShippingCosts = items.every((i) => i.shippingCost != null && (i.shippingCost ?? 0) > 0);
+      final showShippingAmount = allReviewed && hasAllShippingCosts;
+      final groupShipping = showShippingAmount
+          ? items.fold<double>(
+              0,
+              (sum, item) => sum + ((item.shippingCost ?? 0) * item.quantity),
+            )
+          : null;
       widgets.add(
         Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.lg),
@@ -71,9 +72,11 @@ class CartScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Shipping: \$${groupShipping.toStringAsFixed(2)}',
+                groupShipping != null
+                    ? 'Shipping: \$${groupShipping.toStringAsFixed(2)}'
+                    : 'Shipping: Pending review',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppConfig.primaryColor,
+                      color: groupShipping != null ? AppConfig.primaryColor : AppConfig.subtitleColor,
                       fontWeight: FontWeight.w500,
                     ),
               ),
@@ -245,6 +248,8 @@ class _CartItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final showShippingAmount = item.isReviewed && item.shippingCost != null && item.shippingCost! > 0;
+    final showShippingPending = !item.isReviewed && (item.shippingCost == null || item.shippingCost == 0);
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -362,7 +367,19 @@ class _CartItemCard extends StatelessWidget {
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
-                            'Shipping: \$${(item.shippingCost! * item.quantity).toStringAsFixed(2)}',
+                            showShippingAmount
+                                ? 'Shipping: \$${(item.shippingCost! * item.quantity).toStringAsFixed(2)}'
+                                : 'Shipping: Pending review',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: AppConfig.subtitleColor,
+                                ),
+                          ),
+                        ),
+                      if (!showShippingAmount && showShippingPending)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Shipping: Pending review',
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                   color: AppConfig.subtitleColor,
                                 ),
@@ -457,14 +474,13 @@ class _CartSummary extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final total = cartNotifier.totalPrice;
     final itemCount = cartNotifier.itemCount;
-    double totalShipping = 0;
-    for (final item in cartItems) {
-      totalShipping += (item.shippingCost ?? 0) * item.quantity;
-    }
-    if (totalShipping == 0 && cartItems.isNotEmpty) {
-      totalShipping = 12.0 * cartItems.length;
-    }
-    final grandTotal = total + totalShipping;
+    final allReviewed = cartItems.every((i) => i.isReviewed);
+    final hasAllShippingCosts = cartItems.every((i) => i.shippingCost != null && (i.shippingCost ?? 0) > 0);
+    final shippingReady = allReviewed && hasAllShippingCosts;
+    final totalShipping = shippingReady
+        ? cartItems.fold<double>(0, (sum, item) => sum + ((item.shippingCost ?? 0) * item.quantity))
+        : null;
+    final grandTotal = totalShipping != null ? total + totalShipping : null;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -502,26 +518,24 @@ class _CartSummary extends ConsumerWidget {
                 ),
               ],
             ),
-            if (totalShipping > 0) ...[
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Shipping',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppConfig.subtitleColor,
-                        ),
-                  ),
-                  Text(
-                    '\$${totalShipping.toStringAsFixed(2)}',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                ],
-              ),
-            ],
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Shipping',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppConfig.subtitleColor,
+                      ),
+                ),
+                Text(
+                  totalShipping != null ? '\$${totalShipping.toStringAsFixed(2)}' : 'Pending review',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -533,7 +547,7 @@ class _CartSummary extends ConsumerWidget {
                       ),
                 ),
                 Text(
-                  '\$${grandTotal.toStringAsFixed(2)}',
+                  grandTotal != null ? '\$${grandTotal.toStringAsFixed(2)}' : 'Pending review',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                         color: AppConfig.primaryColor,

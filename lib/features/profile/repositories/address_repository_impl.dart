@@ -106,15 +106,15 @@ Address _addressFromJson(Map<String, dynamic> j) {
     addressLine: (j['address_line'] ?? '').toString(),
     countryId: (j['country_id'] ?? '').toString(),
     countryName: (j['country_name'] ?? '').toString(),
-    cityId: j['city_id'] as String?,
-    cityName: j['city_name'] as String?,
-    phone: j['phone'] as String?,
+    cityId: _asStringOrNull(j['city_id']),
+    cityName: _asStringOrNull(j['city_name']),
+    phone: _asStringOrNull(j['phone']),
     isDefault: j['is_default'] == true,
-    nickname: j['nickname'] as String?,
+    nickname: _asStringOrNull(j['nickname']),
     addressType: type,
-    areaDistrict: j['area_district'] as String?,
-    streetAddress: j['street_address'] as String?,
-    buildingVillaSuite: j['building_villa_suite'] as String?,
+    areaDistrict: _asStringOrNull(j['area_district']),
+    streetAddress: _asStringOrNull(j['street_address']),
+    buildingVillaSuite: _asStringOrNull(j['building_villa_suite']),
     isVerified: j['is_verified'] == true,
     isResidential: j['is_residential'] != false,
     linkedToActiveOrder: j['linked_to_active_order'] == true,
@@ -122,6 +122,13 @@ Address _addressFromJson(Map<String, dynamic> j) {
     lat: (j['lat'] as num?)?.toDouble(),
     lng: (j['lng'] as num?)?.toDouble(),
   );
+}
+
+String? _asStringOrNull(dynamic v) {
+  if (v == null) return null;
+  final s = v.toString();
+  if (s.trim().isEmpty) return null;
+  return s;
 }
 
 String _addressTypeToString(AddressType t) {

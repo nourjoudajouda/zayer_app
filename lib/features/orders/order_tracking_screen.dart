@@ -79,6 +79,7 @@ class _OrderTrackingContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasCustoms = order.shipments.any((s) => (s.customsDuties ?? '').trim().isNotEmpty);
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
       appBar: AppBar(
@@ -123,7 +124,7 @@ class _OrderTrackingContent extends StatelessWidget {
                     onToggleLogistics: onToggleLogistics,
                   ),
               const SizedBox(height: AppSpacing.lg),
-              _CustomsInsightCard(),
+              if (hasCustoms) _CustomsInsightCard(duties: order.shipments.map((s) => s.customsDuties).whereType<String>().where((d) => d.trim().isNotEmpty).toList()),
               const SizedBox(height: AppSpacing.lg),
               Text(
                 'Questions about customs, delays, or delivery?',
@@ -294,8 +295,7 @@ class _ShipmentTrackingCard extends StatelessWidget {
           ),
           if (isExpanded) ...[
             const Divider(height: 1),
-            if (isUsa && shipment.trackingEvents.isNotEmpty) ...[
-              _MapPlaceholder(),
+            if (shipment.trackingEvents.isNotEmpty) ...[
               Padding(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 child: Column(
@@ -337,6 +337,26 @@ class _ShipmentTrackingCard extends StatelessWidget {
                   ],
                 ),
               ),
+            ] else
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Row(
+                  children: [
+                    Icon(Icons.local_shipping_outlined, color: AppConfig.subtitleColor),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        'Tracking updates will appear once this shipment is handed to the carrier.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (shipment.grossWeightKg != null ||
+                (shipment.dimensions != null && shipment.dimensions!.isNotEmpty) ||
+                (shipment.shippingMethod).trim().isNotEmpty ||
+                shipment.insuranceConfirmed)
               _ExpandableLogistics(
                 expanded: logisticsExpanded,
                 onToggle: onToggleLogistics,
@@ -345,39 +365,7 @@ class _ShipmentTrackingCard extends StatelessWidget {
                 method: shipment.shippingMethod,
                 insuranceConfirmed: shipment.insuranceConfirmed,
               ),
-            ] else
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                child: Text('No tracking events', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor)),
-              ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _MapPlaceholder extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 120,
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppConfig.borderColor.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
-      ),
-      child: Stack(
-        children: [
-          Center(child: Icon(Icons.map_outlined, size: 40, color: AppConfig.subtitleColor)),
-          Positioned(
-            top: 8,
-            right: 8,
-            child: Text(
-              'Last updated: 14 mins ago',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppConfig.subtitleColor),
-            ),
-          ),
         ],
       ),
     );
@@ -462,8 +450,13 @@ class _LogisticsRow extends StatelessWidget {
 }
 
 class _CustomsInsightCard extends StatelessWidget {
+  const _CustomsInsightCard({required this.duties});
+
+  final List<String> duties;
+
   @override
   Widget build(BuildContext context) {
+    final unique = duties.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList();
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -483,7 +476,9 @@ class _CustomsInsightCard extends StatelessWidget {
                 Text('Customs Clearance Insight', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
                 Text(
-                  'This shipment is undergoing standard verification by UAE Customs authorities. Documentation has been submitted. Typical clearance time: 24-48 hours.',
+                  unique.isNotEmpty
+                      ? 'Customs duties assessed: ${unique.join(' • ')}'
+                      : 'Customs updates will appear here when available.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
                 ),
               ],

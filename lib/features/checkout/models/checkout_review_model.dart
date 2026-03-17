@@ -33,14 +33,16 @@ class CheckoutShipment {
 
 class CheckoutReviewModel {
   const CheckoutReviewModel({
-    this.shippingAddressShort = '123 Main St, Apt 4B, New York, NY 10001',
-    this.consolidationSavings = '\$45.00',
+    this.shippingAddressShort = '',
+    this.consolidationSavings = '',
     this.walletBalanceEnabled = true,
-    this.walletBalance = '\$50.00',
-    this.subtotal = '\$245.10',
-    this.shipping = '\$22.00',
-    this.insurance = '\$5.00',
-    this.total = '\$212.10',
+    this.walletBalance = '',
+    this.subtotal = '',
+    this.shipping = '',
+    this.insurance = '',
+    this.total = '',
+    this.amountDueNow,
+    this.walletApplied,
     required this.shipments,
   });
 
@@ -52,6 +54,10 @@ class CheckoutReviewModel {
   final String shipping;
   final String insurance;
   final String total;
+  /// Amount due now after wallet application (backend source of truth).
+  final double? amountDueNow;
+  /// Wallet amount applied (if provided by backend).
+  final double? walletApplied;
   final List<CheckoutShipment> shipments;
 
   factory CheckoutReviewModel.fromJson(Map<String, dynamic> j) {
@@ -86,7 +92,19 @@ class CheckoutReviewModel {
       shipping: (j['shipping'] ?? '\$0.00').toString(),
       insurance: (j['insurance'] ?? '\$0.00').toString(),
       total: (j['total'] ?? '\$0.00').toString(),
+      amountDueNow: _parseMoney(j['amount_due_now'] ?? j['due_now'] ?? j['amount_due']),
+      walletApplied: _parseMoney(j['wallet_applied'] ?? j['wallet_applied_amount']),
       shipments: shipments,
     );
   }
+}
+
+double? _parseMoney(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v.toDouble();
+  final s = v.toString().trim();
+  if (s.isEmpty) return null;
+  // Keep digits, minus, dot.
+  final cleaned = s.replaceAll(RegExp(r'[^0-9\.\-]'), '');
+  return double.tryParse(cleaned);
 }

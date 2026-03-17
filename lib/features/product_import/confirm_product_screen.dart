@@ -10,6 +10,7 @@ import '../../core/network/api_client.dart';
 import '../../core/network/api_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/widgets/add_to_cart_success_sheet.dart';
 import '../cart/models/cart_item_model.dart';
 import '../cart/providers/cart_providers.dart';
 import '../cart/repositories/cart_repository.dart';
@@ -75,26 +76,6 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
     }
   }
 
-  /// Convert price from any currency to USD using estimated rates
-  /// In production, use real-time exchange rates from API
-  double _convertToUSD(double price, String currency) {
-    // Estimated exchange rates (should be fetched from API in production)
-    const exchangeRates = {
-      'USD': 1.0,
-      'EUR': 1.08,
-      'GBP': 1.27,
-      'AED': 0.27,
-      'SAR': 0.27,
-      'EGP': 0.032,
-      'ILS': 0.27, // Israeli Shekel: 1 ILS ≈ 0.27 USD
-      'NIS': 0.27, // New Israeli Shekel (same as ILS)
-      '₪': 0.27, // Shekel symbol
-    };
-    
-    final rate = exchangeRates[currency.toUpperCase()] ?? exchangeRates[currency] ?? 1.0;
-    return price * rate;
-  }
-
   @override
   Widget build(BuildContext context) {
     // Use actual product data if available, otherwise use mock data
@@ -104,12 +85,9 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
     final productImageUrl = widget.product?.imageUrl;
     // User can edit unit price when product has multiple variations (size/color)
     final usdPrice = _unitPrice;
-    const estimatedShipping = 45.0; // Always in USD
-    const estimatedDuties = 60.0; // Always in USD
-    final total = (usdPrice * _quantity) + estimatedShipping + estimatedDuties;
-    
-    // Show warning if currency is not USD (when we use store price elsewhere)
-    final showCurrencyWarning = productCurrency != 'USD';
+    final subtotal = usdPrice * _quantity;
+    // Until backend provides an actual quote/final pricing, we must not show invented shipping/duties/totals.
+    final pricingPendingReview = true;
 
     return Scaffold(
       appBar: AppBar(
@@ -220,14 +198,11 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                                       color: AppConfig.primaryColor,
                                     ),
                               ),
-                              if (showCurrencyWarning) ...[
+                              if (productCurrency != 'USD') ...[
                                 const SizedBox(width: 8),
                                 Text(
                                   '($productCurrency)',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                         color: AppConfig.subtitleColor,
                                         fontStyle: FontStyle.italic,
                                       ),
@@ -428,7 +403,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Cost Breakdown (Estimated)',
+                      'Cost Breakdown',
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
@@ -436,51 +411,17 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                     const SizedBox(height: AppSpacing.md),
                     _buildCostRow(
                       'Product × $_quantity',
-                      'USD ${(usdPrice * _quantity).toStringAsFixed(2)}',
+                      'USD ${subtotal.toStringAsFixed(2)}',
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     _buildCostRow(
-                      'International Shipping',
-                      'USD ${estimatedShipping.toStringAsFixed(2)}',
+                      'Shipping',
+                      pricingPendingReview ? 'Pending Review' : '—',
                     ),
-                    const SizedBox(height: AppSpacing.sm),
-                    _buildCostRow(
-                      'Import Duties & Taxes',
-                      'USD ${estimatedDuties.toStringAsFixed(2)}',
-                    ),
-                    if (showCurrencyWarning) ...[
-                      const SizedBox(height: AppSpacing.sm),
-                      Container(
-                        padding: const EdgeInsets.all(AppSpacing.sm),
-                        decoration: BoxDecoration(
-                          color: AppConfig.primaryColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline,
-                              size: 16,
-                              color: AppConfig.primaryColor,
-                            ),
-                            const SizedBox(width: AppSpacing.xs),
-                            Expanded(
-                              child: Text(
-                                'Prices converted to USD using estimated rates',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: AppConfig.primaryColor,
-                                      fontSize: 11,
-                                    ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
                     const Divider(height: AppSpacing.lg),
                     _buildCostRow(
-                      'Estimated Total',
-                      'USD ${total.toStringAsFixed(2)}',
+                      'Total',
+                      pricingPendingReview ? 'Pending Review' : '—',
                       isTotal: true,
                     ),
                   ],
@@ -488,7 +429,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
-                'Final costs will be calculated after review and shared for your approval before purchase.',
+                'Final shipping will be confirmed after review.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppConfig.subtitleColor,
                     ),
@@ -586,26 +527,12 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
 
       if (mounted) {
         if (added) {
-          final choice = await showDialog<String>(context: context, barrierDismissible: false, builder: (ctx) {
-            return AlertDialog(
-              title: const Text('Added to cart'),
-              content: const Text(
-                'Do you want to continue shopping in this store or go to your cart?',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop('continue'),
-                  child: const Text('Continue shopping'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(ctx).pop('cart'),
-                  child: const Text('Go to cart'),
-                ),
-              ],
-            );
-          });
+          final choice = await showAddToCartSuccessSheet(
+            context,
+            message: 'Do you want to continue shopping or go to your cart?',
+          );
           if (!mounted) return;
-          if (choice == 'cart') {
+          if (choice == AddToCartSuccessAction.goToCart) {
             Navigator.of(context).popUntil((route) {
               return route.isFirst ||
                   route.settings.name == AppRoutes.storeLanding ||

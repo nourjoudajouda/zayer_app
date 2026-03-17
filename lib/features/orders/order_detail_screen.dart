@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/network/api_client.dart';
+import '../../core/network/api_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import 'models/order_model.dart';
@@ -185,7 +188,6 @@ class _ShippingAddressCard extends StatelessWidget {
               ],
             ),
           ),
-          Icon(Icons.info_outline, size: 20, color: AppConfig.subtitleColor),
         ],
       ),
     );
@@ -226,7 +228,9 @@ class _ShipmentSection extends StatelessWidget {
           if (shipment.items.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.md),
             ...shipment.items.map((item) => _OrderLineItemTile(item: item)),
-            if (shipment.grossWeightKg != null || shipment.dimensions != null || shipment.shippingMethod.isNotEmpty)
+            if (shipment.grossWeightKg != null ||
+                (shipment.dimensions != null && shipment.dimensions!.isNotEmpty) ||
+                shipment.shippingMethod.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: AppSpacing.sm),
                 child: Wrap(
@@ -237,7 +241,8 @@ class _ShipmentSection extends StatelessWidget {
                       Text('WEIGHT: ${shipment.grossWeightKg} kg', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppConfig.subtitleColor)),
                     if (shipment.dimensions != null && shipment.dimensions!.isNotEmpty)
                       Text('DIMENSIONS: ${shipment.dimensions}', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppConfig.subtitleColor)),
-                    Text('METHOD: ${shipment.shippingMethod}', style: TextStyle(color: AppConfig.primaryColor, fontWeight: FontWeight.w600, fontSize: 12)),
+                    if (shipment.shippingMethod.isNotEmpty)
+                      Text('METHOD: ${shipment.shippingMethod}', style: TextStyle(color: AppConfig.primaryColor, fontWeight: FontWeight.w600, fontSize: 12)),
                   ],
                 ),
               ),
@@ -320,6 +325,7 @@ class _OrderLineItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sku = item.sku.trim();
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
       padding: const EdgeInsets.all(AppSpacing.sm),
@@ -338,7 +344,27 @@ class _OrderLineItemTile extends StatelessWidget {
               color: AppConfig.borderColor.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.smartphone_outlined, color: AppConfig.subtitleColor),
+            child: () {
+              final url = resolveAssetUrl(item.imageUrl, ApiClient.safeBaseUrl);
+              if (url == null || url.isEmpty) {
+                return const Icon(Icons.image_outlined, color: AppConfig.subtitleColor);
+              }
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: CachedNetworkImage(
+                  imageUrl: url,
+                  fit: BoxFit.cover,
+                  placeholder: (context, _) => const Center(
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                  errorWidget: (context, _, __) => const Icon(Icons.image_outlined, color: AppConfig.subtitleColor),
+                ),
+              );
+            }(),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
@@ -347,7 +373,12 @@ class _OrderLineItemTile extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(item.name, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
-                Text('${item.storeName} • SKU: ${item.sku}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(
+                  sku.isNotEmpty ? '${item.storeName} • SKU: $sku' : item.storeName,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 if (item.badges.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Wrap(

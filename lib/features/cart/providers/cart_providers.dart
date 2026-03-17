@@ -52,11 +52,15 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
 
   Future<void> updateQuantity(String id, int quantity) async {
     await _repository.updateQuantity(id, quantity);
+    // Refresh from backend to keep totals/shipping as source of truth.
+    await _repository.loadItems();
     state = List.from(_repository.items);
   }
 
   Future<void> removeItem(String id) async {
     await _repository.removeItem(id);
+    // Refresh from backend to keep totals/shipping as source of truth.
+    await _repository.loadItems();
     state = List.from(_repository.items);
   }
 

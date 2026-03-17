@@ -114,6 +114,9 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
     final reviewAsync = ref.watch(checkoutReviewProvider);
     final review = reviewAsync.valueOrNull;
     final walletEnabled = ref.watch(checkoutWalletEnabledProvider);
+    final amountDueNow = review != null
+        ? (review.amountDueNow ?? _tryParseMoney(review.total) ?? 0)
+        : 0.0;
 
     return reviewAsync.when(
       loading: () => Scaffold(
@@ -153,6 +156,7 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
         return _ReviewPayContent(
           review: r,
           walletEnabled: walletEnabled,
+          amountDueNow: r.amountDueNow ?? _tryParseMoney(r.total) ?? 0,
           confirming: _confirming,
           onRefresh: () async {
             ref.invalidate(checkoutReviewProvider);
@@ -183,16 +187,27 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
                     context.go(AppRoutes.orders);
                     return;
                   }
+                  final dueNow = amountDueNow;
+                  if (dueNow <= 0) {
+                    setState(() => _confirming = false);
+                    context.go('${AppRoutes.orderDetail}/$orderId');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Order confirmed.')),
+                    );
+                    return;
+                  }
+
                   final paymentResult = await startOrderPayment(orderId);
                   if (!mounted) return;
                   setState(() => _confirming = false);
-                  if (paymentResult.checkoutUrl != null) {
-                    context.go('${AppRoutes.orderDetail}/$orderId');
+                  final checkoutUrl = paymentResult.checkoutUrl;
+                  if (checkoutUrl != null && checkoutUrl.trim().isNotEmpty) {
                     final webViewResult = await context.push<PaymentWebViewResult>(
                       AppRoutes.paymentWebView,
-                      extra: paymentResult.checkoutUrl!,
+                      extra: checkoutUrl,
                     );
                     if (!context.mounted) return;
+                    context.go('${AppRoutes.orderDetail}/$orderId');
                     ref.invalidate(orderByIdProvider(orderId));
                     ref.invalidate(ordersProvider);
                     ref.invalidate(checkoutReviewProvider);
@@ -224,10 +239,16 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
   }
 }
 
+double? _tryParseMoney(String v) {
+  final cleaned = v.replaceAll(RegExp(r'[^0-9\.\-]'), '');
+  return double.tryParse(cleaned);
+}
+
 class _ReviewPayContent extends StatelessWidget {
   const _ReviewPayContent({
     required this.review,
     required this.walletEnabled,
+    required this.amountDueNow,
     required this.confirming,
     required this.onWalletToggle,
     this.onConfirm,
@@ -236,6 +257,7 @@ class _ReviewPayContent extends StatelessWidget {
 
   final CheckoutReviewModel review;
   final bool walletEnabled;
+  final double amountDueNow;
   final bool confirming;
   final ValueChanged<bool> onWalletToggle;
   final VoidCallback? onConfirm;
@@ -292,7 +314,11 @@ class _ReviewPayContent extends StatelessWidget {
               ),
             ),
             ),
-                    _ConfirmPayBar(total: review.total, onConfirm: onConfirm, isLoading: confirming),
+                    _ConfirmPayBar(
+                      amountDueNow: amountDueNow,
+                      onConfirm: onConfirm,
+                      isLoading: confirming,
+                    ),
           ],
         ),
       ),
@@ -687,14 +713,22 @@ class _PromoCodeField extends StatelessWidget {
 }
 
 class _ConfirmPayBar extends StatelessWidget {
-  const _ConfirmPayBar({required this.total, this.onConfirm, this.isLoading = false});
+  const _ConfirmPayBar({
+    required this.amountDueNow,
+    this.onConfirm,
+    this.isLoading = false,
+  });
 
-  final String total;
+  final double amountDueNow;
   final VoidCallback? onConfirm;
   final bool isLoading;
 
+  static String _formatUsd(double v) => '\$${v.toStringAsFixed(2)}';
+
   @override
   Widget build(BuildContext context) {
+    final due = amountDueNow;
+    final label = due <= 0 ? 'Confirm Order' : 'Confirm & Pay ${_formatUsd(due)}';
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -717,7 +751,7 @@ class _ConfirmPayBar extends StatelessWidget {
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
                     : const Icon(Icons.lock, size: 20, color: Colors.white),
-                label: Text(isLoading ? 'Processing...' : 'Confirm & Pay $total'),
+                label: Text(isLoading ? 'Processing...' : label),
                 style: FilledButton.styleFrom(
                   backgroundColor: AppConfig.primaryColor,
                   foregroundColor: Colors.white,

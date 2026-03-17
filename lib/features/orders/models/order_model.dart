@@ -261,6 +261,9 @@ class OrderModel {
                   price: (i['price'] ?? '\$0.00').toString(),
                   quantity: (i['quantity'] as int?) ?? 1,
                   imageUrl: i['image_url'] as String?,
+                  weightKg: (i['weight_kg'] as num?)?.toDouble(),
+                  dimensions: (i['dimensions'] ?? '').toString().trim().isEmpty ? null : (i['dimensions'] ?? '').toString(),
+                  shippingMethod: (i['shipping_method'] ?? '').toString().trim().isEmpty ? null : (i['shipping_method'] ?? '').toString(),
                 ))
             .toList() ??
         [];
@@ -274,6 +277,10 @@ class OrderModel {
                 ))
             .toList() ??
         [];
+    final statusTagsRaw = s['status_tags'];
+    final statusTags = statusTagsRaw is List
+        ? statusTagsRaw.map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList()
+        : const <String>[];
     return OrderShipment(
       id: (s['id'] ?? '').toString(),
       countryCode: (s['country_code'] ?? '').toString(),
@@ -285,6 +292,10 @@ class OrderModel {
       subtotal: s['subtotal'] as String?,
       shippingFee: s['shipping_fee'] as String?,
       customsDuties: s['customs_duties'] as String?,
+      grossWeightKg: (s['gross_weight_kg'] as num?)?.toDouble(),
+      dimensions: (s['dimensions'] ?? '').toString().trim().isEmpty ? null : (s['dimensions'] ?? '').toString(),
+      insuranceConfirmed: s['insurance_confirmed'] == true,
+      statusTags: statusTags,
     );
   }
 }
