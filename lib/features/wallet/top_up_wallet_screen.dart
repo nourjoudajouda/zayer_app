@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/config/app_config_provider.dart';
 import '../../core/network/api_client.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
@@ -71,12 +72,14 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
         },
       );
       final data = res.data ?? const <String, dynamic>{};
-      final checkoutUrl = (data['checkout_url'] ??
-              (data['data'] is Map ? (data['data'] as Map)['checkout_url'] : null))
+      final topUp = data['top_up'] is Map<String, dynamic>
+          ? data['top_up'] as Map<String, dynamic>
+          : (data['data'] is Map<String, dynamic> ? data['data'] as Map<String, dynamic> : null);
+      final checkoutUrl = (topUp?['checkout_url'] ?? data['checkout_url'])
           ?.toString()
           .trim();
 
-      // If backend provides a real payment URL, launch Square flow.
+      // If backend provides a real payment URL, launch hosted checkout flow.
       if (checkoutUrl != null && checkoutUrl.isNotEmpty) {
         final result = await context.push<PaymentWebViewResult>(
           AppRoutes.paymentWebView,
@@ -128,6 +131,8 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
     final balanceAsync = ref.watch(walletBalanceProvider);
     final balance = balanceAsync.valueOrNull ?? const WalletBalance(available: 0, pending: 0, promo: 0);
     final amount = _selectedAmount;
+    final defaultGateway = ref.watch(bootstrapConfigProvider).valueOrNull?.paymentGateways?.defaultGatewayCode;
+    final gatewayLabel = (defaultGateway == 'stripe') ? 'Stripe' : 'Square';
 
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
@@ -221,7 +226,7 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Pay securely with Square',
+                            'Pay securely with $gatewayLabel',
                             style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 4),
@@ -260,7 +265,7 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
                 child: Column(
                   children: [
                     _SummaryRow('Top-up Amount', amount != null ? '\$${amount.toStringAsFixed(2)}' : '—'),
-                    _SummaryRow('Payment', 'Secure checkout (Square)'),
+                    _SummaryRow('Payment', 'Secure checkout ($gatewayLabel)'),
                     const SizedBox(height: AppSpacing.sm),
                     Row(
                       children: [

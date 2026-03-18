@@ -17,7 +17,7 @@ enum PaymentWebViewResult {
   failedToLoad,
 }
 
-/// In-app WebView for Square checkout. Opens [checkoutUrl] and lets the user
+/// In-app WebView for hosted checkout (Square/Stripe/etc). Opens [checkoutUrl] and lets the user
 /// complete or cancel payment. Close button returns to previous screen with a result.
 class PaymentWebViewScreen extends StatefulWidget {
   const PaymentWebViewScreen({

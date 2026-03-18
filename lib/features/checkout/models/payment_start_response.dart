@@ -1,4 +1,4 @@
-/// Response from POST /api/orders/{orderId}/pay (Square checkout start).
+/// Response from POST /api/orders/{orderId}/pay (hosted checkout start).
 class PaymentStartResponse {
   const PaymentStartResponse({
     required this.paymentId,

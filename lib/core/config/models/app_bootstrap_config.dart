@@ -324,6 +324,66 @@ class PromoBannerConfig {
   }
 }
 
+class PaymentGatewayProviderConfig {
+  const PaymentGatewayProviderConfig({
+    required this.enabled,
+    required this.environment,
+    this.publishableKey,
+    this.supportsWebCheckout = true,
+  });
+
+  final bool enabled;
+  final String environment;
+  final String? publishableKey;
+  final bool supportsWebCheckout;
+
+  factory PaymentGatewayProviderConfig.fromJson(Map<String, dynamic> json) {
+    return PaymentGatewayProviderConfig(
+      enabled: json['enabled'] as bool? ?? false,
+      environment: (json['environment'] as String?)?.trim().isNotEmpty == true
+          ? (json['environment'] as String).trim()
+          : 'test',
+      publishableKey: json['publishable_key'] as String?,
+      supportsWebCheckout: json['supports_web_checkout'] as bool? ?? true,
+    );
+  }
+}
+
+class PaymentGatewaysConfig {
+  const PaymentGatewaysConfig({
+    required this.defaultGatewayCode,
+    required this.enabled,
+    required this.providers,
+  });
+
+  final String defaultGatewayCode;
+  final List<String> enabled;
+  final Map<String, PaymentGatewayProviderConfig> providers;
+
+  factory PaymentGatewaysConfig.fromJson(Map<String, dynamic> json) {
+    final enabledList = (json['enabled'] as List<dynamic>? ?? const [])
+        .map((e) => e.toString())
+        .toList();
+
+    final providerMapJson = json['providers'] as Map<String, dynamic>? ?? const {};
+    final providerMap = <String, PaymentGatewayProviderConfig>{};
+    for (final entry in providerMapJson.entries) {
+      final v = entry.value;
+      if (v is Map<String, dynamic>) {
+        providerMap[entry.key] = PaymentGatewayProviderConfig.fromJson(v);
+      }
+    }
+
+    return PaymentGatewaysConfig(
+      defaultGatewayCode: (json['default'] as String?)?.trim().isNotEmpty == true
+          ? (json['default'] as String).trim()
+          : 'square',
+      enabled: enabledList,
+      providers: providerMap,
+    );
+  }
+}
+
 /// Root bootstrap config: theme + splash + onboarding + markets + promo_banners + api_base_url + development_mode + app_name + app_icon_url.
 class AppBootstrapConfig {
   const AppBootstrapConfig({
@@ -336,6 +396,7 @@ class AppBootstrapConfig {
     this.developmentMode = false,
     this.appName,
     this.appIconUrl,
+    this.paymentGateways,
   });
 
   final ThemeConfig theme;
@@ -351,6 +412,7 @@ class AppBootstrapConfig {
   final String? appName;
   /// App icon/logo URL from admin. Used inside the app (e.g. AppBar).
   final String? appIconUrl;
+  final PaymentGatewaysConfig? paymentGateways;
 
   factory AppBootstrapConfig.fromJson(Map<String, dynamic> json) {
     final themeJson = json['theme'] as Map<String, dynamic>?;
@@ -362,6 +424,10 @@ class AppBootstrapConfig {
     final devMode = json['development_mode'] as bool? ?? false;
     final appName = json['app_name'] as String?;
     final appIconUrl = json['app_icon_url'] as String?;
+    final paymentGatewaysJson = json['payment_gateways'] as Map<String, dynamic>?;
+    final paymentGateways = paymentGatewaysJson != null
+        ? PaymentGatewaysConfig.fromJson(paymentGatewaysJson)
+        : null;
     return AppBootstrapConfig(
       theme: ThemeConfig.fromJson(themeJson),
       splash: SplashConfig.fromJson(splashJson),
@@ -380,6 +446,7 @@ class AppBootstrapConfig {
       developmentMode: devMode,
       appName: appName != null && appName.trim().isNotEmpty ? appName.trim() : null,
       appIconUrl: appIconUrl != null && appIconUrl.trim().isNotEmpty ? appIconUrl.trim() : null,
+      paymentGateways: paymentGateways,
     );
   }
 

@@ -143,6 +143,23 @@ class AppConfigRepositoryMock implements AppConfigRepository {
           },
         ],
       },
+      'payment_gateways': {
+        'default': 'square',
+        'enabled': ['square'],
+        'providers': {
+          'square': {
+            'enabled': true,
+            'environment': 'sandbox',
+            'supports_web_checkout': true,
+          },
+          'stripe': {
+            'enabled': false,
+            'environment': 'test',
+            'publishable_key': '',
+            'supports_web_checkout': true,
+          },
+        },
+      },
     };
 
     return AppBootstrapConfig.fromJson(mockJson);
