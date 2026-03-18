@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:dio/dio.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,10 +11,12 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/import/normalize_url.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/ui/zayer_primary_button.dart';
 import '../../core/widgets/add_to_cart_success_sheet.dart';
 import '../cart/models/cart_item_model.dart';
 import '../cart/providers/cart_providers.dart';
@@ -262,8 +265,8 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
       return;
     }
 
-    final productUrl = _urlController.text.trim();
-    if (productUrl.isEmpty) {
+    final rawUrl = _urlController.text.trim();
+    if (rawUrl.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter product URL'),
@@ -271,6 +274,15 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
         ),
       );
       return;
+    }
+
+    // Normalize/canonicalize to avoid excessively long tracking URLs that can break backend storage.
+    var productUrl = normalizeProductUrl(rawUrl).canonicalUrl.trim();
+    if (productUrl.length > 500) {
+      try {
+        final u = Uri.parse(productUrl);
+        productUrl = u.replace(queryParameters: const {}, fragment: '').toString();
+      } catch (_) {}
     }
 
     // Build variation text from selections (e.g. "Color: Red, Size: M")
@@ -340,18 +352,46 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
           );
         }
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not add to cart. ${e.toString()}'),
-            backgroundColor: AppConfig.errorRed,
-          ),
-        );
-      }
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final msg = _friendlyApiMessage(e) ??
+          'Could not add to cart right now. Please try again.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: AppConfig.errorRed,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not add to cart right now. Please try again.'),
+          backgroundColor: AppConfig.errorRed,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isAddingToCart = false);
     }
+  }
+
+  String? _friendlyApiMessage(DioException e) {
+    final data = e.response?.data;
+    if (data is Map) {
+      final message = data['message'];
+      if (message is String && message.trim().isNotEmpty) return message.trim();
+      final errors = data['errors'];
+      if (errors is Map && errors.isNotEmpty) {
+        final first = errors.values.first;
+        if (first is List && first.isNotEmpty) {
+          final v = first.first;
+          if (v is String && v.trim().isNotEmpty) return v.trim();
+        }
+      }
+    }
+    if (e.response?.statusCode == 401) return 'Please sign in to continue.';
+    if (e.response?.statusCode == 500) return 'Server error. Please try again shortly.';
+    return null;
   }
 
   @override
@@ -1269,10 +1309,11 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
                   textAlign: TextAlign.center,
                 ),
               ),
-            FilledButton.icon(
+            ZayerPrimaryButton(
+              label: loading ? 'Adding...' : 'Add to Cart',
               onPressed: (!loading && _canAddToCart) ? _addToCart : null,
               icon: loading
-                  ? SizedBox(
+                  ? const SizedBox(
                       width: 22,
                       height: 22,
                       child: CircularProgressIndicator(
@@ -1280,18 +1321,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
                         color: Colors.white,
                       ),
                     )
-                  : const Icon(Icons.shopping_cart_outlined, size: 22),
-              label: Text(loading ? 'Adding...' : 'Add to Cart'),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppConfig.primaryColor,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: AppConfig.borderColor,
-                disabledForegroundColor: AppConfig.subtitleColor,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
-                ),
-              ),
+                  : const Icon(Icons.shopping_cart_outlined, size: 22, color: Colors.white),
             ),
           ],
         ),

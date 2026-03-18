@@ -56,12 +56,15 @@ class NotificationItem {
     final typeStr = json['type'] as String? ?? 'orders';
     final normalized = typeStr.toLowerCase();
     final type = switch (normalized) {
-      'orders' || 'order' || 'order_update' || 'payment_update' => NotificationFilterType.orders,
+      'payments' || 'payment' || 'payment_update' || 'wallet' || 'wallet_update' => NotificationFilterType.payments,
+      'orders' || 'order' || 'order_update' => NotificationFilterType.orders,
       'shipments' || 'shipment' || 'shipment_update' || 'tracking_update' => NotificationFilterType.shipments,
       'promo' || 'promotion' => NotificationFilterType.promo,
       _ => normalized.contains('ship') || normalized.contains('track')
           ? NotificationFilterType.shipments
-          : (normalized.contains('promo') || normalized.contains('offer')
+          : (normalized.contains('pay') || normalized.contains('wallet'))
+              ? NotificationFilterType.payments
+              : (normalized.contains('promo') || normalized.contains('offer')
               ? NotificationFilterType.promo
               : NotificationFilterType.orders),
     };
@@ -84,5 +87,6 @@ enum NotificationFilterType {
   all,
   orders,
   shipments,
+  payments,
   promo,
 }

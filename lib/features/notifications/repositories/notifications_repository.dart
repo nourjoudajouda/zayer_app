@@ -11,6 +11,9 @@ abstract class NotificationsRepository {
 
   /// Best-effort. If backend endpoint isn't available yet, this should fail silently upstream.
   Future<void> markAllRead();
+
+  /// Best-effort delete. If backend endpoint isn't available yet, this should fail silently upstream.
+  Future<void> delete(String notificationId);
 }
 
 class NotificationsRepositoryImpl implements NotificationsRepository {
@@ -64,6 +67,28 @@ class NotificationsRepositoryImpl implements NotificationsRepository {
     for (final path in candidates) {
       try {
         final res = await _dio.patch<dynamic>(
+          path,
+          options: Options(validateStatus: (s) => s != null && s < 500),
+        );
+        final code = res.statusCode ?? 0;
+        if (code >= 200 && code < 300) return;
+      } catch (_) {
+        // Try next
+      }
+    }
+  }
+
+  @override
+  Future<void> delete(String notificationId) async {
+    if (notificationId.trim().isEmpty) return;
+    final candidates = <String>[
+      '/api/notifications/$notificationId',
+      '/api/notifications/$notificationId/delete',
+      '/api/notifications/$notificationId/remove',
+    ];
+    for (final path in candidates) {
+      try {
+        final res = await _dio.delete<dynamic>(
           path,
           options: Options(validateStatus: (s) => s != null && s < 500),
         );

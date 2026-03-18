@@ -1,16 +1,22 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/config/app_config_provider.dart';
+import '../../core/network/api_client.dart';
+import '../../core/network/api_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../generated/l10n/app_localizations.dart';
 
-/// Mock store model. Replace with API later.
+/// Store model hydrated from backend config/navigation.
 class _StoreModel {
   const _StoreModel({
     required this.storeName,
     required this.storeUrl,
+    this.logoUrl,
     this.isVerified = true,
     this.isOfficial = true,
     this.isSecure = true,
@@ -18,6 +24,7 @@ class _StoreModel {
   });
   final String storeName;
   final String storeUrl;
+  final String? logoUrl;
   final bool isVerified;
   final bool isOfficial;
   final bool isSecure;
@@ -27,30 +34,38 @@ class _StoreModel {
 /// Flag to show/hide Paste Product Link button. Set to false later if needed.
 const bool showPasteLinkButton = true;
 
-class StoreLandingScreen extends StatelessWidget {
+class StoreLandingScreen extends ConsumerWidget {
   const StoreLandingScreen({
     super.key,
     this.storeId,
-    this.storeName = 'Amazon US',
-    this.storeUrl = 'https://www.amazon.com',
+    required this.storeName,
+    required this.storeUrl,
+    this.logoUrl,
+    this.categories = const <String>[],
   });
 
   final String? storeId;
   final String storeName;
   final String storeUrl;
+  final String? logoUrl;
+  final List<String> categories;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
+    final appName = ref.watch(appDisplayNameProvider);
 
-    // Mocked model. Replace with API/remote config later.
+    // Model built from route/config.
     final store = _StoreModel(
       storeName: storeName,
       storeUrl: storeUrl,
+      logoUrl: logoUrl,
       isVerified: true,
       isOfficial: true,
       isSecure: true,
-      categories: const ['Electronics', 'Fashion', 'Home', 'Beauty'],
+      categories: categories.isNotEmpty
+          ? categories
+          : const ['Electronics', 'Fashion', 'Home', 'Beauty'],
     );
 
     return Scaffold(
@@ -87,7 +102,7 @@ class StoreLandingScreen extends StatelessWidget {
             children: [
               _TopSection(store: store),
               const SizedBox(height: AppSpacing.lg),
-              _InfoCard(),
+              _InfoCard(appName: appName),
               const SizedBox(height: AppSpacing.lg),
               SizedBox(
                 height: 54,
@@ -96,7 +111,7 @@ class StoreLandingScreen extends StatelessWidget {
                     context.push('${AppRoutes.store}?url=${Uri.encodeComponent(store.storeUrl)}');
                   },
                   icon: const Icon(Icons.open_in_new, size: 20),
-                  label: Text(l10n.shopOnAmazon),
+                  label: Text(l10n.shopOnAmazon.replaceAll('Amazon', store.storeName)),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppConfig.primaryColor,
                     shape: RoundedRectangleBorder(
@@ -156,7 +171,29 @@ class _TopSection extends StatelessWidget {
               color: AppConfig.borderColor,
               borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
             ),
-            child: const Icon(Icons.store, size: 52, color: AppConfig.subtitleColor),
+            child: () {
+              final resolved = resolveAssetUrl(store.logoUrl, ApiClient.safeBaseUrl);
+              if (resolved != null && resolved.isNotEmpty) {
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
+                  child: CachedNetworkImage(
+                    imageUrl: resolved,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => const Icon(
+                      Icons.store,
+                      size: 52,
+                      color: AppConfig.subtitleColor,
+                    ),
+                    errorWidget: (context, url, error) => const Icon(
+                      Icons.store,
+                      size: 52,
+                      color: AppConfig.subtitleColor,
+                    ),
+                  ),
+                );
+              }
+              return const Icon(Icons.store, size: 52, color: AppConfig.subtitleColor);
+            }(),
           ),
           const SizedBox(height: AppSpacing.md),
           Row(
@@ -241,6 +278,10 @@ class _PillChip extends StatelessWidget {
 }
 
 class _InfoCard extends StatelessWidget {
+  const _InfoCard({required this.appName});
+
+  final String appName;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -250,7 +291,7 @@ class _InfoCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
       ),
       child: Text(
-        "You'll shop directly on the official store website. Zayer handles shipping and consolidation.",
+        "You'll shop directly on the official store website. $appName handles shipping and consolidation.",
         textAlign: TextAlign.center,
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: AppConfig.textColor,

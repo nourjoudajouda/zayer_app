@@ -35,3 +35,10 @@ final developmentModeProvider = Provider<bool>((ref) {
   final config = ref.watch(bootstrapConfigProvider).valueOrNull;
   return config?.developmentMode ?? false;
 });
+
+/// App display name from backend bootstrap. Falls back to "Eshterely".
+final appDisplayNameProvider = Provider<String>((ref) {
+  final cfg = ref.watch(bootstrapConfigProvider).valueOrNull;
+  final name = cfg?.appName?.trim();
+  return (name != null && name.isNotEmpty) ? name : 'Eshterely';
+});

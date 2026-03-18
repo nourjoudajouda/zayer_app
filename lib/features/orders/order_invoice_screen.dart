@@ -71,7 +71,12 @@ class _OrderInvoiceContent extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Expanded(child: _StatusCard(label: 'PAYMENT STATUS', child: _PaidChip())),
+                  Expanded(
+                    child: _StatusCard(
+                      label: 'PAYMENT STATUS',
+                      child: _PaymentStatusChip(status: order.paymentStatus ?? order.statusLabel.toLowerCase()),
+                    ),
+                  ),
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: _StatusCard(
@@ -147,14 +152,35 @@ class _StatusCard extends StatelessWidget {
   }
 }
 
-class _PaidChip extends StatelessWidget {
+class _PaymentStatusChip extends StatelessWidget {
+  const _PaymentStatusChip({required this.status});
+
+  final String status;
+
   @override
   Widget build(BuildContext context) {
+    final normalized = status.toLowerCase();
+    final isPaid = normalized.contains('paid');
+    final isPending = normalized.contains('pending');
+    final color = isPaid
+        ? AppConfig.successGreen
+        : isPending
+            ? AppConfig.warningOrange
+            : AppConfig.primaryColor;
+    final label = isPaid
+        ? 'Paid'
+        : isPending
+            ? 'Pending'
+            : status.toUpperCase();
     return Row(
       children: [
-        Icon(Icons.check_circle, color: AppConfig.successGreen, size: 22),
+        Icon(
+          isPaid ? Icons.check_circle : Icons.hourglass_bottom,
+          color: color,
+          size: 22,
+        ),
         const SizedBox(width: 6),
-        Text('Paid', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppConfig.successGreen, fontWeight: FontWeight.w600)),
+        Text(label, style: Theme.of(context).textTheme.titleMedium?.copyWith(color: color, fontWeight: FontWeight.w600)),
       ],
     );
   }

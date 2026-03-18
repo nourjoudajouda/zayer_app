@@ -6,6 +6,12 @@ final locallyReadNotificationIdsProvider =
   LocallyReadNotificationIdsNotifier.new,
 );
 
+/// In-session local overrides for deleted notifications (hide from list).
+final locallyDeletedNotificationIdsProvider =
+    NotifierProvider<LocallyDeletedNotificationIdsNotifier, Set<String>>(
+  LocallyDeletedNotificationIdsNotifier.new,
+);
+
 class LocallyReadNotificationIdsNotifier extends Notifier<Set<String>> {
   @override
   Set<String> build() => <String>{};
@@ -16,6 +22,24 @@ class LocallyReadNotificationIdsNotifier extends Notifier<Set<String>> {
   }
 
   void markAllRead(Iterable<String> ids) {
+    state = {...state, ...ids.where((e) => e.trim().isNotEmpty)};
+  }
+
+  void clear() {
+    state = <String>{};
+  }
+}
+
+class LocallyDeletedNotificationIdsNotifier extends Notifier<Set<String>> {
+  @override
+  Set<String> build() => <String>{};
+
+  void markDeleted(String id) {
+    if (id.trim().isEmpty) return;
+    state = {...state, id};
+  }
+
+  void markAllDeleted(Iterable<String> ids) {
     state = {...state, ...ids.where((e) => e.trim().isNotEmpty)};
   }
 

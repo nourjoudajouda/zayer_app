@@ -12,9 +12,13 @@ final notificationsListProvider =
     final repo = NotificationsRepositoryImpl();
     final list = await repo.fetchNotifications();
     final locallyReadIds = ref.watch(locallyReadNotificationIdsProvider);
-    if (locallyReadIds.isEmpty) return list;
+    final locallyDeletedIds = ref.watch(locallyDeletedNotificationIdsProvider);
+    final filtered = locallyDeletedIds.isEmpty
+        ? list
+        : list.where((n) => !locallyDeletedIds.contains(n.id)).toList();
+    if (locallyReadIds.isEmpty) return filtered;
     return [
-      for (final n in list)
+      for (final n in filtered)
         n.copyWith(read: n.read || locallyReadIds.contains(n.id)),
     ];
   } catch (_) {}

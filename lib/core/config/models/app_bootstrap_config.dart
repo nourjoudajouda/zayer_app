@@ -182,6 +182,7 @@ class StoreConfig {
     required this.countryCode,
     required this.storeUrl,
     this.isFeatured = false,
+    this.categories = const <String>[],
   });
 
   final String id;
@@ -191,8 +192,19 @@ class StoreConfig {
   final String countryCode;
   final String storeUrl;
   final bool isFeatured;
+  final List<String> categories;
 
   factory StoreConfig.fromJson(Map<String, dynamic> json) {
+    final rawCategories = json['categories'];
+    List<String> categories = const <String>[];
+    if (rawCategories is List) {
+      categories = rawCategories
+          .whereType<String>()
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+
     return StoreConfig(
       id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
@@ -201,6 +213,7 @@ class StoreConfig {
       countryCode: json['country_code'] as String? ?? '',
       storeUrl: json['store_url'] as String? ?? '',
       isFeatured: json['is_featured'] as bool? ?? false,
+      categories: categories,
     );
   }
 }

@@ -213,11 +213,21 @@ GoRouter _createAppRouter() {
         builder: (context, state) {
           final storeId = state.uri.queryParameters['storeId'];
           final storeName = state.uri.queryParameters['storeName'] ?? 'Store';
-          final storeUrl = state.uri.queryParameters['storeUrl'] ?? 'https://www.amazon.com';
+          final storeUrl =
+              state.uri.queryParameters['storeUrl'] ?? 'https://www.amazon.com';
+          final logoUrl = state.uri.queryParameters['logoUrl'];
+          final rawCategories = state.uri.queryParameters['categories'];
+          final categories = (rawCategories ?? '')
+              .split(',')
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList();
           return StoreLandingScreen(
             storeId: storeId,
             storeName: storeName,
             storeUrl: storeUrl,
+            logoUrl: logoUrl,
+            categories: categories,
           );
         },
       ),

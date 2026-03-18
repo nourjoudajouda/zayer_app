@@ -148,7 +148,6 @@ class FcmService {
 
   static void _handleForegroundMessage(RemoteMessage message) {
     final data = message.data;
-    if (data.isEmpty) return;
     if (kDebugMode) {
       debugPrint('FCM: foreground message received; data keys: ${data.keys.join(", ")}');
     }
@@ -157,13 +156,17 @@ class FcmService {
     _showLocalNotification(
       title: title,
       body: body,
-      payload: data,
+      // Some providers/flows may send "notification-only" messages (empty data).
+      // Still show a foreground notification; payload remains best-effort.
+      payload: data.isNotEmpty ? data : <String, dynamic>{},
     );
     try {
-      final appPayload = AppNotificationPayload.fromMap(data);
-      final target = mapPayloadToTarget(appPayload);
-      if (kDebugMode) {
-        debugPrint('FCM: payload parsed -> target: ${target?.route ?? "fallback"}');
+      if (data.isNotEmpty) {
+        final appPayload = AppNotificationPayload.fromMap(data);
+        final target = mapPayloadToTarget(appPayload);
+        if (kDebugMode) {
+          debugPrint('FCM: payload parsed -> target: ${target?.route ?? "fallback"}');
+        }
       }
     } catch (_) {}
     _onForegroundMessageCallback?.call(message);

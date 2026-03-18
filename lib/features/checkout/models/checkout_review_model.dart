@@ -6,7 +6,6 @@ class CheckoutShipmentItem {
     required this.quantity,
     required this.eta,
     this.imageUrl,
-    this.reviewed = true,
     this.shippingCost,
   });
 
@@ -15,7 +14,6 @@ class CheckoutShipmentItem {
   final int quantity;
   final String eta;
   final String? imageUrl;
-  final bool reviewed;
   final String? shippingCost;
 }
 
@@ -23,12 +21,10 @@ class CheckoutShipment {
   const CheckoutShipment({
     required this.originLabel,
     required this.items,
-    this.reviewed = true,
   });
 
   final String originLabel;
   final List<CheckoutShipmentItem> items;
-  final bool reviewed;
 }
 
 class CheckoutReviewModel {
@@ -43,6 +39,11 @@ class CheckoutReviewModel {
     this.total = '',
     this.amountDueNow,
     this.walletApplied,
+    this.promoCode = '',
+    this.promoValid = false,
+    this.promoMessage = '',
+    this.promoDiscountAmount,
+    this.priceLines = const [],
     required this.shipments,
   });
 
@@ -58,6 +59,11 @@ class CheckoutReviewModel {
   final double? amountDueNow;
   /// Wallet amount applied (if provided by backend).
   final double? walletApplied;
+  final String promoCode;
+  final bool promoValid;
+  final String promoMessage;
+  final double? promoDiscountAmount;
+  final List<Map<String, dynamic>> priceLines;
   final List<CheckoutShipment> shipments;
 
   factory CheckoutReviewModel.fromJson(Map<String, dynamic> j) {
@@ -73,14 +79,12 @@ class CheckoutReviewModel {
           quantity: (im['quantity'] as int?) ?? 1,
           eta: (im['eta'] ?? '').toString(),
           imageUrl: im['image_url'] as String?,
-          reviewed: im['reviewed'] == true,
           shippingCost: im['shipping_cost'] as String?,
         );
       }).toList() ?? [];
       return CheckoutShipment(
         originLabel: (sm['origin_label'] ?? '').toString(),
         items: items,
-        reviewed: sm['reviewed'] == true,
       );
     }).toList() ?? [];
     return CheckoutReviewModel(
@@ -92,8 +96,17 @@ class CheckoutReviewModel {
       shipping: (j['shipping'] ?? '\$0.00').toString(),
       insurance: (j['insurance'] ?? '\$0.00').toString(),
       total: (j['total'] ?? '\$0.00').toString(),
-      amountDueNow: _parseMoney(j['amount_due_now'] ?? j['due_now'] ?? j['amount_due']),
-      walletApplied: _parseMoney(j['wallet_applied'] ?? j['wallet_applied_amount']),
+      amountDueNow: _parseMoney(j['amount_due_now'] ?? j['due_now'] ?? j['amount_due'] ?? (j['pricing'] as Map?)?['amount_due_now']),
+      walletApplied: _parseMoney(j['wallet_applied'] ?? j['wallet_applied_amount'] ?? (j['pricing'] as Map?)?['wallet_applied_amount']),
+      promoCode: (j['promo_code'] ?? '').toString(),
+      promoValid: j['promo_valid'] == true || j['promo_valid'] == 1,
+      promoMessage: (j['promo_message'] ?? '').toString(),
+      promoDiscountAmount: _parseMoney(j['promo_discount_amount'] ?? (j['pricing'] as Map?)?['discounts']),
+      priceLines: (j['price_lines'] as List<dynamic>?)
+              ?.whereType<Map<String, dynamic>>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList() ??
+          const [],
       shipments: shipments,
     );
   }

@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../core/network/api_client.dart';
+import '../../core/network/api_config.dart';
 import 'models/checkout_review_model.dart';
 import 'payment_webview_screen.dart';
 import '../cart/providers/cart_providers.dart';
 import '../orders/providers/orders_providers.dart';
+import '../profile/providers/profile_providers.dart';
 import '../wallet/providers/wallet_providers.dart';
 import 'providers/checkout_review_providers.dart';
 
@@ -114,16 +119,30 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
     final reviewAsync = ref.watch(checkoutReviewProvider);
     final review = reviewAsync.valueOrNull;
     final walletEnabled = ref.watch(checkoutWalletEnabledProvider);
-    final amountDueNow = review != null
-        ? (review.amountDueNow ?? _tryParseMoney(review.total) ?? 0)
-        : 0.0;
+    final total = review != null ? (_tryParseMoney(review.total) ?? 0.0) : 0.0;
+    final walletBalance = review != null ? (_tryParseMoney(review.walletBalance) ?? 0.0) : 0.0;
+    final walletAppliedNow = review?.walletApplied != null
+        ? (walletEnabled ? (review!.walletApplied ?? 0.0) : 0.0)
+        : (walletEnabled ? (walletBalance > 0 ? (walletBalance > total ? total : walletBalance) : 0.0) : 0.0);
+    final amountDueNow = walletEnabled
+        ? (review?.amountDueNow ?? ((total - walletAppliedNow) > 0 ? (total - walletAppliedNow) : 0.0))
+        : total;
+
+    // Guard against bypassing address requirement:
+    // - must have a default shipping address (required for accurate shipping)
+    final addressesAsync = ref.watch(addressesProvider);
+    final defaultAddress = addressesAsync.valueOrNull
+        ?.where((a) => a.isDefault)
+        .firstOrNull;
+    final hasDefaultAddress =
+        defaultAddress != null && defaultAddress.addressLine.trim().isNotEmpty;
 
     return reviewAsync.when(
       loading: () => Scaffold(
         appBar: AppBar(title: const Text('Review & Pay')),
         body: const Center(child: CircularProgressIndicator()),
       ),
-      error: (_, __) => Scaffold(
+      error: (e, st) => Scaffold(
         appBar: AppBar(title: const Text('Review & Pay')),
         body: Center(
           child: Padding(
@@ -145,18 +164,120 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
         ),
       ),
       data: (r) {
+        if (!hasDefaultAddress) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Review & Pay')),
+            body: Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
+                      border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.info_outline, color: Colors.orange),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                !hasDefaultAddress
+                                    ? 'Add a default address to continue'
+                                    : 'Add a default address to continue',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w800),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                !hasDefaultAddress
+                                    ? 'Shipping depends on your default shipping address. Add an address and set it as default, then retry checkout.'
+                                    : 'Shipping depends on your default shipping address. Add an address and set it as default, then retry checkout.',
+                                style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  if (!hasDefaultAddress)
+                    FilledButton(
+                      onPressed: () => _openMyAddressesAndMaybeWarn(context),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppConfig.primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text('Add / Set Default Address'),
+                    ),
+                  const SizedBox(height: AppSpacing.sm),
+                  OutlinedButton(
+                    onPressed: () {
+                      ref.invalidate(cartItemsProvider);
+                      ref.invalidate(checkoutReviewProvider);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppConfig.textColor,
+                      side: const BorderSide(color: AppConfig.borderColor),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
         if (r.shipments.isEmpty) {
           return Scaffold(
             appBar: AppBar(title: const Text('Review & Pay')),
-            body: const Center(
-              child: Text('Your cart is empty. Add items from the cart.'),
+            body: Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.hourglass_empty, size: 48, color: AppConfig.subtitleColor),
+                  const SizedBox(height: AppSpacing.md),
+                  const Text('No approved items to checkout yet.'),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Items pending review will stay in your cart until approved.',
+                    style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () => context.go(AppRoutes.cart),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppConfig.primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text('Back to Cart'),
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         }
         return _ReviewPayContent(
           review: r,
           walletEnabled: walletEnabled,
-          amountDueNow: r.amountDueNow ?? _tryParseMoney(r.total) ?? 0,
+          amountDueNow: amountDueNow,
           confirming: _confirming,
           onRefresh: () async {
             ref.invalidate(checkoutReviewProvider);
@@ -167,9 +288,15 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
           onConfirm: _confirming
               ? null
               : () async {
+                  if (!hasDefaultAddress) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please add and set a default address to calculate shipping.')),
+                    );
+                    return;
+                  }
                   setState(() => _confirming = true);
                   final result = await confirmCheckout(ref, useWallet: walletEnabled);
-                  if (!mounted) return;
+                  if (!context.mounted) return;
                   if (!result.ok) {
                     setState(() => _confirming = false);
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -198,7 +325,7 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
                   }
 
                   final paymentResult = await startOrderPayment(orderId);
-                  if (!mounted) return;
+                  if (!context.mounted) return;
                   setState(() => _confirming = false);
                   final checkoutUrl = paymentResult.checkoutUrl;
                   if (checkoutUrl != null && checkoutUrl.trim().isNotEmpty) {
@@ -265,6 +392,11 @@ class _ReviewPayContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final total = _tryParseMoney(review.total) ?? 0.0;
+    final walletBalance = _tryParseMoney(review.walletBalance) ?? 0.0;
+    final walletAppliedNow = walletEnabled
+        ? (review.walletApplied ?? (walletBalance > total ? total : walletBalance))
+        : 0.0;
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
       appBar: AppBar(
@@ -305,9 +437,18 @@ class _ReviewPayContent extends StatelessWidget {
                       onToggle: onWalletToggle,
                     ),
                     const SizedBox(height: AppSpacing.lg),
-                    _PriceDetailsSection(review: review),
+                    _PriceDetailsSection(
+                      review: review,
+                      walletEnabled: walletEnabled,
+                      walletAppliedNow: walletAppliedNow,
+                      amountDueNow: amountDueNow,
+                    ),
                     const SizedBox(height: AppSpacing.md),
-                    _PromoCodeField(),
+                    _PromoCodeField(
+                      currentCode: review.promoCode,
+                      promoMessage: review.promoMessage,
+                      discountAmount: review.promoDiscountAmount,
+                    ),
                     const SizedBox(height: AppSpacing.xxl),
                   ],
                 ),
@@ -411,23 +552,33 @@ class _ShipmentSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppConfig.cardColor,
+    return Card(
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
-        border: Border.all(color: AppConfig.borderColor),
+        side: const BorderSide(color: AppConfig.borderColor),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: true,
+          tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 6),
+          childrenPadding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
+          title: Text(
             shipment.originLabel,
             style: AppTextStyles.titleMedium(AppConfig.textColor),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          ...shipment.items.map((item) => _ShipmentItemRow(item: item)),
-        ],
+          subtitle: Text(
+            '${shipment.items.length} item(s)',
+            style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+          ),
+          children: [
+            for (final item in shipment.items) ...[
+              _ShipmentItemRow(item: item),
+              const SizedBox(height: AppSpacing.sm),
+            ]
+          ],
+        ),
       ),
     );
   }
@@ -452,11 +603,21 @@ class _ShipmentItemRow extends StatelessWidget {
               color: AppConfig.lightBlueBg.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
             ),
-            child: Icon(
-              Icons.image_outlined,
-              color: AppConfig.subtitleColor,
-              size: 28,
-            ),
+            child: () {
+              final url = resolveAssetUrl(item.imageUrl, ApiClient.safeBaseUrl);
+              if (url == null || url.isEmpty) {
+                return const Icon(Icons.image_outlined, color: AppConfig.subtitleColor, size: 28);
+              }
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                child: CachedNetworkImage(
+                  imageUrl: url,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  errorWidget: (context, url, error) => const Icon(Icons.image_outlined, color: AppConfig.subtitleColor, size: 28),
+                ),
+              );
+            }(),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
@@ -466,27 +627,6 @@ class _ShipmentItemRow extends StatelessWidget {
                 Text(
                   item.name,
                   style: AppTextStyles.bodyMedium(AppConfig.textColor),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: (item.reviewed
-                            ? AppConfig.successGreen
-                            : Colors.orange)
-                        .withValues(alpha: 0.15),
-                    borderRadius:
-                        BorderRadius.circular(AppConfig.radiusSmall),
-                  ),
-                  child: Text(
-                    item.reviewed ? 'REVIEWED' : 'PENDING REVIEW',
-                    style: AppTextStyles.bodySmall(
-                      item.reviewed ? AppConfig.successGreen : Colors.orange.shade800,
-                    ),
-                  ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Row(
@@ -614,12 +754,22 @@ class _WalletBalanceRow extends StatelessWidget {
 }
 
 class _PriceDetailsSection extends StatelessWidget {
-  const _PriceDetailsSection({required this.review});
+  const _PriceDetailsSection({
+    required this.review,
+    required this.walletEnabled,
+    required this.walletAppliedNow,
+    required this.amountDueNow,
+  });
 
   final CheckoutReviewModel review;
+  final bool walletEnabled;
+  final double walletAppliedNow;
+  final double amountDueNow;
 
   @override
   Widget build(BuildContext context) {
+    final walletRowVisible = walletEnabled && walletAppliedNow > 0.0001;
+    final promoVisible = (review.promoDiscountAmount ?? 0) > 0.0001 || review.promoCode.trim().isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -638,6 +788,23 @@ class _PriceDetailsSection extends StatelessWidget {
           _PriceRow(label: 'Subtotal', value: review.subtotal),
           _PriceRow(label: 'Shipping', value: review.shipping),
           _PriceRow(label: 'Insurance', value: review.insurance),
+          if (promoVisible)
+            _PriceRow(
+              label: review.promoCode.trim().isNotEmpty
+                  ? 'Promo discount (${review.promoCode.trim()})'
+                  : 'Promo discount',
+              value: '-\$${(review.promoDiscountAmount ?? 0).toStringAsFixed(2)}',
+            ),
+          if (walletRowVisible)
+            _PriceRow(
+              label: 'Wallet applied',
+              value: '-\$${walletAppliedNow.toStringAsFixed(2)}',
+            ),
+          const SizedBox(height: AppSpacing.sm),
+          _PriceRow(
+            label: 'Due now',
+            value: '\$${amountDueNow.toStringAsFixed(2)}',
+          ),
         ],
       ),
     );
@@ -671,41 +838,172 @@ class _PriceRow extends StatelessWidget {
   }
 }
 
-class _PromoCodeField extends StatelessWidget {
+class _PromoCodeField extends ConsumerStatefulWidget {
+  const _PromoCodeField({
+    required this.currentCode,
+    required this.promoMessage,
+    required this.discountAmount,
+  });
+
+  final String currentCode;
+  final String promoMessage;
+  final double? discountAmount;
+
+  @override
+  ConsumerState<_PromoCodeField> createState() => _PromoCodeFieldState();
+}
+
+class _PromoCodeFieldState extends ConsumerState<_PromoCodeField> {
+  late final TextEditingController _controller;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.currentCode);
+  }
+
+  @override
+  void didUpdateWidget(covariant _PromoCodeField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.currentCode != oldWidget.currentCode && widget.currentCode != _controller.text) {
+      _controller.text = widget.currentCode;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _validate(BuildContext context, String code) async {
+    final c = code.trim();
+    if (c.isEmpty) {
+      setState(() => _loading = false);
+      ref.read(checkoutPromoCodeProvider.notifier).state = '';
+      ref.invalidate(checkoutReviewProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Promo code cleared')),
+      );
+      return;
+    }
+    try {
+      setState(() => _loading = true);
+      final res = await ApiClient.instance.post<Map<String, dynamic>>(
+        '/api/checkout/promo/validate',
+        data: {'code': c},
+      );
+      if (!context.mounted) return;
+      final data = res.data ?? const <String, dynamic>{};
+      final valid = data['valid'] == true;
+      final msg = (data['message'] ?? 'Done').toString();
+      if (valid) {
+        ref.read(checkoutPromoCodeProvider.notifier).state = c;
+        ref.invalidate(checkoutReviewProvider);
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } on DioException catch (e) {
+      if (!context.mounted) return;
+      final data = e.response?.data;
+      final message = data is Map<String, dynamic>
+          ? (data['message'] ?? 'Promo code is not valid').toString()
+          : 'Promo code is not valid';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Promo code is not valid')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final applied = widget.currentCode.trim().isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: TextField(
-            decoration: InputDecoration(
-              hintText: 'Promo Code',
-              border: OutlineInputBorder(
-                borderRadius:
-                    BorderRadius.circular(AppConfig.radiusSmall),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: 14,
-              ),
+        if (applied && (widget.discountAmount ?? 0) > 0)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+            child: Text(
+              'Applied ${widget.currentCode.trim()} - Discount \$${(widget.discountAmount ?? 0).toStringAsFixed(2)}',
+              style: AppTextStyles.bodySmall(applied ? AppConfig.successGreen : AppConfig.subtitleColor),
             ),
           ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        FilledButton(
-          onPressed: () {},
-          style: FilledButton.styleFrom(
-            backgroundColor: AppConfig.primaryColor,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg,
-              vertical: 14,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+        if (!applied && widget.promoMessage.trim().isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+            child: Text(
+              widget.promoMessage,
+              style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
             ),
           ),
-          child: const Text('Apply'),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  hintText: 'Promo Code',
+                  suffixIcon: applied
+                      ? const Icon(Icons.local_offer_outlined, color: AppConfig.successGreen)
+                      : null,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: 14,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            FilledButton(
+              onPressed: _loading ? null : () => _validate(context, _controller.text),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppConfig.primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                ),
+              ),
+              child: _loading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Apply'),
+            ),
+            if (applied) ...[
+              const SizedBox(width: AppSpacing.sm),
+              TextButton(
+                onPressed: _loading
+                    ? null
+                    : () {
+                        ref.read(checkoutPromoCodeProvider.notifier).state = '';
+                        ref.invalidate(checkoutReviewProvider);
+                        _controller.clear();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Promo code removed')),
+                        );
+                      },
+                child: const Text('Remove'),
+              ),
+            ],
+          ],
         ),
       ],
     );

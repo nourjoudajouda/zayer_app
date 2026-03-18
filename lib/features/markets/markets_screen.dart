@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/config/app_config_provider.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import 'providers/markets_providers.dart';
@@ -69,98 +70,116 @@ class _MarketsScreenState extends ConsumerState<MarketsScreen> {
         ],
       ),
       body: SafeArea(
-        child: Stack(
-          children: [
-            SingleChildScrollView(
-              padding: const EdgeInsets.only(bottom: 80),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: AppSpacing.md),
-                  CountryChipsRow(countries: config.countries),
-                  const SizedBox(height: AppSpacing.lg),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'FEATURED STORES',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppConfig.subtitleColor,
-                                letterSpacing: 0.8,
-                              ),
-                        ),
-                        TextButton(
-                          onPressed: () {},
-                          style: TextButton.styleFrom(
-                            foregroundColor: AppConfig.primaryColor,
+        child: RefreshIndicator(
+          onRefresh: () async {
+            bootstrapConfigRefresh(ref);
+            await ref.read(bootstrapConfigProvider.future);
+          },
+          child: Stack(
+            children: [
+              SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.only(bottom: 80),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: AppSpacing.md),
+                    CountryChipsRow(countries: config.countries),
+                    const SizedBox(height: AppSpacing.lg),
+                    Padding(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'FEATURED STORES',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color: AppConfig.subtitleColor,
+                                  letterSpacing: 0.8,
+                                ),
                           ),
-                          child: const Text('View all  >'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                    child: stores.isEmpty
-                        ? Padding(
-                            padding: const EdgeInsets.all(AppSpacing.xl),
-                            child: Center(
-                              child: Text(
-                                'No stores in this market',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      color: AppConfig.subtitleColor,
-                                    ),
-                              ),
+                          TextButton(
+                            onPressed: () {},
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppConfig.primaryColor,
                             ),
-                          )
-                        : Column(
-                            children: stores
-                                .map((s) => FeaturedStoreCard(store: s))
-                                .toList(),
+                            child: const Text('View all  >'),
                           ),
-                  ),
-                  const SizedBox(height: AppSpacing.xxl),
-                ],
-              ),
-            ),
-            Positioned(
-              right: AppSpacing.md,
-              bottom: AppSpacing.lg,
-              child: Material(
-                color: const Color(0xFF0F172A),
-                borderRadius: BorderRadius.circular(AppConfig.radiusXLarge),
-                elevation: 4,
-                shadowColor: Colors.black.withValues(alpha: 0.2),
-                child: InkWell(
-                  onTap: () => context.push(AppRoutes.pasteLink),
-                  borderRadius: BorderRadius.circular(AppConfig.radiusXLarge),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg,
-                      vertical: AppSpacing.md,
+                        ],
+                      ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.link, color: Colors.white, size: 22),
-                        const SizedBox(width: AppSpacing.sm),
-                        Text(
-                          'Paste Link',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
+                    const SizedBox(height: AppSpacing.sm),
+                    Padding(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                      child: stores.isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.all(AppSpacing.xl),
+                              child: Center(
+                                child: Text(
+                                  'No stores in this market',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                        color: AppConfig.subtitleColor,
+                                      ),
+                                ),
                               ),
-                        ),
-                      ],
+                            )
+                          : Column(
+                              children: stores
+                                  .map((s) => FeaturedStoreCard(store: s))
+                                  .toList(),
+                            ),
+                    ),
+                    const SizedBox(height: AppSpacing.xxl),
+                  ],
+                ),
+              ),
+              Positioned(
+                right: AppSpacing.md,
+                bottom: AppSpacing.lg,
+                child: Material(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(AppConfig.radiusXLarge),
+                  elevation: 4,
+                  shadowColor: Colors.black.withValues(alpha: 0.2),
+                  child: InkWell(
+                    onTap: () => context.push(AppRoutes.pasteLink),
+                    borderRadius: BorderRadius.circular(AppConfig.radiusXLarge),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.md,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.link, color: Colors.white, size: 22),
+                          const SizedBox(width: AppSpacing.sm),
+                          Text(
+                            'Paste Link',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -117,6 +117,12 @@ class OrderModel {
     this.shippingAddress,
     this.shipments = const [],
     this.priceLines = const [],
+    this.paymentStatus,
+    this.paymentReference,
+    this.promoCode,
+    this.promoDiscountAmount,
+    this.walletAppliedAmount,
+    this.amountDueNow,
     this.consolidationSavings,
     this.paymentMethodLabel,
     this.paymentMethodLastFour,
@@ -136,6 +142,12 @@ class OrderModel {
   final String? shippingAddress;
   final List<OrderShipment> shipments;
   final List<OrderPriceLine> priceLines;
+  final String? paymentStatus;
+  final String? paymentReference;
+  final String? promoCode;
+  final double? promoDiscountAmount;
+  final double? walletAppliedAmount;
+  final double? amountDueNow;
   final String? consolidationSavings;
   final String? paymentMethodLabel;
   final String? paymentMethodLastFour;
@@ -242,6 +254,12 @@ class OrderModel {
       shippingAddress: j['shipping_address'] as String?,
       shipments: shipments,
       priceLines: priceLines,
+      paymentStatus: j['payment_status'] as String?,
+      paymentReference: j['payment_reference'] as String?,
+      promoCode: j['promo_code'] as String?,
+      promoDiscountAmount: (j['promo_discount_amount'] as num?)?.toDouble(),
+      walletAppliedAmount: (j['wallet_applied_amount'] as num?)?.toDouble(),
+      amountDueNow: (j['amount_due_now'] as num?)?.toDouble(),
       consolidationSavings: j['consolidation_savings'] as String?,
       paymentMethodLabel: j['payment_method_label'] as String?,
       paymentMethodLastFour: j['payment_method_last_four'] as String?,

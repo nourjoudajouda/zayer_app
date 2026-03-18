@@ -26,9 +26,15 @@ Future<String> _getPrimaryAddressShort(Ref ref) async {
 
 /// Checkout review from API: GET /api/checkout/review.
 /// Backend is the source of truth for pricing/shipping/wallet application; do not fabricate totals locally.
+final checkoutPromoCodeProvider = StateProvider<String>((ref) => '');
+
 final checkoutReviewProvider = FutureProvider<CheckoutReviewModel>((ref) async {
   final addressFallback = await _getPrimaryAddressShort(ref);
-  final res = await ApiClient.instance.get<Map<String, dynamic>>('/api/checkout/review');
+  final promoCode = ref.watch(checkoutPromoCodeProvider).trim();
+  final res = await ApiClient.instance.get<Map<String, dynamic>>(
+    '/api/checkout/review',
+    queryParameters: promoCode.isEmpty ? null : {'promo_code': promoCode},
+  );
   final raw = res.data;
   if (raw == null) {
     throw Exception('Empty checkout review response');
@@ -45,9 +51,13 @@ final checkoutWalletEnabledProvider = StateProvider<bool>((ref) => true);
 /// Confirm checkout: POST /api/checkout/confirm
 Future<({bool ok, String? orderId, String? orderNumber})> confirmCheckout(WidgetRef ref, {bool useWallet = true}) async {
   try {
+    final promoCode = ref.read(checkoutPromoCodeProvider).trim();
     final res = await ApiClient.instance.post<Map<String, dynamic>>(
       '/api/checkout/confirm',
-      data: {'use_wallet_balance': useWallet},
+      data: {
+        'use_wallet_balance': useWallet,
+        if (promoCode.isNotEmpty) 'promo_code': promoCode,
+      },
     );
     if (res.statusCode == 201 && res.data != null) {
       return (
@@ -80,7 +90,10 @@ Future<StartPaymentResult> startOrderPayment(String orderId) async {
     if (data == null) {
       return (checkoutUrl: null, error: 'Invalid response');
     }
-    final payment = PaymentStartResponse.fromJson(Map<String, dynamic>.from(data));
+    final payload = (data['data'] is Map<String, dynamic>)
+        ? Map<String, dynamic>.from(data['data'] as Map<String, dynamic>)
+        : Map<String, dynamic>.from(data);
+    final payment = PaymentStartResponse.fromJson(payload);
     final url = payment.checkoutUrl?.trim();
     if (url == null || url.isEmpty) {
       return (checkoutUrl: null, error: 'No payment link received');

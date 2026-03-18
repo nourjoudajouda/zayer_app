@@ -83,6 +83,16 @@ NormalizedUrlResult normalizeProductUrl(String input) {
   // eBay: extract item id if possible
   if (host.contains('ebay.')) {
     final itemId = _extractEbayItemId(uri);
+    if (itemId != null && itemId.trim().isNotEmpty) {
+      // Canonicalize to short URL (avoids long tracking params).
+      final canonical = 'https://www.ebay.com/itm/${itemId.trim()}';
+      return NormalizedUrlResult(
+        canonicalUrl: canonical,
+        storeKey: 'ebay',
+        productId: itemId.trim(),
+        wasModified: wasModified || url != canonical,
+      );
+    }
     return NormalizedUrlResult(
       canonicalUrl: url,
       storeKey: 'ebay',

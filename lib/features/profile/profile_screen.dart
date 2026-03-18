@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/config/app_config_provider.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_config.dart';
 import '../../core/widgets/success_dialog.dart';
@@ -31,7 +32,7 @@ import 'widgets/zayer_tile.dart';
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
-  static const _appVersion = 'Zayer v1.0.0'; // TODO: Use package_info_plus when available
+  static const _appVersion = 'v1.0.0'; // TODO: Use package_info_plus when available
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -203,6 +204,7 @@ class _ProfileContent extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
+    final appName = ref.watch(appDisplayNameProvider);
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -392,7 +394,7 @@ class _ProfileContent extends ConsumerWidget {
           const SizedBox(height: AppSpacing.xl),
           Center(
             child: Text(
-              ProfileScreen._appVersion,
+              '$appName ${ProfileScreen._appVersion}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppConfig.subtitleColor,
                   ),

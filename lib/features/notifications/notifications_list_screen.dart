@@ -43,6 +43,8 @@ class _NotificationsListScreenState
         return list.where((e) => e.type == NotificationFilterType.orders).toList();
       case NotificationFilterType.shipments:
         return list.where((e) => e.type == NotificationFilterType.shipments).toList();
+      case NotificationFilterType.payments:
+        return list.where((e) => e.type == NotificationFilterType.payments).toList();
       case NotificationFilterType.promo:
         return list.where((e) => e.type == NotificationFilterType.promo).toList();
     }
@@ -54,6 +56,16 @@ class _NotificationsListScreenState
     // Best-effort backend call; do not block UI.
     try {
       await _repo.markAllRead();
+    } catch (_) {}
+    ref.invalidate(notificationsListProvider);
+  }
+
+  Future<void> _delete(NotificationItem item) async {
+    // Hide immediately for snappy UX.
+    ref.read(locallyDeletedNotificationIdsProvider.notifier).markDeleted(item.id);
+    // Best-effort backend call.
+    try {
+      await _repo.delete(item.id);
     } catch (_) {}
     ref.invalidate(notificationsListProvider);
   }
@@ -131,14 +143,10 @@ class _NotificationsListScreenState
         foregroundColor: AppConfig.textColor,
         elevation: 0,
         actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
-            onSelected: (v) {
-              if (v == 'mark_read') _markAllRead(items);
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: 'mark_read', child: Text('Mark all as read')),
-            ],
+          IconButton(
+            icon: const Icon(Icons.tune),
+            tooltip: 'Notification settings',
+            onPressed: () => context.push(AppRoutes.notificationSettings),
           ),
         ],
       ),
@@ -175,8 +183,14 @@ class _NotificationsListScreenState
                   _FilterChip(
                     label: 'Promo',
                     selected: _filter == NotificationFilterType.promo,
+                    onTap: () => setState(() => _filter = NotificationFilterType.promo),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  _FilterChip(
+                    label: 'Payments',
+                    selected: _filter == NotificationFilterType.payments,
                     onTap: () =>
-                        setState(() => _filter = NotificationFilterType.promo),
+                        setState(() => _filter = NotificationFilterType.payments),
                   ),
                 ],
               ),
@@ -220,7 +234,7 @@ class _NotificationsListScreenState
             TextButton(
               onPressed: () => _markAllRead(list),
               child: Text(
-                'Mark all as read',
+                'MARK ALL AS READ',
                 style: AppTextStyles.bodySmall(AppConfig.primaryColor),
               ),
             ),
@@ -232,6 +246,12 @@ class _NotificationsListScreenState
             isImportant: isImportant,
             onTap: () => _openNotification(e),
             onActionTap: e.actionLabel != null ? () => _openNotification(e) : null,
+            onDelete: () => _delete(e),
+            onMarkRead: () {
+              ref.read(locallyReadNotificationIdsProvider.notifier).markRead(e.id);
+              _repo.markRead(e.id);
+              ref.invalidate(notificationsListProvider);
+            },
           )),
       const SizedBox(height: AppSpacing.lg),
     ];
@@ -279,108 +299,144 @@ class _NotificationCard extends StatelessWidget {
     required this.isImportant,
     required this.onTap,
     this.onActionTap,
+    required this.onDelete,
+    required this.onMarkRead,
   });
 
   final NotificationItem item;
   final bool isImportant;
   final VoidCallback onTap;
   final VoidCallback? onActionTap;
+  final VoidCallback onDelete;
+  final VoidCallback onMarkRead;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Material(
-        color: isImportant
-            ? Colors.amber.withValues(alpha: 0.15)
-            : AppConfig.cardColor,
-        borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
-        child: InkWell(
-          onTap: onTap,
+      child: Dismissible(
+        key: ValueKey('notif_${item.id}'),
+        background: _SwipeActionBackground(
+          alignment: Alignment.centerLeft,
+          color: AppConfig.primaryColor,
+          icon: Icons.check,
+          label: 'READ',
+        ),
+        secondaryBackground: const _SwipeActionBackground(
+          alignment: Alignment.centerRight,
+          color: AppConfig.errorRed,
+          icon: Icons.delete_outline,
+          label: 'DELETE',
+        ),
+        confirmDismiss: (direction) async {
+          if (direction == DismissDirection.startToEnd) {
+            onMarkRead();
+            return false;
+          }
+          if (direction == DismissDirection.endToStart) {
+            onDelete();
+            return true;
+          }
+          return false;
+        },
+        child: Material(
+          color: isImportant
+              ? Colors.amber.withValues(alpha: 0.15)
+              : AppConfig.cardColor,
           borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
-          child: Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: isImportant
-                    ? Colors.amber.withValues(alpha: 0.5)
-                    : AppConfig.borderColor,
-              ),
-              borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  _iconForType(item.type),
-                  size: 24,
-                  color:
-                      isImportant ? Colors.amber.shade800 : AppConfig.subtitleColor,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: isImportant
+                      ? Colors.amber.withValues(alpha: 0.5)
+                      : AppConfig.borderColor,
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                if (!item.read)
-                  Container(
-                    width: 8,
-                    height: 8,
-                    margin: const EdgeInsets.only(top: 6),
-                    decoration: const BoxDecoration(
-                      color: AppConfig.primaryColor,
-                      shape: BoxShape.circle,
-                    ),
+                borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    _iconForType(item.type),
+                    size: 24,
+                    color: isImportant
+                        ? Colors.amber.shade800
+                        : AppConfig.subtitleColor,
                   ),
-                const SizedBox(width: AppSpacing.xs),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
+                  const SizedBox(width: AppSpacing.sm),
+                  if (!item.read)
+                    Container(
+                      width: 8,
+                      height: 8,
+                      margin: const EdgeInsets.only(top: 6),
+                      decoration: const BoxDecoration(
+                        color: AppConfig.primaryColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                item.title,
+                                style: item.read
+                                    ? AppTextStyles.titleMedium(
+                                        AppConfig.textColor,
+                                      )
+                                    : AppTextStyles.titleMedium(
+                                        AppConfig.textColor,
+                                      ).copyWith(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Text(
+                              item.timeAgo,
+                              style: AppTextStyles.bodySmall(
+                                AppConfig.subtitleColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          item.subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        _TypePill(type: item.type, category: item.category),
+                        if (item.actionLabel != null && onActionTap != null) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          TextButton(
+                            onPressed: onActionTap,
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              minimumSize: Size.zero,
+                              tapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                            ),
                             child: Text(
-                              item.title,
-                              style: item.read
-                                  ? AppTextStyles.titleMedium(AppConfig.textColor)
-                                  : AppTextStyles.titleMedium(AppConfig.textColor)
-                                      .copyWith(fontWeight: FontWeight.w700),
+                              item.actionLabel!,
+                              style: AppTextStyles.label(AppConfig.primaryColor),
                             ),
                           ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Text(
-                            item.timeAgo,
-                            style:
-                                AppTextStyles.bodySmall(AppConfig.subtitleColor),
-                          ),
                         ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        item.subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      _TypePill(type: item.type, category: item.category),
-                      if (item.actionLabel != null && onActionTap != null) ...[
-                        const SizedBox(height: AppSpacing.sm),
-                        TextButton(
-                          onPressed: onActionTap,
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: Text(
-                            item.actionLabel!,
-                            style: AppTextStyles.label(AppConfig.primaryColor),
-                          ),
-                        ),
                       ],
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -394,11 +450,47 @@ class _NotificationCard extends StatelessWidget {
         return Icons.shopping_bag_outlined;
       case NotificationFilterType.shipments:
         return Icons.local_shipping_outlined;
+      case NotificationFilterType.payments:
+        return Icons.payments_outlined;
       case NotificationFilterType.promo:
         return Icons.local_offer_outlined;
       case NotificationFilterType.all:
         return Icons.notifications_outlined;
     }
+  }
+}
+
+class _SwipeActionBackground extends StatelessWidget {
+  const _SwipeActionBackground({
+    required this.alignment,
+    required this.color,
+    required this.icon,
+    required this.label,
+  });
+
+  final Alignment alignment;
+  final Color color;
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      alignment: alignment,
+      color: color,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -415,6 +507,10 @@ class _TypePill extends StatelessWidget {
       NotificationFilterType.shipments => (
           'Shipments',
           AppConfig.borderColor.withValues(alpha: 0.25)
+        ),
+      NotificationFilterType.payments => (
+          'Payments',
+          AppConfig.primaryColor.withValues(alpha: 0.10)
         ),
       NotificationFilterType.promo => ('Promo', Colors.orange.withValues(alpha: 0.15)),
       NotificationFilterType.all => ('Notification', AppConfig.borderColor.withValues(alpha: 0.2)),

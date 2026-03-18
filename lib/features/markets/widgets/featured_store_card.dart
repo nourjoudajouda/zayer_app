@@ -94,7 +94,12 @@ class FeaturedStoreCard extends StatelessWidget {
             FilledButton(
               onPressed: () {
                 context.push(
-                  '${AppRoutes.storeLanding}?storeId=${Uri.encodeComponent(store.id)}&storeName=${Uri.encodeComponent(store.name)}&storeUrl=${Uri.encodeComponent(store.storeUrl)}',
+                  '${AppRoutes.storeLanding}'
+                  '?storeId=${Uri.encodeComponent(store.id)}'
+                  '&storeName=${Uri.encodeComponent(store.name)}'
+                  '&storeUrl=${Uri.encodeComponent(store.storeUrl)}'
+                  '&logoUrl=${Uri.encodeComponent(store.logoUrl)}'
+                  '&categories=${Uri.encodeComponent(store.categories.join(','))}',
                 );
               },
               style: FilledButton.styleFrom(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/config/app_config_provider.dart';
 import '../../core/routing/app_router.dart';
 import '../../features/security/sign_out_confirmation.dart';
 import '../../core/theme/app_spacing.dart';
@@ -53,6 +54,7 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(effectiveSettingsProvider);
+    final appName = ref.watch(appDisplayNameProvider);
 
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
@@ -156,7 +158,7 @@ class SettingsScreen extends ConsumerWidget {
               _DeleteAccountCard(),
               const SizedBox(height: AppSpacing.lg),
               Text(
-                'ZAYER LOGISTICS OFFICIAL • Server: ${settings.serverRegion}',
+                '${appName.toUpperCase()} OFFICIAL • Server: ${settings.serverRegion}',
                 textAlign: TextAlign.center,
                 style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
               ),

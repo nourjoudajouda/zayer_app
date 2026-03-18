@@ -24,6 +24,7 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
   final TextEditingController _customAmountController = TextEditingController(text: '100.00');
   bool _useCustom = false;
   bool _isConfirming = false;
+  bool _savePaymentMethod = false;
 
   @override
   void initState() {
@@ -63,7 +64,11 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
     try {
       final res = await ApiClient.instance.post<Map<String, dynamic>>(
         '/api/wallet/top-up',
-        data: {'amount': amount},
+        data: {
+          'amount': amount,
+          // Best-effort: only meaningful if backend supports saving a method.
+          'save_payment_method': _savePaymentMethod,
+        },
       );
       final data = res.data ?? const <String, dynamic>{};
       final checkoutUrl = (data['checkout_url'] ??
@@ -199,38 +204,48 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              Text('Payment Method', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-              const SizedBox(height: AppSpacing.sm),
               Container(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
-                  color: AppConfig.cardColor,
+                  color: AppConfig.lightBlueBg.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
-                  border: Border.all(color: AppConfig.primaryColor, width: 2),
+                  border: Border.all(color: AppConfig.borderColor),
                 ),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.credit_card_outlined, size: 32, color: AppConfig.primaryColor.withValues(alpha: 0.8)),
-                    const SizedBox(width: AppSpacing.md),
+                    Icon(Icons.lock_outline, size: 20, color: AppConfig.primaryColor),
+                    const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Card on file',
+                            'Pay securely with Square',
                             style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                           ),
-                          const SizedBox(height: 2),
+                          const SizedBox(height: 4),
                           Text(
-                            'Your saved payment method will be charged when you confirm. Add or change payment methods in your account settings when available.',
+                            'You’ll enter your card details on the secure checkout page after you confirm.',
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
                           ),
                         ],
                       ),
                     ),
-                    Icon(Icons.check_circle, color: AppConfig.primaryColor, size: 26),
                   ],
                 ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              SwitchListTile(
+                value: _savePaymentMethod,
+                onChanged: (v) => setState(() => _savePaymentMethod = v),
+                title: const Text('Save payment method for next time'),
+                subtitle: Text(
+                  'Only applies if supported by checkout.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
+                ),
+                contentPadding: EdgeInsets.zero,
+                activeColor: AppConfig.primaryColor,
               ),
               const SizedBox(height: AppSpacing.lg),
               Text('ORDER SUMMARY', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppConfig.subtitleColor, fontWeight: FontWeight.w600)),
@@ -245,7 +260,7 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
                 child: Column(
                   children: [
                     _SummaryRow('Top-up Amount', amount != null ? '\$${amount.toStringAsFixed(2)}' : '—'),
-                    _SummaryRow('Payment Method', 'Card on file'),
+                    _SummaryRow('Payment', 'Secure checkout (Square)'),
                     const SizedBox(height: AppSpacing.sm),
                     Row(
                       children: [
