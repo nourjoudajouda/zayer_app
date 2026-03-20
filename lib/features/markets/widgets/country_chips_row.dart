@@ -24,9 +24,9 @@ class CountryChipsRow extends ConsumerWidget {
         itemCount: countries.length,
         itemBuilder: (context, i) {
           final c = countries[i];
-          final isSelected =
-              (c.code == 'ALL' && selected == null) ||
-              (c.code != 'ALL' && selected == c.code);
+          final isSelected = c.code == 'ALL'
+              ? (selected == null || selected == 'ALL')
+              : (selected != null && marketCountryCodesEqual(selected, c.code));
 
           return Padding(
             padding: const EdgeInsets.only(right: AppSpacing.sm),

@@ -92,7 +92,10 @@ final homeMarketsProvider = Provider<List<MarketItem>>((ref) {
   return markets.countries
       .where((c) => c.code != 'ALL')
       .map((c) {
-        final count = stores.where((s) => s.countryCode == c.code).length;
+        final count = c.storeCount ??
+            stores
+                .where((s) => marketCountryCodesEqual(s.countryCode, c.code))
+                .length;
         return MarketItem(
           id: c.code.toLowerCase(),
           name: c.name,

@@ -6,7 +6,9 @@ import '../models/wallet_model.dart';
 /// Wallet balance from API: GET /api/wallet
 final walletBalanceProvider = FutureProvider<WalletBalance>((ref) async {
   try {
-    final res = await ApiClient.instance.get<Map<String, dynamic>>('/api/wallet');
+    final res = await ApiClient.instance.get<Map<String, dynamic>>(
+      '/api/wallet',
+    );
     final d = res.data;
     if (d != null) {
       return WalletBalance(
@@ -23,19 +25,32 @@ final walletBalanceProvider = FutureProvider<WalletBalance>((ref) async {
 final walletBalanceVisibleProvider = StateProvider<bool>((_) => true);
 
 /// Activity filter: All | Refunds | Payments | Top-ups.
-final walletActivityFilterProvider = StateProvider<WalletActivityType>((_) => WalletActivityType.all);
+final walletActivityFilterProvider = StateProvider<WalletActivityType>(
+  (_) => WalletActivityType.all,
+);
 
 /// Transactions from API: GET /api/wallet/activity
-final walletTransactionsProvider = FutureProvider<List<WalletTransaction>>((ref) async {
+final walletTransactionsProvider = FutureProvider<List<WalletTransaction>>((
+  ref,
+) async {
   try {
-    final res = await ApiClient.instance.get<List<dynamic>>('/api/wallet/activity');
+    final res = await ApiClient.instance.get<List<dynamic>>(
+      '/api/wallet/activity',
+    );
     final list = res.data;
     if (list != null) {
       return list.whereType<Map<String, dynamic>>().map((t) {
         final typeStr = t['type'] as String?;
         var type = WalletActivityType.topUps;
-        if (typeStr == 'payment' || typeStr == 'payments') type = WalletActivityType.payments;
-        if (typeStr == 'refund' || typeStr == 'refunds') type = WalletActivityType.refunds;
+        if (typeStr == 'payment' || typeStr == 'payments') {
+          type = WalletActivityType.payments;
+        }
+        if (typeStr == 'refund' || typeStr == 'refunds') {
+          type = WalletActivityType.refunds;
+        }
+        if (typeStr == 'admin_credit' || typeStr == 'admin-credits') {
+          type = WalletActivityType.adminCredits;
+        }
         return WalletTransaction(
           id: (t['id'] ?? '').toString(),
           type: type,
@@ -52,15 +67,16 @@ final walletTransactionsProvider = FutureProvider<List<WalletTransaction>>((ref)
 });
 
 /// Filtered transactions by activity type.
-final walletFilteredTransactionsProvider = Provider<AsyncValue<List<WalletTransaction>>>((ref) {
-  final async = ref.watch(walletTransactionsProvider);
-  final filter = ref.watch(walletActivityFilterProvider);
-  return async.when(
-    data: (list) {
-      if (filter == WalletActivityType.all) return AsyncValue.data(list);
-      return AsyncValue.data(list.where((t) => t.type == filter).toList());
-    },
-    loading: () => const AsyncValue.loading(),
-    error: (e, st) => AsyncValue.error(e, st),
-  );
-});
+final walletFilteredTransactionsProvider =
+    Provider<AsyncValue<List<WalletTransaction>>>((ref) {
+      final async = ref.watch(walletTransactionsProvider);
+      final filter = ref.watch(walletActivityFilterProvider);
+      return async.when(
+        data: (list) {
+          if (filter == WalletActivityType.all) return AsyncValue.data(list);
+          return AsyncValue.data(list.where((t) => t.type == filter).toList());
+        },
+        loading: () => const AsyncValue.loading(),
+        error: (e, st) => AsyncValue.error(e, st),
+      );
+    });

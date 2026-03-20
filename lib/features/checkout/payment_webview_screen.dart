@@ -11,8 +11,10 @@ import '../../core/theme/app_text_styles.dart';
 enum PaymentWebViewResult {
   /// User tapped close/back without completing (or from error/unsupported screen).
   closed,
+
   /// User closed from the payment page; they may have completed payment (refresh order).
   maybeCompleted,
+
   /// WebView failed to load the checkout URL.
   failedToLoad,
 }
@@ -20,10 +22,7 @@ enum PaymentWebViewResult {
 /// In-app WebView for hosted checkout (Square/Stripe/etc). Opens [checkoutUrl] and lets the user
 /// complete or cancel payment. Close button returns to previous screen with a result.
 class PaymentWebViewScreen extends StatefulWidget {
-  const PaymentWebViewScreen({
-    super.key,
-    required this.checkoutUrl,
-  });
+  const PaymentWebViewScreen({super.key, required this.checkoutUrl});
 
   final String checkoutUrl;
 
@@ -35,16 +34,47 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
   WebViewController? _controller;
   bool _isLoading = true;
   String? _loadError;
+  bool _popped = false;
+
+  PaymentWebViewResult? _resultFromReturnUrl(String url) {
+    final lower = url.toLowerCase();
+
+    // Typical Stripe return URLs (example from your screenshot):
+    //   http://localhost/payment/stripe/success?session_id=cs_test_...
+    // We close the WebView instead of trying to render the return page
+    // (which may be blocked on Android for cleartext / localhost).
+    final isSuccessRoute =
+        lower.contains('/payment/stripe/success') ||
+        lower.contains('stripe/success') ||
+        (lower.contains('/success') &&
+            (lower.contains('session_id=') ||
+                lower.contains('payment_intent=')));
+
+    if (isSuccessRoute) return PaymentWebViewResult.maybeCompleted;
+
+    final isCancelRoute =
+        lower.contains('/payment/stripe/cancel') ||
+        lower.contains('stripe/cancel') ||
+        lower.contains('/cancel');
+
+    if (isCancelRoute) return PaymentWebViewResult.closed;
+
+    return null;
+  }
 
   void _popWithResult(PaymentWebViewResult result) {
-    if (mounted) Navigator.of(context).pop(result);
+    if (!mounted || _popped) return;
+    _popped = true;
+    Navigator.of(context).pop(result);
   }
 
   @override
   void initState() {
     super.initState();
     if (widget.checkoutUrl.trim().isEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _popWithResult(PaymentWebViewResult.failedToLoad));
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _popWithResult(PaymentWebViewResult.failedToLoad),
+      );
       return;
     }
     if (isWebViewSupported) {
@@ -52,17 +82,34 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
         ..setNavigationDelegate(
           NavigationDelegate(
-            onPageStarted: (_) {
-              if (mounted) setState(() {
-                _isLoading = true;
-                _loadError = null;
-              });
+            onPageStarted: (url) {
+              final returnResult = _resultFromReturnUrl(url);
+              if (returnResult != null) {
+                _popWithResult(returnResult);
+              }
+              if (mounted) {
+                setState(() {
+                  _isLoading = true;
+                  _loadError = null;
+                });
+              }
             },
             onPageFinished: (_) {
-              if (mounted) setState(() {
-                _isLoading = false;
-                _loadError = null;
-              });
+              if (mounted) {
+                setState(() {
+                  _isLoading = false;
+                  _loadError = null;
+                });
+              }
+            },
+            onNavigationRequest: (request) {
+              final result = _resultFromReturnUrl(request.url);
+              if (result != null) {
+                // Keep user inside the app (no Chrome redirect).
+                // We still allow webview navigation so backend success/cancel route runs.
+                return NavigationDecision.navigate;
+              }
+              return NavigationDecision.navigate;
             },
             onWebResourceError: (WebResourceError error) {
               if (mounted) {
@@ -90,9 +137,9 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open link')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not open link')));
     }
   }
 
@@ -112,8 +159,8 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
             final result = _loadError != null
                 ? PaymentWebViewResult.failedToLoad
                 : !isWebViewSupported
-                    ? PaymentWebViewResult.closed
-                    : PaymentWebViewResult.maybeCompleted;
+                ? PaymentWebViewResult.closed
+                : PaymentWebViewResult.maybeCompleted;
             Navigator.of(context).pop(result);
           },
         ),
@@ -135,10 +182,7 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
     return Stack(
       children: [
         WebViewWidget(controller: _controller!),
-        if (_isLoading)
-          const Center(
-            child: CircularProgressIndicator(),
-          ),
+        if (_isLoading) const Center(child: CircularProgressIndicator()),
       ],
     );
   }
@@ -196,11 +240,7 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: AppConfig.errorRed,
-            ),
+            Icon(Icons.error_outline, size: 64, color: AppConfig.errorRed),
             const SizedBox(height: AppSpacing.lg),
             Text(
               _loadError ?? 'Something went wrong',

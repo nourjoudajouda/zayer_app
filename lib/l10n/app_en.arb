@@ -118,5 +118,6 @@
   "infoHintAddress": "Add or update your default shipping address for faster checkout",
   "import": "Import",
   "checkConnectionAndRetry": "No connection. Check network and retry.",
-  "retry": "Retry"
+  "retry": "Retry",
+  "defaultAddressChangeCartReviewNote": "Note: If you change your default delivery address, all items in your cart will be sent for admin review again."
 }

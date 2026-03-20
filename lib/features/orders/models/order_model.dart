@@ -13,11 +13,7 @@ enum OrderStatus {
   cancelled,
 }
 
-enum OrderOrigin {
-  multiOrigin,
-  turkey,
-  usa,
-}
+enum OrderOrigin { multiOrigin, turkey, usa }
 
 /// Single tracking event for a shipment.
 class OrderTrackingEvent {
@@ -63,7 +59,11 @@ class OrderLineItem {
 
 /// Price line in breakdown.
 class OrderPriceLine {
-  const OrderPriceLine({required this.label, required this.amount, this.isDiscount = false});
+  const OrderPriceLine({
+    required this.label,
+    required this.amount,
+    this.isDiscount = false,
+  });
   final String label;
   final String amount;
   final bool isDiscount;
@@ -186,6 +186,40 @@ class OrderModel {
     }
   }
 
+  /// Line under the order number, e.g. `Placed on Mar 5, 2026`.
+  String get placedOnLine {
+    var raw = placedDate.trim();
+    if (raw.isEmpty) {
+      final inv = invoiceIssueDate?.trim();
+      if (inv != null && inv.isNotEmpty) {
+        raw = inv;
+      }
+    }
+    if (raw.isEmpty) {
+      return 'Placed on —';
+    }
+    final lower = raw.toLowerCase();
+    if (lower.startsWith('placed on')) {
+      return raw;
+    }
+    return 'Placed on $raw';
+  }
+
+  /// Uppercase chip text for list, invoice, and detail app bar (aligned with orders cards).
+  String get statusChipUpper {
+    switch (status) {
+      case OrderStatus.inTransit:
+      case OrderStatus.shipped:
+        return 'IN TRANSIT';
+      case OrderStatus.delivered:
+        return 'DELIVERED';
+      case OrderStatus.cancelled:
+        return 'CANCELLED';
+      default:
+        return statusLabel.toUpperCase();
+    }
+  }
+
   bool get canTrack =>
       status == OrderStatus.shipped || status == OrderStatus.inTransit;
   bool get canBuyAgain => status == OrderStatus.delivered;
@@ -195,6 +229,7 @@ class OrderModel {
     final lower = s.toString().toLowerCase().replaceAll('-', '_');
     switch (lower) {
       case 'pending_review':
+      case 'under_review':
         return OrderStatus.pendingReview;
       case 'pending_payment':
         return OrderStatus.pendingPayment;
@@ -223,12 +258,14 @@ class OrderModel {
 
   static OrderModel fromJson(Map<String, dynamic> j) {
     final shipmentsList = j['shipments'] as List<dynamic>?;
-    final shipments = shipmentsList
+    final shipments =
+        shipmentsList
             ?.map((s) => _shipmentFromJson(s as Map<String, dynamic>))
             .toList() ??
         [];
     final priceLinesList = j['price_lines'] as List<dynamic>?;
-    final priceLines = priceLinesList
+    final priceLines =
+        priceLinesList
             ?.map((e) {
               final m = e is Map<String, dynamic> ? e : null;
               if (m == null) return null;
@@ -241,10 +278,53 @@ class OrderModel {
             .whereType<OrderPriceLine>()
             .toList() ??
         [];
+    final statusRaw = (j['status_key'] ?? j['status']) as String?;
+    final rawDbStatus = (j['status'] ?? '').toString().toLowerCase().replaceAll(
+      '-',
+      '_',
+    );
+    final paymentStatusRaw = (j['payment_status'] ?? '')
+        .toString()
+        .toLowerCase()
+        .trim();
+    final needsReview = j['needs_review'] == true;
+    final parsedStatus = _statusFrom(statusRaw);
+
+    final paymentIndicatesPaid =
+        paymentStatusRaw == 'paid' ||
+        paymentStatusRaw == 'completed' ||
+        paymentStatusRaw == 'succeeded';
+
+    // UI should reflect operational stage after successful payment:
+    // pending_payment/paid => pending_review or processing.
+    var resolvedStatus = switch (parsedStatus) {
+      OrderStatus.pendingPayment || OrderStatus.paid
+          when paymentIndicatesPaid =>
+        needsReview ? OrderStatus.pendingReview : OrderStatus.processing,
+      _ => parsedStatus,
+    };
+
+    // Admin/order row may still be under_review while status_key lags (e.g. paid + review).
+    if (rawDbStatus == 'under_review') {
+      resolvedStatus = OrderStatus.pendingReview;
+    }
+
+    // Paid with amount due cleared — never show as pending payment.
+    final due = j['amount_due_now'];
+    final dueNum = due is num ? due.toDouble() : double.tryParse('$due');
+    if (paymentIndicatesPaid &&
+        dueNum != null &&
+        dueNum <= 0 &&
+        resolvedStatus == OrderStatus.pendingPayment) {
+      resolvedStatus = needsReview
+          ? OrderStatus.pendingReview
+          : OrderStatus.processing;
+    }
+
     return OrderModel(
       id: (j['id'] ?? '').toString(),
       origin: _originFrom(j['origin'] as String?),
-      status: _statusFrom(j['status'] as String?),
+      status: resolvedStatus,
       orderNumber: (j['order_number'] ?? '').toString(),
       placedDate: (j['placed_date'] ?? '').toString(),
       deliveredOn: j['delivered_on'] as String?,
@@ -270,34 +350,48 @@ class OrderModel {
 
   static OrderShipment _shipmentFromJson(Map<String, dynamic> s) {
     final itemsList = s['items'] as List<dynamic>?;
-    final items = itemsList
-            ?.map((i) => OrderLineItem(
-                  id: (i['id'] ?? '').toString(),
-                  name: (i['name'] ?? '').toString(),
-                  storeName: (i['store_name'] ?? '').toString(),
-                  sku: (i['sku'] ?? '').toString(),
-                  price: (i['price'] ?? '\$0.00').toString(),
-                  quantity: (i['quantity'] as int?) ?? 1,
-                  imageUrl: i['image_url'] as String?,
-                  weightKg: (i['weight_kg'] as num?)?.toDouble(),
-                  dimensions: (i['dimensions'] ?? '').toString().trim().isEmpty ? null : (i['dimensions'] ?? '').toString(),
-                  shippingMethod: (i['shipping_method'] ?? '').toString().trim().isEmpty ? null : (i['shipping_method'] ?? '').toString(),
-                ))
+    final items =
+        itemsList
+            ?.map(
+              (i) => OrderLineItem(
+                id: (i['id'] ?? '').toString(),
+                name: (i['name'] ?? '').toString(),
+                storeName: (i['store_name'] ?? '').toString(),
+                sku: (i['sku'] ?? '').toString(),
+                price: (i['price'] ?? '\$0.00').toString(),
+                quantity: (i['quantity'] as int?) ?? 1,
+                imageUrl: i['image_url'] as String?,
+                weightKg: (i['weight_kg'] as num?)?.toDouble(),
+                dimensions: (i['dimensions'] ?? '').toString().trim().isEmpty
+                    ? null
+                    : (i['dimensions'] ?? '').toString(),
+                shippingMethod:
+                    (i['shipping_method'] ?? '').toString().trim().isEmpty
+                    ? null
+                    : (i['shipping_method'] ?? '').toString(),
+              ),
+            )
             .toList() ??
         [];
     final eventsList = s['tracking_events'] as List<dynamic>?;
-    final events = eventsList
-            ?.map((e) => OrderTrackingEvent(
-                  title: (e['title'] ?? '').toString(),
-                  subtitle: (e['subtitle'] ?? '').toString(),
-                  icon: Icons.check_circle_outlined,
-                  isHighlighted: e['is_highlighted'] == true,
-                ))
+    final events =
+        eventsList
+            ?.map(
+              (e) => OrderTrackingEvent(
+                title: (e['title'] ?? '').toString(),
+                subtitle: (e['subtitle'] ?? '').toString(),
+                icon: Icons.check_circle_outlined,
+                isHighlighted: e['is_highlighted'] == true,
+              ),
+            )
             .toList() ??
         [];
     final statusTagsRaw = s['status_tags'];
     final statusTags = statusTagsRaw is List
-        ? statusTagsRaw.map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList()
+        ? statusTagsRaw
+              .map((e) => e.toString())
+              .where((e) => e.trim().isNotEmpty)
+              .toList()
         : const <String>[];
     return OrderShipment(
       id: (s['id'] ?? '').toString(),
@@ -311,7 +405,9 @@ class OrderModel {
       shippingFee: s['shipping_fee'] as String?,
       customsDuties: s['customs_duties'] as String?,
       grossWeightKg: (s['gross_weight_kg'] as num?)?.toDouble(),
-      dimensions: (s['dimensions'] ?? '').toString().trim().isEmpty ? null : (s['dimensions'] ?? '').toString(),
+      dimensions: (s['dimensions'] ?? '').toString().trim().isEmpty
+          ? null
+          : (s['dimensions'] ?? '').toString(),
       insuranceConfirmed: s['insurance_confirmed'] == true,
       statusTags: statusTags,
     );

@@ -11,10 +11,12 @@ class NotificationItem {
     this.important = false,
     this.actionLabel,
     this.actionRoute,
+    this.imageUrl,
   });
 
   final String id;
   final NotificationFilterType type;
+
   /// Original category/type string from backend (future-ready).
   final String category;
   final String title;
@@ -24,6 +26,7 @@ class NotificationItem {
   final bool important;
   final String? actionLabel;
   final String? actionRoute;
+  final String? imageUrl;
 
   NotificationItem copyWith({
     String? id,
@@ -36,6 +39,7 @@ class NotificationItem {
     bool? important,
     String? actionLabel,
     String? actionRoute,
+    String? imageUrl,
   }) {
     return NotificationItem(
       id: id ?? this.id,
@@ -48,6 +52,7 @@ class NotificationItem {
       important: important ?? this.important,
       actionLabel: actionLabel ?? this.actionLabel,
       actionRoute: actionRoute ?? this.actionRoute,
+      imageUrl: imageUrl ?? this.imageUrl,
     );
   }
 
@@ -56,17 +61,26 @@ class NotificationItem {
     final typeStr = json['type'] as String? ?? 'orders';
     final normalized = typeStr.toLowerCase();
     final type = switch (normalized) {
-      'payments' || 'payment' || 'payment_update' || 'wallet' || 'wallet_update' => NotificationFilterType.payments,
+      'all' || 'general' || 'notification' => NotificationFilterType.all,
+      'payments' ||
+      'payment' ||
+      'payment_update' ||
+      'wallet' ||
+      'wallet_update' => NotificationFilterType.payments,
       'orders' || 'order' || 'order_update' => NotificationFilterType.orders,
-      'shipments' || 'shipment' || 'shipment_update' || 'tracking_update' => NotificationFilterType.shipments,
+      'shipments' ||
+      'shipment' ||
+      'shipment_update' ||
+      'tracking_update' => NotificationFilterType.shipments,
       'promo' || 'promotion' => NotificationFilterType.promo,
-      _ => normalized.contains('ship') || normalized.contains('track')
-          ? NotificationFilterType.shipments
-          : (normalized.contains('pay') || normalized.contains('wallet'))
-              ? NotificationFilterType.payments
-              : (normalized.contains('promo') || normalized.contains('offer')
-              ? NotificationFilterType.promo
-              : NotificationFilterType.orders),
+      _ =>
+        normalized.contains('ship') || normalized.contains('track')
+            ? NotificationFilterType.shipments
+            : (normalized.contains('pay') || normalized.contains('wallet'))
+            ? NotificationFilterType.payments
+            : (normalized.contains('promo') || normalized.contains('offer')
+                  ? NotificationFilterType.promo
+                  : NotificationFilterType.orders),
     };
     return NotificationItem(
       id: json['id']?.toString() ?? '',
@@ -79,14 +93,9 @@ class NotificationItem {
       important: json['important'] == true,
       actionLabel: json['action_label'] as String?,
       actionRoute: json['action_route'] as String?,
+      imageUrl: json['image_url'] as String?,
     );
   }
 }
 
-enum NotificationFilterType {
-  all,
-  orders,
-  shipments,
-  payments,
-  promo,
-}
+enum NotificationFilterType { all, orders, shipments, payments, promo }

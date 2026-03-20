@@ -309,7 +309,12 @@ GoRouter _createAppRouter() {
       ),
       GoRoute(
         path: AppRoutes.myAddresses,
-        builder: (context, state) => const MyAddressesScreen(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return MyAddressesScreen(
+            openedFromCart: extra?['openedFromCart'] == true,
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.addEditAddress,
@@ -318,6 +323,7 @@ GoRouter _createAppRouter() {
           final isEdit = extra?['isEdit'] as bool? ?? false;
           return AddEditAddressScreen(
             isEdit: isEdit,
+            requireDefault: extra?['requireDefault'] == true,
             addressId: extra?['addressId'] as String?,
             initialAddressLine: extra?['address'] as String?,
             initialCountryId: extra?['countryId'] as String?,

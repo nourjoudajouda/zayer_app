@@ -132,10 +132,10 @@ Remote config for the Explore Markets screen. Can live in bootstrap-config under
 |-------|------|----------|----------|-------------|
 | `title` | string | No | "Explore Markets" | Screen title (English only). |
 | `subtitle` | string | No | "Shop directly from official stores worldwide" | Subtitle under title. |
-| `countries` | array | No | `[]` | Country filter chips. Each: `{ "code", "name", "flag_emoji", "is_featured?" }`. |
+| `countries` | array | No | `[]` | Country filter chips. Each: `{ "code", "name", "flag_emoji", "is_featured?", "store_count?" }`. Optional `store_count` (or `stores_count`) overrides the home-screen store total (otherwise derived from `featured_stores`). |
 | `featured_stores` | array | No | `[]` | Store cards. Each: `{ "id", "name", "description", "logo_url", "country_code", "store_url", "is_featured" }`. |
 
-**Per-country:** `code` (e.g. "US", "ALL"), `name`, `flag_emoji` (e.g. "🇺🇸"), `is_featured` (optional).
+**Per-country:** `code` (e.g. "US", "ALL"), `name`, `flag_emoji` (e.g. "🇺🇸"), `is_featured` (optional), `store_count` / `stores_count` (optional, integer — total stores for home badge; app matches `UK` and `GB` as one market).
 
 **Per-store:** `id`, `name`, `description`, `logo_url`, `country_code`, `store_url`, `is_featured`.
 

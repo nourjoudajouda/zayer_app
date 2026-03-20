@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/network/api_client.dart';
 import '../models/order_model.dart';
@@ -18,23 +19,15 @@ Future<List<OrderModel>> _fetchOrders() async {
   return [];
 }
 
-final ordersProvider = FutureProvider<List<OrderModel>>((ref) => _fetchOrders());
+final ordersProvider = FutureProvider<List<OrderModel>>(
+  (ref) => _fetchOrders(),
+);
 
 /// Filter by status: All | In Progress | Delivered | Cancelled.
-enum OrdersFilter {
-  all,
-  inProgress,
-  delivered,
-  cancelled,
-}
+enum OrdersFilter { all, inProgress, delivered, cancelled }
 
 /// Filter by order origin (shipment source).
-enum OrdersOriginFilter {
-  all,
-  usa,
-  turkey,
-  multiOrigin,
-}
+enum OrdersOriginFilter { all, usa, turkey, multiOrigin }
 
 /// Sort orders.
 enum OrdersSortOption {
@@ -44,20 +37,79 @@ enum OrdersSortOption {
   amountLowToHigh,
 }
 
-final ordersFilterProvider =
-    StateProvider<OrdersFilter>((ref) => OrdersFilter.all);
+final ordersFilterProvider = StateProvider<OrdersFilter>(
+  (ref) => OrdersFilter.all,
+);
 
-final ordersOriginFilterProvider =
-    StateProvider<OrdersOriginFilter>((ref) => OrdersOriginFilter.all);
+final ordersOriginFilterProvider = StateProvider<OrdersOriginFilter>(
+  (ref) => OrdersOriginFilter.all,
+);
 
-final ordersSortProvider =
-    StateProvider<OrdersSortOption>((ref) => OrdersSortOption.newestFirst);
+final ordersSortProvider = StateProvider<OrdersSortOption>(
+  (ref) => OrdersSortOption.newestFirst,
+);
 
 final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
   final async = ref.watch(ordersProvider);
   final statusFilter = ref.watch(ordersFilterProvider);
   final originFilter = ref.watch(ordersOriginFilterProvider);
   final sortOption = ref.watch(ordersSortProvider);
+
+  DateTime? _parsePlacedDate(String v) {
+    var cleaned = v.trim();
+    // Some mock/legacy data may include "Placed on <date>"
+    cleaned = cleaned
+        .replaceFirst(RegExp(r'^\s*placed\s*on\s*', caseSensitive: false), '')
+        .trim();
+    if (cleaned.isEmpty) return null;
+
+    // Server format: $o->placed_at?->format('M j, Y') => e.g. "Oct 12, 2023"
+    try {
+      return DateFormat('MMM d, yyyy').parse(cleaned);
+    } catch (_) {
+      // Fallback for variants like "October 12, 2023".
+      try {
+        return DateFormat('MMMM d, yyyy').parse(cleaned);
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
+  int _parseOrderId(String id) => int.tryParse(id.trim()) ?? 0;
+
+  int _compareByPlacedDateDesc(OrderModel a, OrderModel b) {
+    final da = _parsePlacedDate(a.placedDate);
+    final db = _parsePlacedDate(b.placedDate);
+    if (da != null && db != null) {
+      final byDate = db.compareTo(da);
+      if (byDate != 0) return byDate;
+    } else if (da != null && db == null) {
+      return -1;
+    } else if (da == null && db != null) {
+      return 1;
+    }
+
+    // Stable fallback: higher id treated as newer.
+    return _parseOrderId(b.id).compareTo(_parseOrderId(a.id));
+  }
+
+  int _compareByPlacedDateAsc(OrderModel a, OrderModel b) {
+    final da = _parsePlacedDate(a.placedDate);
+    final db = _parsePlacedDate(b.placedDate);
+    if (da != null && db != null) {
+      final byDate = da.compareTo(db);
+      if (byDate != 0) return byDate;
+    } else if (da != null && db == null) {
+      return -1;
+    } else if (da == null && db != null) {
+      return 1;
+    }
+
+    // Stable fallback: lower id treated as older.
+    return _parseOrderId(a.id).compareTo(_parseOrderId(b.id));
+  }
+
   return async.when(
     data: (list) {
       var filtered = list.where((o) {
@@ -66,7 +118,8 @@ final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
             break;
           case OrdersFilter.inProgress:
             if (o.status == OrderStatus.delivered ||
-                o.status == OrderStatus.cancelled) return false;
+                o.status == OrderStatus.cancelled)
+              return false;
             break;
           case OrdersFilter.delivered:
             if (o.status != OrderStatus.delivered) return false;
@@ -93,17 +146,26 @@ final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
 
       switch (sortOption) {
         case OrdersSortOption.newestFirst:
+          filtered = List.from(filtered)..sort(_compareByPlacedDateDesc);
           break;
         case OrdersSortOption.oldestFirst:
-          filtered = filtered.reversed.toList();
+          filtered = List.from(filtered)..sort(_compareByPlacedDateAsc);
           break;
         case OrdersSortOption.amountHighToLow:
           filtered = List.from(filtered)
-            ..sort((a, b) => _parseAmount(b.totalAmount).compareTo(_parseAmount(a.totalAmount)));
+            ..sort(
+              (a, b) => _parseAmount(
+                b.totalAmount,
+              ).compareTo(_parseAmount(a.totalAmount)),
+            );
           break;
         case OrdersSortOption.amountLowToHigh:
           filtered = List.from(filtered)
-            ..sort((a, b) => _parseAmount(a.totalAmount).compareTo(_parseAmount(b.totalAmount)));
+            ..sort(
+              (a, b) => _parseAmount(
+                a.totalAmount,
+              ).compareTo(_parseAmount(b.totalAmount)),
+            );
           break;
       }
       return AsyncValue.data(filtered);
@@ -119,9 +181,14 @@ double _parseAmount(String s) {
 }
 
 /// Single order by id. Fetches from GET /api/orders/{id} for full detail.
-final orderByIdProvider = FutureProvider.family<OrderModel?, String>((ref, id) async {
+final orderByIdProvider = FutureProvider.family<OrderModel?, String>((
+  ref,
+  id,
+) async {
   try {
-    final res = await ApiClient.instance.get<Map<String, dynamic>>('/api/orders/$id');
+    final res = await ApiClient.instance.get<Map<String, dynamic>>(
+      '/api/orders/$id',
+    );
     if (res.data != null) return OrderModel.fromJson(res.data!);
   } catch (_) {}
   final list = await ref.watch(ordersProvider.future);

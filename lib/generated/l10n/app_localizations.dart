@@ -793,6 +793,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Retry'**
   String get retry;
+
+  /// No description provided for @defaultAddressChangeCartReviewNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note: If you change your default delivery address, all items in your cart will be sent for admin review again.'**
+  String get defaultAddressChangeCartReviewNote;
 }
 
 class _AppLocalizationsDelegate

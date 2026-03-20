@@ -58,9 +58,9 @@ void _showRecalculationWarning(BuildContext context) {
             const SizedBox(height: AppSpacing.md),
             Text(
               'Change Address?',
-              style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(
+                ctx,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -120,12 +120,21 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
     final review = reviewAsync.valueOrNull;
     final walletEnabled = ref.watch(checkoutWalletEnabledProvider);
     final total = review != null ? (_tryParseMoney(review.total) ?? 0.0) : 0.0;
-    final walletBalance = review != null ? (_tryParseMoney(review.walletBalance) ?? 0.0) : 0.0;
+    final walletBalance = review != null
+        ? (_tryParseMoney(review.walletBalance) ?? 0.0)
+        : 0.0;
     final walletAppliedNow = review?.walletApplied != null
         ? (walletEnabled ? (review!.walletApplied ?? 0.0) : 0.0)
-        : (walletEnabled ? (walletBalance > 0 ? (walletBalance > total ? total : walletBalance) : 0.0) : 0.0);
+        : (walletEnabled
+              ? (walletBalance > 0
+                    ? (walletBalance > total ? total : walletBalance)
+                    : 0.0)
+              : 0.0);
     final amountDueNow = walletEnabled
-        ? (review?.amountDueNow ?? ((total - walletAppliedNow) > 0 ? (total - walletAppliedNow) : 0.0))
+        ? (review?.amountDueNow ??
+              ((total - walletAppliedNow) > 0
+                  ? (total - walletAppliedNow)
+                  : 0.0))
         : total;
 
     // Guard against bypassing address requirement:
@@ -176,8 +185,12 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
                     padding: const EdgeInsets.all(AppSpacing.md),
                     decoration: BoxDecoration(
                       color: Colors.orange.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
-                      border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
+                      borderRadius: BorderRadius.circular(
+                        AppConfig.radiusMedium,
+                      ),
+                      border: Border.all(
+                        color: Colors.orange.withValues(alpha: 0.25),
+                      ),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -192,9 +205,7 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
                                 !hasDefaultAddress
                                     ? 'Add a default address to continue'
                                     : 'Add a default address to continue',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleSmall
+                                style: Theme.of(context).textTheme.titleSmall
                                     ?.copyWith(fontWeight: FontWeight.w800),
                               ),
                               const SizedBox(height: 4),
@@ -202,7 +213,9 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
                                 !hasDefaultAddress
                                     ? 'Shipping depends on your default shipping address. Add an address and set it as default, then retry checkout.'
                                     : 'Shipping depends on your default shipping address. Add an address and set it as default, then retry checkout.',
-                                style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+                                style: AppTextStyles.bodySmall(
+                                  AppConfig.subtitleColor,
+                                ),
                               ),
                             ],
                           ),
@@ -247,7 +260,11 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.hourglass_empty, size: 48, color: AppConfig.subtitleColor),
+                  const Icon(
+                    Icons.hourglass_empty,
+                    size: 48,
+                    color: AppConfig.subtitleColor,
+                  ),
                   const SizedBox(height: AppSpacing.md),
                   const Text('No approved items to checkout yet.'),
                   const SizedBox(height: AppSpacing.sm),
@@ -290,12 +307,19 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
               : () async {
                   if (!hasDefaultAddress) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please add and set a default address to calculate shipping.')),
+                      const SnackBar(
+                        content: Text(
+                          'Please add and set a default address to calculate shipping.',
+                        ),
+                      ),
                     );
                     return;
                   }
                   setState(() => _confirming = true);
-                  final result = await confirmCheckout(ref, useWallet: walletEnabled);
+                  final result = await confirmCheckout(
+                    ref,
+                    useWallet: walletEnabled,
+                  );
                   if (!context.mounted) return;
                   if (!result.ok) {
                     setState(() => _confirming = false);
@@ -329,10 +353,11 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
                   setState(() => _confirming = false);
                   final checkoutUrl = paymentResult.checkoutUrl;
                   if (checkoutUrl != null && checkoutUrl.trim().isNotEmpty) {
-                    final webViewResult = await context.push<PaymentWebViewResult>(
-                      AppRoutes.paymentWebView,
-                      extra: checkoutUrl,
-                    );
+                    final webViewResult = await context
+                        .push<PaymentWebViewResult>(
+                          AppRoutes.paymentWebView,
+                          extra: checkoutUrl,
+                        );
                     if (!context.mounted) return;
                     context.go('${AppRoutes.orderDetail}/$orderId');
                     ref.invalidate(orderByIdProvider(orderId));
@@ -346,17 +371,28 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
                     if (!context.mounted) return;
                     if (webViewResult == PaymentWebViewResult.failedToLoad) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Payment page could not load. Please try again or use another device.')),
+                        const SnackBar(
+                          content: Text(
+                            'Payment page could not load. Please try again or use another device.',
+                          ),
+                        ),
                       );
-                    } else if (webViewResult == PaymentWebViewResult.maybeCompleted) {
+                    } else if (webViewResult ==
+                        PaymentWebViewResult.maybeCompleted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Payment status updated.')),
+                        const SnackBar(
+                          content: Text('Payment status updated.'),
+                        ),
                       );
                     }
                   } else {
                     context.go('${AppRoutes.orderDetail}/$orderId');
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(paymentResult.error ?? 'Could not start payment')),
+                      SnackBar(
+                        content: Text(
+                          paymentResult.error ?? 'Could not start payment',
+                        ),
+                      ),
                     );
                   }
                 },
@@ -395,7 +431,8 @@ class _ReviewPayContent extends StatelessWidget {
     final total = _tryParseMoney(review.total) ?? 0.0;
     final walletBalance = _tryParseMoney(review.walletBalance) ?? 0.0;
     final walletAppliedNow = walletEnabled
-        ? (review.walletApplied ?? (walletBalance > total ? total : walletBalance))
+        ? (review.walletApplied ??
+              (walletBalance > total ? total : walletBalance))
         : 0.0;
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
@@ -414,52 +451,57 @@ class _ReviewPayContent extends StatelessWidget {
                 onRefresh: onRefresh ?? () async {},
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _ShippingCard(
-                      address: review.shippingAddressShort,
-                      onChangeTap: () => _openMyAddressesAndMaybeWarn(context),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    _ConsolidationBenefitCard(
-                      savings: review.consolidationSavings,
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    ...review.shipments.map((s) => Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _ShippingCard(
+                        address: review.shippingAddressShort,
+                        onChangeTap: () =>
+                            _openMyAddressesAndMaybeWarn(context),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      _ConsolidationBenefitCard(
+                        savings: review.consolidationSavings,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      ...review.shipments.map(
+                        (s) => Padding(
                           padding: const EdgeInsets.only(bottom: AppSpacing.lg),
                           child: _ShipmentSection(shipment: s),
-                        )),
-                    _WalletBalanceRow(
-                      balance: review.walletBalance,
-                      enabled: walletEnabled,
-                      onToggle: onWalletToggle,
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    _PriceDetailsSection(
-                      review: review,
-                      walletEnabled: walletEnabled,
-                      walletAppliedNow: walletAppliedNow,
-                      amountDueNow: amountDueNow,
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    _PromoCodeField(
-                      currentCode: review.promoCode,
-                      promoMessage: review.promoMessage,
-                      discountAmount: review.promoDiscountAmount,
-                    ),
-                    const SizedBox(height: AppSpacing.xxl),
-                  ],
+                        ),
+                      ),
+                      _WalletBalanceRow(
+                        balance: review.walletBalance,
+                        enabled: walletEnabled,
+                        onToggle: onWalletToggle,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      _PriceDetailsSection(
+                        review: review,
+                        walletEnabled: walletEnabled,
+                        walletAppliedNow: walletAppliedNow,
+                        amountDueNow: amountDueNow,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      _PromoCodeField(
+                        currentCode: review.promoCode,
+                        promoMessage: review.promoMessage,
+                        discountAmount: review.promoDiscountAmount,
+                      ),
+                      const SizedBox(height: AppSpacing.xxl),
+                    ],
+                  ),
                 ),
               ),
             ),
+            _ConfirmPayBar(
+              amountDueNow: amountDueNow,
+              onConfirm: onConfirm,
+              isLoading: confirming,
             ),
-                    _ConfirmPayBar(
-                      amountDueNow: amountDueNow,
-                      onConfirm: onConfirm,
-                      isLoading: confirming,
-                    ),
           ],
         ),
       ),
@@ -468,10 +510,7 @@ class _ReviewPayContent extends StatelessWidget {
 }
 
 class _ShippingCard extends StatelessWidget {
-  const _ShippingCard({
-    required this.address,
-    required this.onChangeTap,
-  });
+  const _ShippingCard({required this.address, required this.onChangeTap});
 
   final String address;
   final VoidCallback onChangeTap;
@@ -495,16 +534,10 @@ class _ShippingCard extends StatelessWidget {
                 'Shipping to',
                 style: AppTextStyles.label(AppConfig.subtitleColor),
               ),
-              TextButton(
-                onPressed: onChangeTap,
-                child: const Text('Change'),
-              ),
+              TextButton(onPressed: onChangeTap, child: const Text('Change')),
             ],
           ),
-          Text(
-            address,
-            style: AppTextStyles.bodyLarge(AppConfig.textColor),
-          ),
+          Text(address, style: AppTextStyles.bodyLarge(AppConfig.textColor)),
         ],
       ),
     );
@@ -523,15 +556,13 @@ class _ConsolidationBenefitCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppConfig.primaryColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
-        border: Border.all(color: AppConfig.primaryColor.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: AppConfig.primaryColor.withValues(alpha: 0.3),
+        ),
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.savings_outlined,
-            color: AppConfig.primaryColor,
-            size: 24,
-          ),
+          Icon(Icons.savings_outlined, color: AppConfig.primaryColor, size: 24),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
@@ -562,8 +593,16 @@ class _ShipmentSection extends StatelessWidget {
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
           initiallyExpanded: true,
-          tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 6),
-          childrenPadding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
+          tilePadding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: 6,
+          ),
+          childrenPadding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            0,
+            AppSpacing.md,
+            AppSpacing.md,
+          ),
           title: Text(
             shipment.originLabel,
             style: AppTextStyles.titleMedium(AppConfig.textColor),
@@ -576,7 +615,7 @@ class _ShipmentSection extends StatelessWidget {
             for (final item in shipment.items) ...[
               _ShipmentItemRow(item: item),
               const SizedBox(height: AppSpacing.sm),
-            ]
+            ],
           ],
         ),
       ),
@@ -606,15 +645,25 @@ class _ShipmentItemRow extends StatelessWidget {
             child: () {
               final url = resolveAssetUrl(item.imageUrl, ApiClient.safeBaseUrl);
               if (url == null || url.isEmpty) {
-                return const Icon(Icons.image_outlined, color: AppConfig.subtitleColor, size: 28);
+                return const Icon(
+                  Icons.image_outlined,
+                  color: AppConfig.subtitleColor,
+                  size: 28,
+                );
               }
               return ClipRRect(
                 borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
                 child: CachedNetworkImage(
                   imageUrl: url,
                   fit: BoxFit.cover,
-                  placeholder: (context, url) => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                  errorWidget: (context, url, error) => const Icon(Icons.image_outlined, color: AppConfig.subtitleColor, size: 28),
+                  placeholder: (context, url) => const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  errorWidget: (context, url, error) => const Icon(
+                    Icons.image_outlined,
+                    color: AppConfig.subtitleColor,
+                    size: 28,
+                  ),
                 ),
               );
             }(),
@@ -631,10 +680,10 @@ class _ShipmentItemRow extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xs),
                 Row(
                   children: [
-Text(
-                  item.price,
-                  style: AppTextStyles.titleMedium(AppConfig.textColor),
-                ),
+                    Text(
+                      item.price,
+                      style: AppTextStyles.titleMedium(AppConfig.textColor),
+                    ),
                     const SizedBox(width: AppSpacing.md),
                     _Stepper(
                       value: item.quantity,
@@ -725,8 +774,11 @@ class _WalletBalanceRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.account_balance_wallet_outlined,
-              color: AppConfig.primaryColor, size: 24),
+          Icon(
+            Icons.account_balance_wallet_outlined,
+            color: AppConfig.primaryColor,
+            size: 24,
+          ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
@@ -743,10 +795,7 @@ class _WalletBalanceRow extends StatelessWidget {
               ],
             ),
           ),
-          Switch(
-            value: enabled,
-            onChanged: onToggle,
-          ),
+          Switch(value: enabled, onChanged: onToggle),
         ],
       ),
     );
@@ -769,7 +818,9 @@ class _PriceDetailsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final walletRowVisible = walletEnabled && walletAppliedNow > 0.0001;
-    final promoVisible = (review.promoDiscountAmount ?? 0) > 0.0001 || review.promoCode.trim().isNotEmpty;
+    final promoVisible =
+        (review.promoDiscountAmount ?? 0) > 0.0001 ||
+        review.promoCode.trim().isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -793,7 +844,8 @@ class _PriceDetailsSection extends StatelessWidget {
               label: review.promoCode.trim().isNotEmpty
                   ? 'Promo discount (${review.promoCode.trim()})'
                   : 'Promo discount',
-              value: '-\$${(review.promoDiscountAmount ?? 0).toStringAsFixed(2)}',
+              value:
+                  '-\$${(review.promoDiscountAmount ?? 0).toStringAsFixed(2)}',
             ),
           if (walletRowVisible)
             _PriceRow(
@@ -824,14 +876,8 @@ class _PriceRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: AppTextStyles.bodyMedium(AppConfig.subtitleColor),
-          ),
-          Text(
-            value,
-            style: AppTextStyles.bodyMedium(AppConfig.textColor),
-          ),
+          Text(label, style: AppTextStyles.bodyMedium(AppConfig.subtitleColor)),
+          Text(value, style: AppTextStyles.bodyMedium(AppConfig.textColor)),
         ],
       ),
     );
@@ -866,7 +912,8 @@ class _PromoCodeFieldState extends ConsumerState<_PromoCodeField> {
   @override
   void didUpdateWidget(covariant _PromoCodeField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.currentCode != oldWidget.currentCode && widget.currentCode != _controller.text) {
+    if (widget.currentCode != oldWidget.currentCode &&
+        widget.currentCode != _controller.text) {
       _controller.text = widget.currentCode;
     }
   }
@@ -883,9 +930,9 @@ class _PromoCodeFieldState extends ConsumerState<_PromoCodeField> {
       setState(() => _loading = false);
       ref.read(checkoutPromoCodeProvider.notifier).state = '';
       ref.invalidate(checkoutReviewProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Promo code cleared')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Promo code cleared')));
       return;
     }
     try {
@@ -909,12 +956,14 @@ class _PromoCodeFieldState extends ConsumerState<_PromoCodeField> {
       final message = data is Map<String, dynamic>
           ? (data['message'] ?? 'Promo code is not valid').toString()
           : 'Promo code is not valid';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } catch (_) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Promo code is not valid')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Promo code is not valid')));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -933,7 +982,9 @@ class _PromoCodeFieldState extends ConsumerState<_PromoCodeField> {
             padding: const EdgeInsets.only(bottom: AppSpacing.xs),
             child: Text(
               'Applied ${widget.currentCode.trim()} - Discount \$${(widget.discountAmount ?? 0).toStringAsFixed(2)}',
-              style: AppTextStyles.bodySmall(applied ? AppConfig.successGreen : AppConfig.subtitleColor),
+              style: AppTextStyles.bodySmall(
+                applied ? AppConfig.successGreen : AppConfig.subtitleColor,
+              ),
             ),
           ),
         if (!applied && widget.promoMessage.trim().isNotEmpty)
@@ -953,7 +1004,10 @@ class _PromoCodeFieldState extends ConsumerState<_PromoCodeField> {
                 decoration: InputDecoration(
                   hintText: 'Promo Code',
                   suffixIcon: applied
-                      ? const Icon(Icons.local_offer_outlined, color: AppConfig.successGreen)
+                      ? const Icon(
+                          Icons.local_offer_outlined,
+                          color: AppConfig.successGreen,
+                        )
                       : null,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
@@ -967,7 +1021,9 @@ class _PromoCodeFieldState extends ConsumerState<_PromoCodeField> {
             ),
             const SizedBox(width: AppSpacing.sm),
             FilledButton(
-              onPressed: _loading ? null : () => _validate(context, _controller.text),
+              onPressed: _loading
+                  ? null
+                  : () => _validate(context, _controller.text),
               style: FilledButton.styleFrom(
                 backgroundColor: AppConfig.primaryColor,
                 foregroundColor: Colors.white,
@@ -983,7 +1039,10 @@ class _PromoCodeFieldState extends ConsumerState<_PromoCodeField> {
                   ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : const Text('Apply'),
             ),
@@ -1026,7 +1085,9 @@ class _ConfirmPayBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final due = amountDueNow;
-    final label = due <= 0 ? 'Confirm Order' : 'Confirm & Pay ${_formatUsd(due)}';
+    final label = due <= 0
+        ? 'Confirm Order'
+        : 'Confirm & Pay ${_formatUsd(due)}';
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -1046,7 +1107,10 @@ class _ConfirmPayBar extends StatelessWidget {
                     ? const SizedBox(
                         width: 22,
                         height: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                     : const Icon(Icons.lock, size: 20, color: Colors.white),
                 label: Text(isLoading ? 'Processing...' : label),
@@ -1055,8 +1119,7 @@ class _ConfirmPayBar extends StatelessWidget {
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(AppConfig.radiusMedium),
+                    borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
                   ),
                 ),
               ),

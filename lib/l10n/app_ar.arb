@@ -81,5 +81,6 @@
   "deleteAccount": "حذف الحساب",
   "comingSoon": "قريباً",
   "checkConnectionAndRetry": "لا يوجد اتصال. تحقق من الشبكة وحاول مرة أخرى.",
-  "retry": "إعادة المحاولة"
+  "retry": "إعادة المحاولة",
+  "defaultAddressChangeCartReviewNote": "ملاحظة: عند تغيير عنوان التوصيل الافتراضي، تُعاد جميع عناصر السلة إلى مراجعة الإدارة."
 }

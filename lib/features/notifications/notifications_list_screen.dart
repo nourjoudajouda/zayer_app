@@ -31,7 +31,9 @@ class _NotificationsListScreenState
   static List<NotificationItem> _importantFrom(List<NotificationItem> items) =>
       items.where((e) => e.important).toList();
   static List<NotificationItem> _todayFrom(List<NotificationItem> items) =>
-      items.where((e) => e.timeAgo.contains('h') || e.timeAgo == 'Now').toList();
+      items
+          .where((e) => e.timeAgo.contains('h') || e.timeAgo == 'Now')
+          .toList();
   static List<NotificationItem> _yesterdayFrom(List<NotificationItem> items) =>
       items.where((e) => e.timeAgo == 'Yesterday').toList();
 
@@ -40,13 +42,21 @@ class _NotificationsListScreenState
       case NotificationFilterType.all:
         return list;
       case NotificationFilterType.orders:
-        return list.where((e) => e.type == NotificationFilterType.orders).toList();
+        return list
+            .where((e) => e.type == NotificationFilterType.orders)
+            .toList();
       case NotificationFilterType.shipments:
-        return list.where((e) => e.type == NotificationFilterType.shipments).toList();
+        return list
+            .where((e) => e.type == NotificationFilterType.shipments)
+            .toList();
       case NotificationFilterType.payments:
-        return list.where((e) => e.type == NotificationFilterType.payments).toList();
+        return list
+            .where((e) => e.type == NotificationFilterType.payments)
+            .toList();
       case NotificationFilterType.promo:
-        return list.where((e) => e.type == NotificationFilterType.promo).toList();
+        return list
+            .where((e) => e.type == NotificationFilterType.promo)
+            .toList();
     }
   }
 
@@ -62,7 +72,9 @@ class _NotificationsListScreenState
 
   Future<void> _delete(NotificationItem item) async {
     // Hide immediately for snappy UX.
-    ref.read(locallyDeletedNotificationIdsProvider.notifier).markDeleted(item.id);
+    ref
+        .read(locallyDeletedNotificationIdsProvider.notifier)
+        .markDeleted(item.id);
     // Best-effort backend call.
     try {
       await _repo.delete(item.id);
@@ -144,7 +156,7 @@ class _NotificationsListScreenState
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.tune),
+            icon: const Icon(Icons.more_vert),
             tooltip: 'Notification settings',
             onPressed: () => context.push(AppRoutes.notificationSettings),
           ),
@@ -176,21 +188,24 @@ class _NotificationsListScreenState
                   _FilterChip(
                     label: 'Shipments',
                     selected: _filter == NotificationFilterType.shipments,
-                    onTap: () =>
-                        setState(() => _filter = NotificationFilterType.shipments),
+                    onTap: () => setState(
+                      () => _filter = NotificationFilterType.shipments,
+                    ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   _FilterChip(
                     label: 'Promo',
                     selected: _filter == NotificationFilterType.promo,
-                    onTap: () => setState(() => _filter = NotificationFilterType.promo),
+                    onTap: () =>
+                        setState(() => _filter = NotificationFilterType.promo),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   _FilterChip(
                     label: 'Payments',
                     selected: _filter == NotificationFilterType.payments,
-                    onTap: () =>
-                        setState(() => _filter = NotificationFilterType.payments),
+                    onTap: () => setState(
+                      () => _filter = NotificationFilterType.payments,
+                    ),
                   ),
                 ],
               ),
@@ -203,11 +218,25 @@ class _NotificationsListScreenState
                   await ref.read(notificationsListProvider.future);
                 },
                 child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                  ),
                   children: [
-                    ..._buildSection('IMPORTANT', _byFilter(_importantFrom(items)), true),
-                    ..._buildSection('TODAY', _byFilter(_todayFrom(items)), false),
-                    ..._buildSection('YESTERDAY', _byFilter(_yesterdayFrom(items)), false),
+                    ..._buildSection(
+                      'IMPORTANT',
+                      _byFilter(_importantFrom(items)),
+                      true,
+                    ),
+                    ..._buildSection(
+                      'TODAY',
+                      _byFilter(_todayFrom(items)),
+                      false,
+                    ),
+                    ..._buildSection(
+                      'YESTERDAY',
+                      _byFilter(_yesterdayFrom(items)),
+                      false,
+                    ),
                     const SizedBox(height: AppSpacing.xxl),
                   ],
                 ),
@@ -220,7 +249,10 @@ class _NotificationsListScreenState
   }
 
   List<Widget> _buildSection(
-      String header, List<NotificationItem> list, bool isImportant) {
+    String header,
+    List<NotificationItem> list,
+    bool isImportant,
+  ) {
     if (list.isEmpty) return [];
     return [
       Row(
@@ -228,31 +260,38 @@ class _NotificationsListScreenState
         children: [
           Text(
             header,
-            style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+            style: AppTextStyles.bodySmall(
+              AppConfig.subtitleColor,
+            ).copyWith(fontWeight: FontWeight.w700, letterSpacing: 1.3),
           ),
           if (header == 'TODAY')
             TextButton(
               onPressed: () => _markAllRead(list),
               child: Text(
-                'MARK ALL AS READ',
-                style: AppTextStyles.bodySmall(AppConfig.primaryColor),
+                'Mark all as read',
+                style: AppTextStyles.bodySmall(
+                  AppConfig.primaryColor,
+                ).copyWith(fontWeight: FontWeight.w600),
               ),
             ),
         ],
       ),
       const SizedBox(height: AppSpacing.sm),
-      ...list.map((e) => _NotificationCard(
-            item: e,
-            isImportant: isImportant,
-            onTap: () => _openNotification(e),
-            onActionTap: e.actionLabel != null ? () => _openNotification(e) : null,
-            onDelete: () => _delete(e),
-            onMarkRead: () {
-              ref.read(locallyReadNotificationIdsProvider.notifier).markRead(e.id);
-              _repo.markRead(e.id);
-              ref.invalidate(notificationsListProvider);
-            },
-          )),
+      ...list.map(
+        (e) => _NotificationCard(
+          item: e,
+          isImportant: isImportant,
+          onTap: () => _openNotification(e),
+          onDelete: () => _delete(e),
+          onMarkRead: () {
+            ref
+                .read(locallyReadNotificationIdsProvider.notifier)
+                .markRead(e.id);
+            _repo.markRead(e.id);
+            ref.invalidate(notificationsListProvider);
+          },
+        ),
+      ),
       const SizedBox(height: AppSpacing.lg),
     ];
   }
@@ -272,20 +311,18 @@ class _FilterChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected
-          ? AppConfig.primaryColor
-          : AppConfig.borderColor.withValues(alpha: 0.3),
+      color: selected ? AppConfig.primaryColor : const Color(0xFFF3F4F6),
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
           child: Text(
             label,
             style: AppTextStyles.bodySmall(
               selected ? Colors.white : AppConfig.textColor,
-            ),
+            ).copyWith(fontWeight: FontWeight.w600),
           ),
         ),
       ),
@@ -298,7 +335,6 @@ class _NotificationCard extends StatelessWidget {
     required this.item,
     required this.isImportant,
     required this.onTap,
-    this.onActionTap,
     required this.onDelete,
     required this.onMarkRead,
   });
@@ -306,12 +342,20 @@ class _NotificationCard extends StatelessWidget {
   final NotificationItem item;
   final bool isImportant;
   final VoidCallback onTap;
-  final VoidCallback? onActionTap;
   final VoidCallback onDelete;
   final VoidCallback onMarkRead;
 
   @override
   Widget build(BuildContext context) {
+    if (isImportant) {
+      return _ImportantNotificationCard(
+        item: item,
+        onTap: onTap,
+        onDelete: onDelete,
+        onMarkRead: onMarkRead,
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Dismissible(
@@ -340,9 +384,7 @@ class _NotificationCard extends StatelessWidget {
           return false;
         },
         child: Material(
-          color: isImportant
-              ? Colors.amber.withValues(alpha: 0.15)
-              : AppConfig.cardColor,
+          color: const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
           child: InkWell(
             onTap: onTap,
@@ -350,23 +392,13 @@ class _NotificationCard extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
-                border: Border.all(
-                  color: isImportant
-                      ? Colors.amber.withValues(alpha: 0.5)
-                      : AppConfig.borderColor,
-                ),
+                border: Border.all(color: const Color(0xFFE5EAF3)),
                 borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    _iconForType(item.type),
-                    size: 24,
-                    color: isImportant
-                        ? Colors.amber.shade800
-                        : AppConfig.subtitleColor,
-                  ),
+                  _LeadingAvatar(item: item),
                   const SizedBox(width: AppSpacing.sm),
                   if (!item.read)
                     Container(
@@ -402,7 +434,7 @@ class _NotificationCard extends StatelessWidget {
                             Text(
                               item.timeAgo,
                               style: AppTextStyles.bodySmall(
-                                AppConfig.subtitleColor,
+                                const Color(0xFF94A3B8),
                               ),
                             ),
                           ],
@@ -412,26 +444,10 @@ class _NotificationCard extends StatelessWidget {
                           item.subtitle,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        _TypePill(type: item.type, category: item.category),
-                        if (item.actionLabel != null && onActionTap != null) ...[
-                          const SizedBox(height: AppSpacing.sm),
-                          TextButton(
-                            onPressed: onActionTap,
-                            style: TextButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              minimumSize: Size.zero,
-                              tapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: Text(
-                              item.actionLabel!,
-                              style: AppTextStyles.label(AppConfig.primaryColor),
-                            ),
+                          style: AppTextStyles.bodyMedium(
+                            const Color(0xFF64748B),
                           ),
-                        ],
+                        ),
                       ],
                     ),
                   ),
@@ -442,21 +458,6 @@ class _NotificationCard extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  IconData _iconForType(NotificationFilterType type) {
-    switch (type) {
-      case NotificationFilterType.orders:
-        return Icons.shopping_bag_outlined;
-      case NotificationFilterType.shipments:
-        return Icons.local_shipping_outlined;
-      case NotificationFilterType.payments:
-        return Icons.payments_outlined;
-      case NotificationFilterType.promo:
-        return Icons.local_offer_outlined;
-      case NotificationFilterType.all:
-        return Icons.notifications_outlined;
-    }
   }
 }
 
@@ -486,7 +487,10 @@ class _SwipeActionBackground extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             label,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
@@ -494,37 +498,164 @@ class _SwipeActionBackground extends StatelessWidget {
   }
 }
 
-class _TypePill extends StatelessWidget {
-  const _TypePill({required this.type, required this.category});
+class _LeadingAvatar extends StatelessWidget {
+  const _LeadingAvatar({required this.item});
 
-  final NotificationFilterType type;
-  final String category;
+  final NotificationItem item;
 
   @override
   Widget build(BuildContext context) {
-    final (label, bg) = switch (type) {
-      NotificationFilterType.orders => ('Orders', AppConfig.lightBlueBg),
-      NotificationFilterType.shipments => (
-          'Shipments',
-          AppConfig.borderColor.withValues(alpha: 0.25)
+    if (item.imageUrl != null && item.imageUrl!.trim().isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.network(
+          item.imageUrl!,
+          width: 32,
+          height: 32,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => _fallbackIcon(),
         ),
-      NotificationFilterType.payments => (
-          'Payments',
-          AppConfig.primaryColor.withValues(alpha: 0.10)
-        ),
-      NotificationFilterType.promo => ('Promo', Colors.orange.withValues(alpha: 0.15)),
-      NotificationFilterType.all => ('Notification', AppConfig.borderColor.withValues(alpha: 0.2)),
-    };
-    final display = category.trim().isEmpty ? label : category;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(20),
+      );
+    }
+    return _fallbackIcon();
+  }
+
+  Widget _fallbackIcon() {
+    final (icon, bg, fg) = switch (item.type) {
+      NotificationFilterType.orders => (
+        Icons.shopping_bag_outlined,
+        const Color(0xFFDCEAFE),
+        const Color(0xFF2563EB),
       ),
-      child: Text(
-        display,
-        style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+      NotificationFilterType.shipments => (
+        Icons.local_shipping_outlined,
+        const Color(0xFFDCFCE7),
+        const Color(0xFF16A34A),
+      ),
+      NotificationFilterType.payments => (
+        Icons.account_balance_wallet_outlined,
+        const Color(0xFFEDE9FE),
+        const Color(0xFF7C3AED),
+      ),
+      NotificationFilterType.promo => (
+        Icons.local_offer_outlined,
+        const Color(0xFFF3E8FF),
+        const Color(0xFF9333EA),
+      ),
+      NotificationFilterType.all => (
+        Icons.notifications_none,
+        const Color(0xFFE2E8F0),
+        const Color(0xFF475569),
+      ),
+    };
+
+    return Container(
+      width: 32,
+      height: 32,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+      child: Icon(icon, size: 18, color: fg),
+    );
+  }
+}
+
+class _ImportantNotificationCard extends StatelessWidget {
+  const _ImportantNotificationCard({
+    required this.item,
+    required this.onTap,
+    required this.onDelete,
+    required this.onMarkRead,
+  });
+
+  final NotificationItem item;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+  final VoidCallback onMarkRead;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Dismissible(
+        key: ValueKey('notif_imp_${item.id}'),
+        background: _SwipeActionBackground(
+          alignment: Alignment.centerLeft,
+          color: AppConfig.primaryColor,
+          icon: Icons.check,
+          label: 'READ',
+        ),
+        secondaryBackground: const _SwipeActionBackground(
+          alignment: Alignment.centerRight,
+          color: AppConfig.errorRed,
+          icon: Icons.delete_outline,
+          label: 'DELETE',
+        ),
+        confirmDismiss: (direction) async {
+          if (direction == DismissDirection.startToEnd) {
+            onMarkRead();
+            return false;
+          }
+          if (direction == DismissDirection.endToStart) {
+            onDelete();
+            return true;
+          }
+          return false;
+        },
+        child: Material(
+          color: const Color(0xFFFEF9E8),
+          borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFF5D778)),
+                borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFDE68A),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.warning_amber_rounded,
+                          color: Color(0xFF8A6A00),
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          item.title,
+                          style: AppTextStyles.titleMedium(
+                            AppConfig.textColor,
+                          ).copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 42),
+                    child: Text(
+                      item.subtitle,
+                      style: AppTextStyles.bodyMedium(const Color(0xFF8A6A00)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

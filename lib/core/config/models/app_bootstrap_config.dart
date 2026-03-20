@@ -148,6 +148,19 @@ class OnboardingPageConfig {
   }
 }
 
+/// Canonical key for matching [MarketCountryConfig.code] with [StoreConfig.countryCode].
+/// Trims, uppercases, and treats UK and GB as the same market (common API mismatch).
+String canonicalMarketCountryCode(String code) {
+  final u = code.trim().toUpperCase();
+  if (u == 'UK' || u == 'GB') return 'GB';
+  return u;
+}
+
+/// True when two bootstrap country codes refer to the same market.
+bool marketCountryCodesEqual(String a, String b) {
+  return canonicalMarketCountryCode(a) == canonicalMarketCountryCode(b);
+}
+
 /// Market country for filter chips. Laravel snake_case.
 class MarketCountryConfig {
   const MarketCountryConfig({
@@ -155,19 +168,31 @@ class MarketCountryConfig {
     required this.name,
     this.flagEmoji = '',
     this.isFeatured,
+    this.storeCount,
   });
 
   final String code;
   final String name;
   final String flagEmoji;
   final bool? isFeatured;
+  /// When set by API (`store_count` / `stores_count`), shown on home instead of counting [MarketsConfig.featuredStores] only.
+  final int? storeCount;
 
   factory MarketCountryConfig.fromJson(Map<String, dynamic> json) {
+    final rawCount = json['store_count'] ?? json['stores_count'];
+    int? parsedCount;
+    if (rawCount is int) {
+      parsedCount = rawCount;
+    } else if (rawCount is String) {
+      parsedCount = int.tryParse(rawCount.trim());
+    }
+
     return MarketCountryConfig(
       code: json['code'] as String? ?? '',
       name: json['name'] as String? ?? '',
       flagEmoji: json['flag_emoji'] as String? ?? '',
       isFeatured: json['is_featured'] as bool?,
+      storeCount: parsedCount,
     );
   }
 }

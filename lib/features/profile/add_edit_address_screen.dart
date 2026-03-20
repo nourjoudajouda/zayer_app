@@ -5,6 +5,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/theme/app_spacing.dart';
+import '../cart/providers/cart_providers.dart';
 import 'models/address_model.dart';
 import 'providers/profile_providers.dart';
 
@@ -12,6 +13,7 @@ import 'providers/profile_providers.dart';
 class AddEditAddressScreen extends ConsumerStatefulWidget {
   const AddEditAddressScreen({
     super.key,
+    this.requireDefault = false,
     this.addressId,
     this.initialAddressLine,
     this.initialCityId,
@@ -30,6 +32,8 @@ class AddEditAddressScreen extends ConsumerStatefulWidget {
     this.initialLng,
   });
 
+  /// When true (e.g. first address from cart gate), saving must set this line as default.
+  final bool requireDefault;
   final String? addressId;
   final String? initialAddressLine;
   final String? initialCityId;
@@ -79,7 +83,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
     _nicknameController = TextEditingController(text: widget.initialNickname ?? '');
     _selectedCountryId = widget.initialCountryId ?? 'ae';
     _selectedCityId = widget.initialCityId ?? 'dxb';
-    _isDefault = widget.initialIsDefault;
+    _isDefault = widget.requireDefault || widget.initialIsDefault;
     _lat = widget.initialLat;
     _lng = widget.initialLng;
     if (widget.initialAddressTypeIndex != null && widget.initialAddressTypeIndex! < AddressType.values.length) {
@@ -131,6 +135,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
           .where((e) => e != null && e.isNotEmpty)
           .join(', ');
       final repo = ref.read(addressRepositoryProvider);
+      final saveAsDefault = widget.requireDefault ? true : _isDefault;
       await repo.saveAddress(
         id: widget.addressId,
         addressLine: addressLine.isEmpty ? '${_cityName}, $countryName' : addressLine,
@@ -139,7 +144,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
         cityId: cityId?.isEmpty == true ? null : cityId,
         cityName: cityName.isEmpty ? null : cityName,
         phone: widget.initialPhone?.trim().isEmpty == true ? null : widget.initialPhone,
-        isDefault: _isDefault,
+        isDefault: saveAsDefault,
         nickname: _nicknameController.text.trim().isEmpty ? null : _nicknameController.text.trim(),
         addressType: _addressType,
         areaDistrict: _areaDistrictController.text.trim().isEmpty ? null : _areaDistrictController.text.trim(),
@@ -150,6 +155,9 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
         lat: _lat,
         lng: _lng,
       );
+      if (saveAsDefault) {
+        await ref.read(cartItemsProvider.notifier).loadItems();
+      }
       if (mounted) Navigator.of(context).pop(true);
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -515,9 +523,17 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
         const SizedBox(height: AppSpacing.lg),
         SwitchListTile(
           title: const Text('Set as default address'),
-          value: _isDefault,
-          onChanged: (v) => setState(() => _isDefault = v),
-          activeColor: AppConfig.primaryColor,
+          subtitle: widget.requireDefault
+              ? Text(
+                  'Required so we can calculate shipping to your door.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
+                )
+              : null,
+          value: widget.requireDefault ? true : _isDefault,
+          onChanged: widget.requireDefault
+              ? null
+              : (v) => setState(() => _isDefault = v),
+          activeThumbColor: AppConfig.primaryColor,
           contentPadding: EdgeInsets.zero,
         ),
       ],

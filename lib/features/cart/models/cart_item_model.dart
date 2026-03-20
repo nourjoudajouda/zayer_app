@@ -30,7 +30,9 @@ class CartItem {
     this.syncedToBackend = false,
     this.reviewStatus = CartItemReviewStatus.pendingReview,
     this.shippingCost,
+    this.shippingEstimated = false,
     this.variationText,
+    this.destinationAddressId,
   });
 
   /// e.g. "Size: M, Color: Red" for display when product has variations.
@@ -63,6 +65,12 @@ class CartItem {
   /// Shipping cost for this item (or per-unit). Filled by backend/checkout.
   final double? shippingCost;
 
+  /// True when quote used fallbacks or incomplete product data (API `estimated`).
+  final bool shippingEstimated;
+
+  /// Saved address id used for shipping quote (POST `destination_address_id`). From API `shipping_destination.address_id`.
+  final String? destinationAddressId;
+
   double get totalPrice => unitPrice * quantity;
   double get totalShipping => (shippingCost ?? 0) * quantity;
   bool get isReviewed => reviewStatus == CartItemReviewStatus.reviewed;
@@ -89,7 +97,9 @@ class CartItem {
     bool? syncedToBackend,
     CartItemReviewStatus? reviewStatus,
     double? shippingCost,
+    bool? shippingEstimated,
     String? variationText,
+    String? destinationAddressId,
   }) {
     return CartItem(
       id: id ?? this.id,
@@ -113,7 +123,9 @@ class CartItem {
       syncedToBackend: syncedToBackend ?? this.syncedToBackend,
       reviewStatus: reviewStatus ?? this.reviewStatus,
       shippingCost: shippingCost ?? this.shippingCost,
+      shippingEstimated: shippingEstimated ?? this.shippingEstimated,
       variationText: variationText ?? this.variationText,
+      destinationAddressId: destinationAddressId ?? this.destinationAddressId,
     );
   }
 
@@ -140,7 +152,9 @@ class CartItem {
       'source': source,
       'review_status': reviewStatus.name,
       'shipping_cost': shippingCost,
+      'estimated': shippingEstimated,
       'variation_text': variationText,
+      if (destinationAddressId != null) 'destination_address_id': destinationAddressId,
     };
   }
 
@@ -149,6 +163,14 @@ class CartItem {
     final s = json['review_status'] as String?;
     if (s == 'reviewed') status = CartItemReviewStatus.reviewed;
     if (s == 'rejected') status = CartItemReviewStatus.rejected;
+    String? destAddrId;
+    final sd = json['shipping_destination'];
+    if (sd is Map<String, dynamic>) {
+      final raw = sd['address_id'];
+      if (raw != null) destAddrId = raw.toString();
+    }
+    destAddrId ??= json['destination_address_id']?.toString();
+
     return CartItem(
       id: json['id'] as String,
       productUrl: json['url'] as String? ?? json['product_url'] as String? ?? json['productUrl'] as String? ?? '',
@@ -171,7 +193,9 @@ class CartItem {
       syncedToBackend: json['syncedToBackend'] as bool? ?? false,
       reviewStatus: status,
       shippingCost: (json['shipping_cost'] as num?)?.toDouble(),
+      shippingEstimated: json['estimated'] == true,
       variationText: json['variation_text'] as String? ?? json['variationText'] as String?,
+      destinationAddressId: destAddrId,
     );
   }
 }

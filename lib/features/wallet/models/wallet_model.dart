@@ -15,12 +15,7 @@ class WalletBalance {
   String get promoFormatted => '\$${promo.toStringAsFixed(0)}';
 }
 
-enum WalletActivityType {
-  all,
-  refunds,
-  payments,
-  topUps,
-}
+enum WalletActivityType { all, refunds, payments, topUps, adminCredits }
 
 class WalletTransaction {
   const WalletTransaction({

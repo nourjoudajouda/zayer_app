@@ -18,15 +18,19 @@ import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/ui/zayer_primary_button.dart';
 import '../../core/widgets/add_to_cart_success_sheet.dart';
+import '../../generated/l10n/app_localizations.dart';
 import '../cart/models/cart_item_model.dart';
 import '../cart/providers/cart_providers.dart';
 import '../cart/repositories/cart_repository.dart';
-import '../product_import/models/product_variation.dart';
+import '../profile/models/address_model.dart';
+import '../profile/providers/profile_providers.dart';
 import 'models/product_import_result.dart';
 import 'providers/paste_link_providers.dart';
 
 /// Debounce delay for auto-fetch.
 const _debounceMs = 700;
+
+const _shippingEstimateDebounceMs = 650;
 
 /// States for the paste link flow.
 enum _PasteLinkState {
@@ -72,17 +76,36 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
   /// Selected option index per variation (color, size, etc.)
   final Map<int, int> _selectedVariationIndices = {};
   bool _isAddingToCart = false;
+  Timer? _shippingEstimateDebounce;
+  bool _shippingEstimateLoading = false;
+  double? _shippingPreviewPerUnit;
+  String _shippingPreviewCurrency = 'USD';
+  bool _shippingPreviewEstimated = false;
+  String? _shippingPreviewFootnote;
+  bool _shippingPreviewUnavailable = false;
+
+  /// Which saved address to use for shipping preview and add-to-cart (server falls back to default if omitted).
+  String? _quoteShippingAddressId;
 
   @override
   void initState() {
     super.initState();
     _urlController.addListener(_onUrlChanged);
+    _weightController.addListener(_scheduleShippingEstimate);
+    _lengthController.addListener(_scheduleShippingEstimate);
+    _widthController.addListener(_scheduleShippingEstimate);
+    _heightController.addListener(_scheduleShippingEstimate);
   }
 
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _shippingEstimateDebounce?.cancel();
     _urlController.removeListener(_onUrlChanged);
+    _weightController.removeListener(_scheduleShippingEstimate);
+    _lengthController.removeListener(_scheduleShippingEstimate);
+    _widthController.removeListener(_scheduleShippingEstimate);
+    _heightController.removeListener(_scheduleShippingEstimate);
     _urlController.dispose();
     _nameController.dispose();
     _unitPriceController.dispose();
@@ -97,6 +120,291 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
   /// Fields are enabled when store detected (success) or manual mode.
   bool get _fieldsEnabled =>
       _state == _PasteLinkState.success || _state == _PasteLinkState.manual;
+
+  void _clearShippingPreview() {
+    _shippingEstimateDebounce?.cancel();
+    _shippingEstimateLoading = false;
+    _shippingPreviewPerUnit = null;
+    _shippingPreviewCurrency = 'USD';
+    _shippingPreviewEstimated = false;
+    _shippingPreviewFootnote = null;
+    _shippingPreviewUnavailable = false;
+  }
+
+  void _scheduleShippingEstimate() {
+    _shippingEstimateDebounce?.cancel();
+    if (!_fieldsEnabled) return;
+    _shippingEstimateDebounce = Timer(
+      const Duration(milliseconds: _shippingEstimateDebounceMs),
+      _loadShippingEstimate,
+    );
+  }
+
+  String? _effectiveQuoteAddressId(List<Address> list) {
+    if (list.isEmpty) return null;
+    final cur = _quoteShippingAddressId;
+    if (cur != null && list.any((a) => a.id == cur)) return cur;
+    for (final a in list) {
+      if (a.isDefault) return a.id;
+    }
+    return list.first.id;
+  }
+
+  Future<void> _loadShippingEstimate() async {
+    if (!_fieldsEnabled || !mounted) return;
+    setState(() {
+      _shippingEstimateLoading = true;
+      _shippingPreviewUnavailable = false;
+      _shippingPreviewFootnote = null;
+    });
+    final repo = ref.read(cartRepositoryProvider);
+    final list = ref.read(addressesProvider).valueOrNull ?? [];
+    final destId = _effectiveQuoteAddressId(list);
+    final w = double.tryParse(_weightController.text.trim());
+    final l = double.tryParse(_lengthController.text.trim());
+    final wi = double.tryParse(_widthController.text.trim());
+    final h = double.tryParse(_heightController.text.trim());
+    final hasAnyDim = _lengthController.text.trim().isNotEmpty ||
+        _widthController.text.trim().isNotEmpty ||
+        _heightController.text.trim().isNotEmpty;
+    final r = await repo.estimateShipping(
+      quantity: _quantity,
+      weight: w,
+      weightUnit: _weightController.text.trim().isNotEmpty ? _weightUnit : null,
+      length: l,
+      width: wi,
+      height: h,
+      dimensionUnit: hasAnyDim ? _dimensionUnit : null,
+      destinationAddressId: destId,
+    );
+    if (!mounted) return;
+    setState(() {
+      _shippingEstimateLoading = false;
+      if (!r.available) {
+        _shippingPreviewPerUnit = null;
+        _shippingPreviewUnavailable = true;
+        _shippingPreviewFootnote = r.message;
+        return;
+      }
+      _shippingPreviewUnavailable = false;
+      _shippingPreviewPerUnit = r.shippingCost;
+      _shippingPreviewCurrency = r.currency;
+      _shippingPreviewEstimated = r.estimated;
+      final label = r.destinationLabel?.trim();
+      final cc = r.destinationCountry?.trim();
+      if (label != null && label.isNotEmpty) {
+        _shippingPreviewFootnote =
+            cc != null && cc.isNotEmpty ? '$label · $cc' : label;
+      } else if (cc != null && cc.isNotEmpty) {
+        _shippingPreviewFootnote = 'Delivery to $cc';
+      } else {
+        _shippingPreviewFootnote = null;
+      }
+    });
+  }
+
+  Widget _buildShippingEstimateBanner() {
+    if (_shippingEstimateLoading) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppConfig.lightBlueBg.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+          border: Border.all(color: AppConfig.borderColor),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppConfig.primaryColor,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Calculating approximate shipping…',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppConfig.subtitleColor,
+                  ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_shippingPreviewUnavailable) {
+      final msg = _shippingPreviewFootnote?.trim();
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: Colors.orange.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+          border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
+        ),
+        child: Text(
+          msg != null && msg.isNotEmpty
+              ? msg
+              : 'Sign in and add a default delivery address to see shipping estimates.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppConfig.textColor,
+              ),
+        ),
+      );
+    }
+    final cost = _shippingPreviewPerUnit;
+    if (cost == null) return const SizedBox.shrink();
+    final label = _shippingPreviewEstimated ? 'Approx. shipping' : 'Shipping estimate';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppConfig.primaryColor.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+        border: Border.all(color: AppConfig.primaryColor.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$label (qty $_quantity)',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppConfig.textColor,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${cost.toStringAsFixed(2)} $_shippingPreviewCurrency',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppConfig.primaryColor,
+                ),
+          ),
+          if (_shippingPreviewFootnote != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              _shippingPreviewFootnote!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppConfig.subtitleColor,
+                  ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShippingDestinationRow() {
+    final addressesAsync = ref.watch(addressesProvider);
+    return addressesAsync.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.only(bottom: AppSpacing.md),
+        child: LinearProgressIndicator(),
+      ),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (list) {
+        if (list.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.md),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Add a delivery address to calculate shipping.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppConfig.textColor,
+                        ),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      await context.push(AppRoutes.myAddresses);
+                      if (mounted) ref.invalidate(addressesProvider);
+                    },
+                    child: const Text('My addresses'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        final effective = _effectiveQuoteAddressId(list)!;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Delivery address',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppConfig.textColor,
+                    ),
+              ),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                value: effective,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                ),
+                items: list
+                    .map(
+                      (a) => DropdownMenuItem<String>(
+                        value: a.id,
+                        child: Text(
+                          '${a.displayTitle}${a.isDefault ? ' (default)' : ''} · ${a.countryName}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: _fieldsEnabled
+                    ? (v) {
+                        if (v == null) return;
+                        setState(() => _quoteShippingAddressId = v);
+                        _scheduleShippingEstimate();
+                      }
+                    : null,
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () async {
+                    await context.push(AppRoutes.myAddresses);
+                    if (mounted) ref.invalidate(addressesProvider);
+                  },
+                  child: const Text('Manage addresses'),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                AppLocalizations.of(context)?.defaultAddressChangeCartReviewNote ??
+                    'Note: If you change your default delivery address, all items in your cart will be sent for admin review again.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppConfig.subtitleColor,
+                      height: 1.35,
+                    ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   void _focusNameField() {
     _nameFocusNode.requestFocus();
@@ -120,6 +428,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
         _invalidError = null;
         _result = null;
         _showNormalizedHint = false;
+        _clearShippingPreview();
       });
       return;
     }
@@ -156,6 +465,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
       _invalidError = null;
       _result = null;
       _showNormalizedHint = false;
+      _clearShippingPreview();
     });
 
     final repo = ref.read(productLinkImportRepositoryProvider);
@@ -189,12 +499,16 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
           _weightController.text = w.toStringAsFixed(2);
         }
       });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scheduleShippingEstimate();
+      });
     } on InvalidLinkException catch (e) {
       if (!mounted) return;
       if (currentRequestId != _requestId) return;
       setState(() {
         _state = _PasteLinkState.invalid;
         _invalidError = e.message;
+        _clearShippingPreview();
       });
     } on UnsupportedLinkException {
       if (!mounted) return;
@@ -206,6 +520,10 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
         _nameController.clear();
         _unitPriceController.clear();
         _showNormalizedHint = false;
+        _clearShippingPreview();
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scheduleShippingEstimate();
       });
     } catch (e, st) {
       if (!mounted) return;
@@ -214,6 +532,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
       setState(() {
         _state = _PasteLinkState.idle;
         _invalidError = 'Failed to load product. Please try again.';
+        _clearShippingPreview();
       });
     }
   }
@@ -300,6 +619,8 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
     }
 
     // Build cart item from form data
+    final addrList = ref.read(addressesProvider).valueOrNull ?? [];
+    final shipDestId = _effectiveQuoteAddressId(addrList);
     final cartItem = CartItem(
       id: generateCartItemId(),
       productUrl: productUrl,
@@ -324,6 +645,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
           : null,
       source: 'paste_link',
       variationText: variationText,
+      destinationAddressId: shipDestId,
     );
 
     if (!mounted) return;
@@ -396,6 +718,24 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AsyncValue<List<Address>>>(addressesProvider, (prev, next) {
+      next.whenData((list) {
+        if (!mounted) return;
+        final cur = _quoteShippingAddressId;
+        final valid = cur != null && list.any((a) => a.id == cur);
+        if (list.isEmpty) {
+          if (cur != null) setState(() => _quoteShippingAddressId = null);
+          return;
+        }
+        if (!valid) {
+          final id = _effectiveQuoteAddressId(list);
+          if (id != null) {
+            setState(() => _quoteShippingAddressId = id);
+            _scheduleShippingEstimate();
+          }
+        }
+      });
+    });
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -516,6 +856,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
 
   void _clearUrl() {
     _debounceTimer?.cancel();
+    _shippingEstimateDebounce?.cancel();
     _isUpdatingFromCanonical = true;
     _urlController.clear();
     _isUpdatingFromCanonical = false;
@@ -534,6 +875,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
       _heightController.clear();
       _selectedImages.clear();
       _selectedVariationIndices.clear();
+      _clearShippingPreview();
     });
   }
 
@@ -932,6 +1274,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
                                     _unitPriceController.text = price.toStringAsFixed(2);
                                   }
                                 });
+                                _scheduleShippingEstimate();
                               },
                               selectedColor: AppConfig.primaryColor.withValues(alpha: 0.3),
                             );
@@ -1083,6 +1426,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
                             _quantity = math.max(1, _quantity - 1);
                             _updateTotalPrice();
                           });
+                          _scheduleShippingEstimate();
                         }
                       : null,
                   icon: const Icon(Icons.remove, size: 20),
@@ -1110,6 +1454,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
                             _quantity++;
                             _updateTotalPrice();
                           });
+                          _scheduleShippingEstimate();
                         }
                       : null,
                   icon: const Icon(Icons.add, size: 20),
@@ -1162,6 +1507,11 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
             ],
           ),
         ),
+        if (_fieldsEnabled) ...[
+          const SizedBox(height: AppSpacing.md),
+          _buildShippingDestinationRow(),
+          _buildShippingEstimateBanner(),
+        ],
         // Weight - optional, with unit (lb / g)
         const SizedBox(height: AppSpacing.md),
         Text(
@@ -1195,7 +1545,10 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
                 ],
                 onChanged: _fieldsEnabled
                     ? (value) {
-                        if (value != null) setState(() => _weightUnit = value);
+                        if (value != null) {
+                          setState(() => _weightUnit = value);
+                          _scheduleShippingEstimate();
+                        }
                       }
                     : null,
               ),
@@ -1253,7 +1606,10 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
                 ],
                 onChanged: _fieldsEnabled
                     ? (value) {
-                        if (value != null) setState(() => _dimensionUnit = value);
+                        if (value != null) {
+                          setState(() => _dimensionUnit = value);
+                          _scheduleShippingEstimate();
+                        }
                       }
                     : null,
               ),
@@ -1269,7 +1625,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
             border: Border.all(color: AppConfig.borderColor),
           ),
           child: Text(
-            'Total shipping and customs fees will be calculated and shared for your approval after review.',
+            'Shipping above is an estimate to your default delivery address. Final total may change if admin adjusts weight or fees.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppConfig.subtitleColor,
                 ),

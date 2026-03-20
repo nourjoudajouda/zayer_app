@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+// Uint8List is re-exported by package:flutter/foundation.dart.
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -17,6 +18,8 @@ typedef OnForegroundMessage = void Function(RemoteMessage message);
 /// Call [setup] once when the app has context (e.g. from [ZayerApp] builder).
 class FcmService {
   FcmService._();
+  static const String _channelId = 'fcm_high_importance_v2';
+  static const String _channelName = 'High Priority Notifications';
 
   static bool _initialized = false;
   static OnNotificationTap? _onNotificationTap;
@@ -71,10 +74,10 @@ class FcmService {
       await _initializeLocalNotifications(android: android, ios: ios);
       if (Platform.isAndroid) {
         const channel = AndroidNotificationChannel(
-          'fcm_foreground_channel',
-          'Notifications',
+          _channelId,
+          _channelName,
           description: 'App notifications',
-          importance: Importance.high,
+          importance: Importance.max,
           playSound: true,
           enableVibration: true,
           showBadge: true,
@@ -153,12 +156,14 @@ class FcmService {
     }
     final title = message.notification?.title ?? 'Notification';
     final body = message.notification?.body ?? '';
+    final imageUrl = (data['image_url'] ?? '').toString();
     _showLocalNotification(
       title: title,
       body: body,
       // Some providers/flows may send "notification-only" messages (empty data).
       // Still show a foreground notification; payload remains best-effort.
       payload: data.isNotEmpty ? data : <String, dynamic>{},
+      imageUrl: imageUrl.trim().isEmpty ? null : imageUrl.trim(),
     );
     try {
       if (data.isNotEmpty) {
@@ -246,19 +251,40 @@ class FcmService {
     required String title,
     required String body,
     required Map<String, dynamic> payload,
+    String? imageUrl,
   }) async {
-    const android = AndroidNotificationDetails(
-      'fcm_foreground_channel',
-      'Notifications',
+    Uint8List? imageBytes;
+    if (imageUrl != null && imageUrl.trim().isNotEmpty) {
+      try {
+        final uri = Uri.parse(imageUrl.trim());
+        final httpClient = HttpClient();
+        final request = await httpClient.getUrl(uri);
+        final response = await request.close();
+        if (response.statusCode == 200) {
+          imageBytes = Uint8List.fromList(await consolidateHttpClientResponseBytes(response));
+        }
+        httpClient.close();
+      } catch (_) {
+        // Best-effort: ignore image download failures.
+        imageBytes = null;
+      }
+    }
+
+    final android = AndroidNotificationDetails(
+      _channelId,
+      _channelName,
       channelDescription: 'App notifications',
-      importance: Importance.high,
-      priority: Priority.high,
+      icon: 'notification_icon',
+      importance: Importance.max,
+      priority: Priority.max,
       playSound: true,
       enableVibration: true,
+      ticker: 'notification',
       visibility: NotificationVisibility.public,
+      largeIcon: imageBytes != null ? ByteArrayAndroidBitmap(imageBytes) : null,
     );
-    const ios = DarwinNotificationDetails();
-    const details = NotificationDetails(android: android, iOS: ios);
+    final ios = DarwinNotificationDetails();
+    final details = NotificationDetails(android: android, iOS: ios);
     final payloadJson = jsonEncode(payload);
     try {
       // Use dynamic to support plugin signature differences across platforms/tests.

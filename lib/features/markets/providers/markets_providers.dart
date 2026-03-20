@@ -24,6 +24,6 @@ final filteredStoresProvider = Provider<List<StoreConfig>>((ref) {
     return config.featuredStores;
   }
   return config.featuredStores
-      .where((s) => s.countryCode.toUpperCase() == country.toUpperCase())
+      .where((s) => marketCountryCodesEqual(s.countryCode, country))
       .toList();
 });

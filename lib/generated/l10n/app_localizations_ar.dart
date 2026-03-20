@@ -371,4 +371,8 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get retry => 'إعادة المحاولة';
+
+  @override
+  String get defaultAddressChangeCartReviewNote =>
+      'ملاحظة: عند تغيير عنوان التوصيل الافتراضي، تُعاد جميع عناصر السلة إلى مراجعة الإدارة.';
 }

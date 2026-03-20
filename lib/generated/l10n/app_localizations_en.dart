@@ -372,4 +372,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get retry => 'Retry';
+
+  @override
+  String get defaultAddressChangeCartReviewNote =>
+      'Note: If you change your default delivery address, all items in your cart will be sent for admin review again.';
 }

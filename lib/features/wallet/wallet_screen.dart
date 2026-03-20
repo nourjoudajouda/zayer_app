@@ -15,7 +15,9 @@ class WalletScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final balanceAsync = ref.watch(walletBalanceProvider);
-    final balance = balanceAsync.valueOrNull ?? const WalletBalance(available: 0, pending: 0, promo: 0);
+    final balance =
+        balanceAsync.valueOrNull ??
+        const WalletBalance(available: 0, pending: 0, promo: 0);
     final balanceLoading = balanceAsync.isLoading;
     final visible = ref.watch(walletBalanceVisibleProvider);
     final transactionsAsync = ref.watch(walletFilteredTransactionsProvider);
@@ -42,7 +44,16 @@ class WalletScreen extends ConsumerWidget {
                 child: const SizedBox(
                   width: 36,
                   height: 36,
-                  child: Center(child: Text('?', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600))),
+                  child: Center(
+                    child: Text(
+                      '?',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -60,133 +71,226 @@ class WalletScreen extends ConsumerWidget {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
             child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: AppSpacing.sm),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppConfig.primaryColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppConfig.primaryColor.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.check_circle_outlined, size: 18, color: AppConfig.primaryColor),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Automatically applied at checkout',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppConfig.primaryColor, fontWeight: FontWeight.w500),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: AppSpacing.sm),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppConfig.primaryColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: AppConfig.primaryColor.withValues(alpha: 0.3),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Currency converted to USD based on real-time rates',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (balanceLoading)
-                        SizedBox(
-                          width: 120,
-                          height: 32,
-                          child: Center(
-                            child: SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: AppConfig.primaryColor),
-                            ),
-                          ),
-                        )
-                      else
-                        Text(
-                          visible ? balance.availableFormatted : '••••••••',
-                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: AppConfig.textColor,
-                              ),
-                        ),
-                      const SizedBox(height: 4),
+                      Icon(
+                        Icons.check_circle_outlined,
+                        size: 18,
+                        color: AppConfig.primaryColor,
+                      ),
+                      const SizedBox(width: 6),
                       Text(
-                        'AVAILABLE BALANCE',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppConfig.subtitleColor),
+                        'Automatically applied at checkout',
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: AppConfig.primaryColor,
+                              fontWeight: FontWeight.w500,
+                            ),
                       ),
                     ],
                   ),
-                  IconButton(
-                    icon: Icon(visible ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: AppConfig.subtitleColor),
-                    onPressed: () => ref.read(walletBalanceVisibleProvider.notifier).state = !visible,
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
-              SizedBox(
-                height: 48,
-                child: FilledButton.icon(
-                  onPressed: () => context.push(AppRoutes.topUpWallet),
-                  icon: const Icon(Icons.add, size: 22),
-                  label: const Text('Add Funds'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppConfig.primaryColor,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConfig.radiusSmall)),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Currency converted to USD based on real-time rates',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppConfig.subtitleColor,
                   ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              _BalanceBreakdownCard(balance: balance),
-              const SizedBox(height: AppSpacing.md),
-              _WalletUsageCard(),
-              const SizedBox(height: AppSpacing.lg),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Activity', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                  TextButton(
-                    onPressed: () => _showActivityFilterSheet(context, ref),
-                    child: Text('Filters', style: TextStyle(color: AppConfig.primaryColor, fontWeight: FontWeight.w500)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _ActivityChip(label: 'All', isSelected: activityFilter == WalletActivityType.all, onTap: () => ref.read(walletActivityFilterProvider.notifier).state = WalletActivityType.all),
-                    const SizedBox(width: 8),
-                    _ActivityChip(label: 'Refunds', isSelected: activityFilter == WalletActivityType.refunds, onTap: () => ref.read(walletActivityFilterProvider.notifier).state = WalletActivityType.refunds),
-                    const SizedBox(width: 8),
-                    _ActivityChip(label: 'Payments', isSelected: activityFilter == WalletActivityType.payments, onTap: () => ref.read(walletActivityFilterProvider.notifier).state = WalletActivityType.payments),
-                    const SizedBox(width: 8),
-                    _ActivityChip(label: 'Top-ups', isSelected: activityFilter == WalletActivityType.topUps, onTap: () => ref.read(walletActivityFilterProvider.notifier).state = WalletActivityType.topUps),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (balanceLoading)
+                          SizedBox(
+                            width: 120,
+                            height: 32,
+                            child: Center(
+                              child: SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppConfig.primaryColor,
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          Text(
+                            visible ? balance.availableFormatted : '••••••••',
+                            style: Theme.of(context).textTheme.headlineMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: AppConfig.textColor,
+                                ),
+                          ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'AVAILABLE BALANCE',
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(color: AppConfig.subtitleColor),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        visible
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        color: AppConfig.subtitleColor,
+                      ),
+                      onPressed: () =>
+                          ref
+                                  .read(walletBalanceVisibleProvider.notifier)
+                                  .state =
+                              !visible,
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              if (transactions.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                  child: Text(
-                    'No activity in this category',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppConfig.subtitleColor),
-                    textAlign: TextAlign.center,
+                const SizedBox(height: AppSpacing.md),
+                SizedBox(
+                  height: 48,
+                  child: FilledButton.icon(
+                    onPressed: () => context.push(AppRoutes.topUpWallet),
+                    icon: const Icon(Icons.add, size: 22),
+                    label: const Text('Add Funds'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppConfig.primaryColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppConfig.radiusSmall,
+                        ),
+                      ),
+                    ),
                   ),
-                )
-              else
-                ...transactions.map((t) => _TransactionTile(transaction: t)),
-              const SizedBox(height: AppSpacing.xxl),
-            ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                _BalanceBreakdownCard(balance: balance),
+                const SizedBox(height: AppSpacing.md),
+                _WalletUsageCard(),
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Activity',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => _showActivityFilterSheet(context, ref),
+                      child: Text(
+                        'Filters',
+                        style: TextStyle(
+                          color: AppConfig.primaryColor,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _ActivityChip(
+                        label: 'All',
+                        isSelected: activityFilter == WalletActivityType.all,
+                        onTap: () =>
+                            ref
+                                    .read(walletActivityFilterProvider.notifier)
+                                    .state =
+                                WalletActivityType.all,
+                      ),
+                      const SizedBox(width: 8),
+                      _ActivityChip(
+                        label: 'Refunds',
+                        isSelected:
+                            activityFilter == WalletActivityType.refunds,
+                        onTap: () =>
+                            ref
+                                    .read(walletActivityFilterProvider.notifier)
+                                    .state =
+                                WalletActivityType.refunds,
+                      ),
+                      const SizedBox(width: 8),
+                      _ActivityChip(
+                        label: 'Payments',
+                        isSelected:
+                            activityFilter == WalletActivityType.payments,
+                        onTap: () =>
+                            ref
+                                    .read(walletActivityFilterProvider.notifier)
+                                    .state =
+                                WalletActivityType.payments,
+                      ),
+                      const SizedBox(width: 8),
+                      _ActivityChip(
+                        label: 'Top-ups',
+                        isSelected: activityFilter == WalletActivityType.topUps,
+                        onTap: () =>
+                            ref
+                                    .read(walletActivityFilterProvider.notifier)
+                                    .state =
+                                WalletActivityType.topUps,
+                      ),
+                      const SizedBox(width: 8),
+                      _ActivityChip(
+                        label: 'Admin Credits',
+                        isSelected:
+                            activityFilter == WalletActivityType.adminCredits,
+                        onTap: () =>
+                            ref
+                                    .read(walletActivityFilterProvider.notifier)
+                                    .state =
+                                WalletActivityType.adminCredits,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                if (transactions.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.lg,
+                    ),
+                    child: Text(
+                      'No activity in this category',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppConfig.subtitleColor,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  )
+                else
+                  ...transactions.map((t) => _TransactionTile(transaction: t)),
+                const SizedBox(height: AppSpacing.xxl),
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );
@@ -196,7 +300,11 @@ class WalletScreen extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppConfig.cardColor,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(AppConfig.radiusMedium))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppConfig.radiusMedium),
+        ),
+      ),
       builder: (ctx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.lg),
@@ -206,15 +314,26 @@ class WalletScreen extends ConsumerWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.help_outline, color: AppConfig.primaryColor, size: 28),
+                  Icon(
+                    Icons.help_outline,
+                    color: AppConfig.primaryColor,
+                    size: 28,
+                  ),
                   const SizedBox(width: AppSpacing.sm),
-                  Text('Wallet help', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                  Text(
+                    'Wallet help',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
                 'Your wallet balance is automatically applied at checkout before other payment methods. Add funds anytime with "Add Funds". Currency is converted to USD at real-time rates.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppConfig.subtitleColor),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppConfig.subtitleColor,
+                ),
               ),
               const SizedBox(height: AppSpacing.lg),
             ],
@@ -228,7 +347,11 @@ class WalletScreen extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppConfig.cardColor,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(AppConfig.radiusMedium))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppConfig.radiusMedium),
+        ),
+      ),
       builder: (ctx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
@@ -236,12 +359,53 @@ class WalletScreen extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Filter activity', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              Text(
+                'Filter activity',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
               const SizedBox(height: AppSpacing.sm),
-              ListTile(title: const Text('All'), onTap: () { ref.read(walletActivityFilterProvider.notifier).state = WalletActivityType.all; Navigator.pop(ctx); }),
-              ListTile(title: const Text('Refunds'), onTap: () { ref.read(walletActivityFilterProvider.notifier).state = WalletActivityType.refunds; Navigator.pop(ctx); }),
-              ListTile(title: const Text('Payments'), onTap: () { ref.read(walletActivityFilterProvider.notifier).state = WalletActivityType.payments; Navigator.pop(ctx); }),
-              ListTile(title: const Text('Top-ups'), onTap: () { ref.read(walletActivityFilterProvider.notifier).state = WalletActivityType.topUps; Navigator.pop(ctx); }),
+              ListTile(
+                title: const Text('All'),
+                onTap: () {
+                  ref.read(walletActivityFilterProvider.notifier).state =
+                      WalletActivityType.all;
+                  Navigator.pop(ctx);
+                },
+              ),
+              ListTile(
+                title: const Text('Refunds'),
+                onTap: () {
+                  ref.read(walletActivityFilterProvider.notifier).state =
+                      WalletActivityType.refunds;
+                  Navigator.pop(ctx);
+                },
+              ),
+              ListTile(
+                title: const Text('Payments'),
+                onTap: () {
+                  ref.read(walletActivityFilterProvider.notifier).state =
+                      WalletActivityType.payments;
+                  Navigator.pop(ctx);
+                },
+              ),
+              ListTile(
+                title: const Text('Top-ups'),
+                onTap: () {
+                  ref.read(walletActivityFilterProvider.notifier).state =
+                      WalletActivityType.topUps;
+                  Navigator.pop(ctx);
+                },
+              ),
+              ListTile(
+                title: const Text('Admin Credits'),
+                onTap: () {
+                  ref.read(walletActivityFilterProvider.notifier).state =
+                      WalletActivityType.adminCredits;
+                  Navigator.pop(ctx);
+                },
+              ),
             ],
           ),
         ),
@@ -251,7 +415,11 @@ class WalletScreen extends ConsumerWidget {
 }
 
 class _ActivityChip extends StatelessWidget {
-  const _ActivityChip({required this.label, required this.isSelected, required this.onTap});
+  const _ActivityChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
 
   final String label;
   final bool isSelected;
@@ -269,7 +437,9 @@ class _ActivityChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            border: isSelected ? null : Border.all(color: AppConfig.borderColor),
+            border: isSelected
+                ? null
+                : Border.all(color: AppConfig.borderColor),
           ),
           child: Text(
             label,
@@ -328,10 +498,10 @@ class _BalanceBreakdownCard extends StatelessWidget {
               Text(
                 'BALANCE BREAKDOWN',
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: AppConfig.subtitleColor,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
-                    ),
+                  color: AppConfig.subtitleColor,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                ),
               ),
               const Spacer(),
               Material(
@@ -344,7 +514,14 @@ class _BalanceBreakdownCard extends StatelessWidget {
                     width: 22,
                     height: 22,
                     child: Center(
-                      child: Text('i', style: TextStyle(color: AppConfig.subtitleColor, fontSize: 12, fontWeight: FontWeight.w700)),
+                      child: Text(
+                        'i',
+                        style: TextStyle(
+                          color: AppConfig.subtitleColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -397,17 +574,21 @@ class _BreakdownRow extends StatelessWidget {
       children: [
         Text(
           label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppConfig.textColor),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: AppConfig.textColor),
         ),
         Text(
           value,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: valueColor,
-                fontWeight: FontWeight.w600,
-                decoration: dottedUnderline ? TextDecoration.underline : null,
-                decorationColor: dottedUnderline ? valueColor : null,
-                decorationStyle: dottedUnderline ? TextDecorationStyle.dotted : null,
-              ),
+            color: valueColor,
+            fontWeight: FontWeight.w600,
+            decoration: dottedUnderline ? TextDecoration.underline : null,
+            decorationColor: dottedUnderline ? valueColor : null,
+            decorationStyle: dottedUnderline
+                ? TextDecorationStyle.dotted
+                : null,
+          ),
         ),
       ],
     );
@@ -423,7 +604,13 @@ class _WalletUsageCard extends StatelessWidget {
         color: AppConfig.cardColor,
         borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
         border: Border.all(color: AppConfig.borderColor),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -433,22 +620,38 @@ class _WalletUsageCard extends StatelessWidget {
               Container(
                 width: 40,
                 height: 40,
-                decoration: BoxDecoration(color: AppConfig.primaryColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.account_balance_wallet_outlined, color: AppConfig.primaryColor, size: 22),
+                decoration: BoxDecoration(
+                  color: AppConfig.primaryColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: AppConfig.primaryColor,
+                  size: 22,
+                ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              Text('Wallet Usage', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+              Text(
+                'Wallet Usage',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
             '• Payment Priority: Credits and refunds are always used first before other payment methods.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
           ),
           const SizedBox(height: 4),
           Text(
             '• Partial Payments: If your balance is lower than the total, you can pay the remaining with a card.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
           ),
           const SizedBox(height: AppSpacing.sm),
           GestureDetector(
@@ -458,10 +661,17 @@ class _WalletUsageCard extends StatelessWidget {
               children: [
                 Text(
                   'View Terms & Conditions',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.primaryColor, fontWeight: FontWeight.w500),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppConfig.primaryColor,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 const SizedBox(width: 4),
-                Icon(Icons.arrow_forward_ios, size: 12, color: AppConfig.primaryColor),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 12,
+                  color: AppConfig.primaryColor,
+                ),
               ],
             ),
           ),
@@ -480,11 +690,17 @@ class _TransactionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final icon = transaction.type == WalletActivityType.refunds
         ? Icons.reply
+        : transaction.type == WalletActivityType.adminCredits
+        ? Icons.admin_panel_settings_outlined
         : transaction.type == WalletActivityType.topUps
-            ? Icons.add_circle_outline
-            : Icons.shopping_bag_outlined;
-    final iconBg = transaction.isCredit ? AppConfig.successGreen.withValues(alpha: 0.15) : AppConfig.borderColor.withValues(alpha: 0.5);
-    final amountColor = transaction.isCredit ? AppConfig.successGreen : AppConfig.textColor;
+        ? Icons.add_circle_outline
+        : Icons.shopping_bag_outlined;
+    final iconBg = transaction.isCredit
+        ? AppConfig.successGreen.withValues(alpha: 0.15)
+        : AppConfig.borderColor.withValues(alpha: 0.5);
+    final amountColor = transaction.isCredit
+        ? AppConfig.successGreen
+        : AppConfig.textColor;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -494,26 +710,56 @@ class _TransactionTile extends StatelessWidget {
           Container(
             width: 44,
             height: 44,
-            decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(12)),
-            child: Icon(icon, size: 22, color: transaction.isCredit ? AppConfig.successGreen : AppConfig.subtitleColor),
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              size: 22,
+              color: transaction.isCredit
+                  ? AppConfig.successGreen
+                  : AppConfig.subtitleColor,
+            ),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(transaction.title, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
+                Text(
+                  transaction.title,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                ),
                 const SizedBox(height: 2),
-                Text(transaction.dateTime, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor)),
+                Text(
+                  transaction.dateTime,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppConfig.subtitleColor,
+                  ),
+                ),
               ],
             ),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(transaction.amount, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600, color: amountColor)),
+              Text(
+                transaction.amount,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: amountColor,
+                ),
+              ),
               const SizedBox(height: 2),
-              Text(transaction.subtitle, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: amountColor)),
+              Text(
+                transaction.subtitle,
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(color: amountColor),
+              ),
             ],
           ),
         ],

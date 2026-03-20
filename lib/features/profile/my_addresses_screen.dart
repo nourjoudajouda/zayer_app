@@ -7,6 +7,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../core/config/app_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../generated/l10n/app_localizations.dart';
+import '../cart/providers/cart_providers.dart';
 import 'models/address_model.dart';
 import 'providers/profile_providers.dart';
 import 'widgets/action_card.dart';
@@ -15,7 +17,10 @@ import 'widgets/badge_pill.dart';
 /// My Addresses screen. Opened from Review & Pay "Change" or from Profile.
 /// Pops with [true] when user saves/selects a different address so caller can show recalculation warning.
 class MyAddressesScreen extends ConsumerWidget {
-  const MyAddressesScreen({super.key});
+  const MyAddressesScreen({super.key, this.openedFromCart = false});
+
+  /// True when opened from cart checkout gate (prompt to pick default).
+  final bool openedFromCart;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -24,7 +29,7 @@ class MyAddressesScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
       appBar: AppBar(
-        title: const Text('My Addresses'),
+        title: Text(openedFromCart ? 'Delivery address' : 'My Addresses'),
         centerTitle: true,
         backgroundColor: AppConfig.backgroundColor,
         foregroundColor: AppConfig.textColor,
@@ -33,16 +38,20 @@ class MyAddressesScreen extends ConsumerWidget {
       body: addressesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
-        data: (addresses) => _MyAddressesContent(addresses: addresses),
+        data: (addresses) => _MyAddressesContent(
+          addresses: addresses,
+          openedFromCart: openedFromCart,
+        ),
       ),
     );
   }
 }
 
 class _MyAddressesContent extends ConsumerWidget {
-  const _MyAddressesContent({required this.addresses});
+  const _MyAddressesContent({required this.addresses, this.openedFromCart = false});
 
   final List<Address> addresses;
+  final bool openedFromCart;
 
   Future<void> _onEdit(BuildContext context, WidgetRef ref, Address address) async {
     if (address.isLocked) return;
@@ -80,7 +89,10 @@ class _MyAddressesContent extends ConsumerWidget {
   Future<void> _onAddNew(BuildContext context, WidgetRef ref) async {
     final saved = await context.push<bool>(
       AppRoutes.addEditAddress,
-      extra: <String, dynamic>{'isEdit': false},
+      extra: <String, dynamic>{
+        'isEdit': false,
+        if (openedFromCart && addresses.isEmpty) 'requireDefault': true,
+      },
     );
     if (context.mounted && saved == true) {
       ref.invalidate(addressesProvider);
@@ -93,8 +105,12 @@ class _MyAddressesContent extends ConsumerWidget {
     try {
       await ref.read(addressRepositoryProvider).setDefaultAddress(addressId);
       ref.invalidate(addressesProvider);
+      await ref.read(cartItemsProvider.notifier).loadItems();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Default address updated')));
+        if (openedFromCart) {
+          context.pop(true);
+        }
       }
     } finally {
       ref.read(setDefaultAddressLoadingIdProvider.notifier).state = null;
@@ -124,6 +140,22 @@ class _MyAddressesContent extends ConsumerWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                if (openedFromCart) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+                    decoration: BoxDecoration(
+                      color: AppConfig.primaryColor.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                      border: Border.all(color: AppConfig.primaryColor.withValues(alpha: 0.25)),
+                    ),
+                    child: Text(
+                      'Choose where we ship your cart. Your first address will be saved as the default for shipping quotes.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.textColor),
+                    ),
+                  ),
+                ],
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.xl),
                   decoration: BoxDecoration(
@@ -147,7 +179,7 @@ class _MyAddressesContent extends ConsumerWidget {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Add an address to get started with checkout and delivery.',
+                  'Add an address and set it as default for shipping and checkout.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppConfig.subtitleColor,
                   ),
@@ -184,6 +216,57 @@ class _MyAddressesContent extends ConsumerWidget {
         child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (addresses.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 20,
+                    color: AppConfig.primaryColor.withValues(alpha: 0.85),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      AppLocalizations.of(context)?.defaultAddressChangeCartReviewNote ??
+                          'Note: If you change your default delivery address, all items in your cart will be sent for admin review again.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppConfig.subtitleColor,
+                            height: 1.35,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (openedFromCart && defaultAddress == null && addresses.isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              margin: const EdgeInsets.only(bottom: AppSpacing.md),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline, color: Colors.orange, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'No default address yet. Tap “Set as default” on one of your addresses below.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.textColor),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           // PRIMARY RESIDENCE
           if (defaultAddress != null) ...[
             Text(
@@ -219,6 +302,11 @@ class _MyAddressesContent extends ConsumerWidget {
                   child: _OtherLocationCard(
                     address: address,
                     onEdit: address.isLocked ? null : () => _onEdit(context, ref, address),
+                    onSetDefault: address.isLocked
+                        ? null
+                        : () => _onSetDefault(context, ref, address.id),
+                    isSettingDefault:
+                        ref.watch(setDefaultAddressLoadingIdProvider) == address.id,
                   ),
                 )),
             const SizedBox(height: AppSpacing.md),
@@ -433,10 +521,17 @@ class _ActionChip extends StatelessWidget {
 }
 
 class _OtherLocationCard extends StatelessWidget {
-  const _OtherLocationCard({required this.address, this.onEdit});
+  const _OtherLocationCard({
+    required this.address,
+    this.onEdit,
+    this.onSetDefault,
+    this.isSettingDefault = false,
+  });
 
   final Address address;
   final VoidCallback? onEdit;
+  final VoidCallback? onSetDefault;
+  final bool isSettingDefault;
 
   @override
   Widget build(BuildContext context) {
@@ -511,6 +606,27 @@ class _OtherLocationCard extends StatelessWidget {
                     label: 'LINKED TO ACTIVE ORDER',
                     icon: Icons.local_shipping_outlined,
                     color: AppConfig.warningOrange,
+                  ),
+                ],
+                if (onSetDefault != null) ...[
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: isSettingDefault ? null : onSetDefault,
+                      icon: isSettingDefault
+                          ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppConfig.primaryColor,
+                              ),
+                            )
+                          : const Icon(Icons.star_outline, size: 18),
+                      label: Text(isSettingDefault ? 'Setting default…' : 'Set as default'),
+                      style: TextButton.styleFrom(foregroundColor: AppConfig.primaryColor),
+                    ),
                   ),
                 ],
               ],

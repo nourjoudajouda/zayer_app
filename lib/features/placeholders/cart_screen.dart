@@ -38,8 +38,7 @@ class CartScreen extends ConsumerWidget {
     for (final entry in byCountry.entries) {
       final countryLabel = '${entry.key} Shipment';
       final items = entry.value;
-      final allReviewed = items.every((i) => i.isReviewed);
-      final hasAllShippingCosts = items.every((i) => i.shippingCost != null && (i.shippingCost ?? 0) > 0);
+      final hasAllShippingCosts = items.every((i) => i.shippingCost != null);
       final canShowShipping = hasAllShippingCosts;
       final groupShipping = canShowShipping
           ? items.fold<double>(
@@ -47,6 +46,8 @@ class CartScreen extends ConsumerWidget {
               (sum, item) => sum + ((item.shippingCost ?? 0) * item.quantity),
             )
           : null;
+      final groupShippingLabelEstimated =
+          items.any((i) => i.shippingEstimated || !i.isReviewed);
       widgets.add(
         Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.lg),
@@ -77,10 +78,10 @@ class CartScreen extends ConsumerWidget {
                 ),
                 subtitle: Text(
                   groupShipping != null
-                      ? (allReviewed
-                          ? 'Shipping: \$${groupShipping.toStringAsFixed(2)}'
-                          : 'Estimated shipping: \$${groupShipping.toStringAsFixed(2)}')
-                      : 'Shipping: Pending review',
+                      ? (groupShippingLabelEstimated
+                          ? 'Estimated shipping: \$${groupShipping.toStringAsFixed(2)}'
+                          : 'Shipping: \$${groupShipping.toStringAsFixed(2)}')
+                      : 'Shipping unavailable — add a default address or check back later',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: groupShipping != null ? AppConfig.primaryColor : AppConfig.subtitleColor,
                         fontWeight: FontWeight.w500,
@@ -171,6 +172,95 @@ class CartScreen extends ConsumerWidget {
       );
     }
 
+    final cartNeedsDefaultAddress =
+        addressesAsync.hasValue && !hasDefaultAddress;
+
+    if (addressesAsync.isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Cart')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (addressesAsync.hasError) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Cart')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('Could not load addresses', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: AppSpacing.md),
+                FilledButton(
+                  onPressed: () => ref.invalidate(addressesProvider),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (cartNeedsDefaultAddress) {
+      final saved = addressesAsync.valueOrNull ?? [];
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Cart'),
+          actions: [
+            Consumer(
+              builder: (context, ref, _) {
+                final isClearing = ref.watch(clearingCartProvider);
+                return TextButton(
+                  onPressed: isClearing
+                      ? null
+                      : () async {
+                          final confirmed = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Clear Cart'),
+                              content: const Text('Are you sure you want to remove all items?'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text('Clear'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirmed == true) {
+                            ref.read(clearingCartProvider.notifier).state = true;
+                            try {
+                              await cartNotifier.clear();
+                            } finally {
+                              ref.read(clearingCartProvider.notifier).state = false;
+                            }
+                          }
+                        },
+                  child: isClearing
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Clear'),
+                );
+              },
+            ),
+          ],
+        ),
+        body: _CartAddressGateBody(
+          hasAnySavedAddress: saved.isNotEmpty,
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Cart'),
@@ -225,53 +315,6 @@ class CartScreen extends ConsumerWidget {
         children: [
           Column(
             children: [
-              if (!hasDefaultAddress)
-                Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.fromLTRB(
-                      AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
-                    border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.location_on_outlined,
-                          color: Colors.orange),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Add a default address to calculate shipping',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Shipping estimates depend on your default shipping address. Please add an address and set it as default.',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(color: AppConfig.subtitleColor),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      TextButton(
-                        onPressed: () => context.push(AppRoutes.myAddresses),
-                        child: const Text('Add Address'),
-                      ),
-                    ],
-                  ),
-                ),
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () => ref.read(cartItemsProvider.notifier).loadItems(),
@@ -301,6 +344,85 @@ class CartScreen extends ConsumerWidget {
   }
 }
 
+class _CartAddressGateBody extends ConsumerWidget {
+  const _CartAddressGateBody({required this.hasAnySavedAddress});
+
+  final bool hasAnySavedAddress;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          children: [
+            const SizedBox(height: AppSpacing.xl),
+            Icon(Icons.location_on_outlined, size: 72, color: AppConfig.primaryColor),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              'Delivery address required',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppConfig.textColor,
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              hasAnySavedAddress
+                  ? 'Set one of your saved addresses as default so we can calculate shipping and unlock checkout.'
+                  : 'Add a delivery address and mark it as default to see shipping for your cart and continue.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppConfig.subtitleColor,
+                    height: 1.4,
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () async {
+                  if (hasAnySavedAddress) {
+                    await context.push(
+                      AppRoutes.myAddresses,
+                      extra: <String, dynamic>{'openedFromCart': true},
+                    );
+                  } else {
+                    await context.push(
+                      AppRoutes.addEditAddress,
+                      extra: <String, dynamic>{
+                        'isEdit': false,
+                        'requireDefault': true,
+                      },
+                    );
+                  }
+                  ref.invalidate(addressesProvider);
+                  await ref.read(cartItemsProvider.notifier).loadItems();
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppConfig.primaryColor,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: Text(hasAnySavedAddress ? 'Choose default address' : 'Add default address'),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextButton(
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                }
+              },
+              child: const Text('Back'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CartItemCard extends StatelessWidget {
   const _CartItemCard({
     required this.item,
@@ -316,7 +438,8 @@ class _CartItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasShipping = item.shippingCost != null && item.shippingCost! > 0;
+    final hasShipping = item.shippingCost != null;
+    final shippingLineEstimated = item.shippingEstimated || !item.isReviewed;
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -434,9 +557,9 @@ class _CartItemCard extends StatelessWidget {
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
-                            item.isReviewed
-                                ? 'Shipping: \$${(item.shippingCost! * item.quantity).toStringAsFixed(2)}'
-                                : 'Estimated shipping: \$${(item.shippingCost! * item.quantity).toStringAsFixed(2)}',
+                            shippingLineEstimated
+                                ? 'Estimated shipping: \$${(item.shippingCost! * item.quantity).toStringAsFixed(2)}'
+                                : 'Shipping: \$${(item.shippingCost! * item.quantity).toStringAsFixed(2)}',
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                   color: AppConfig.subtitleColor,
                                 ),
@@ -446,7 +569,7 @@ class _CartItemCard extends StatelessWidget {
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
-                            'Shipping: Pending review',
+                            'No shipping estimate yet',
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                   color: AppConfig.subtitleColor,
                                 ),
@@ -555,7 +678,7 @@ class _CartSummary extends ConsumerWidget {
     final canProceed = hasDefaultAddress && reviewedItems.isNotEmpty;
 
     final hasAllShippingCosts = reviewedItems.isNotEmpty &&
-        reviewedItems.every((i) => i.shippingCost != null && (i.shippingCost ?? 0) > 0);
+        reviewedItems.every((i) => i.shippingCost != null);
     final canShowShipping = hasAllShippingCosts;
     final totalShipping = canShowShipping
         ? reviewedItems.fold<double>(
@@ -565,7 +688,8 @@ class _CartSummary extends ConsumerWidget {
         : null;
     final grandTotal =
         totalShipping != null ? subtotalReviewed + totalShipping : null;
-    final allReviewed = pendingItemsCount == 0;
+    final summaryShippingEstimated =
+        reviewedItems.any((i) => i.shippingEstimated || !i.isReviewed);
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -627,10 +751,10 @@ class _CartSummary extends ConsumerWidget {
                 ),
                 Text(
                   totalShipping != null
-                      ? (allReviewed
-                          ? '\$${totalShipping.toStringAsFixed(2)}'
-                          : 'Estimated \$${totalShipping.toStringAsFixed(2)}')
-                      : 'Pending review',
+                      ? (summaryShippingEstimated
+                          ? 'Est. \$${totalShipping.toStringAsFixed(2)}'
+                          : '\$${totalShipping.toStringAsFixed(2)}')
+                      : '—',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -649,10 +773,10 @@ class _CartSummary extends ConsumerWidget {
                 ),
                 Text(
                   grandTotal != null
-                      ? (allReviewed
-                          ? '\$${grandTotal.toStringAsFixed(2)}'
-                          : 'Estimated \$${grandTotal.toStringAsFixed(2)}')
-                      : 'Pending review',
+                      ? (summaryShippingEstimated
+                          ? 'Est. \$${grandTotal.toStringAsFixed(2)}'
+                          : '\$${grandTotal.toStringAsFixed(2)}')
+                      : '—',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                         color: AppConfig.primaryColor,
