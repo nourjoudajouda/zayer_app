@@ -1,7 +1,9 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../generated/l10n/app_localizations.dart';
@@ -22,6 +24,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
   bool _obscureCurrent = true;
   bool _obscureNew = true;
   bool _obscureConfirm = true;
+  bool _submitting = false;
 
   bool get _has8Chars => _newController.text.length >= 8;
   bool get _hasNumber => _newController.text.contains(RegExp(r'[0-9]'));
@@ -44,14 +47,70 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (!_has8Chars || !_hasNumber || !_hasSpecial) return;
-    // Mock: call API POST /api/me/change-password
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    if (mounted) {
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password updated. You may be signed out from other devices.')),
+    setState(() => _submitting = true);
+    try {
+      final res = await ApiClient.instance.post<Map<String, dynamic>>(
+        '/api/me/change-password',
+        data: {
+          'current_password': _currentController.text,
+          'password': _newController.text,
+          'password_confirmation': _confirmController.text,
+        },
+        options: Options(
+          contentType: 'application/json',
+          validateStatus: (s) => s != null && s < 500,
+        ),
       );
+      if (!mounted) return;
+      final ok = res.statusCode == 200;
+      if (ok) {
+        Navigator.of(context).pop(true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              (res.data?['message'] as String?) ??
+                  'Password updated. Other devices may be signed out.',
+            ),
+          ),
+        );
+      } else {
+        final msg = _extractError(res);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg)),
+        );
+      }
+    } on DioException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_extractErrorFromDio(e))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  String _extractError(Response<Map<String, dynamic>>? res) {
+    final data = res?.data;
+    if (data is Map<String, dynamic>) {
+      final m = data['message'] as String?;
+      if (m != null && m.isNotEmpty) return m;
+    }
+    return 'Could not update password';
+  }
+
+  String _extractErrorFromDio(DioException e) {
+    final data = e.response?.data;
+    if (data is Map<String, dynamic>) {
+      final m = data['message'] as String?;
+      if (m != null && m.isNotEmpty) return m;
+      final errs = data['errors'] as Map<String, dynamic>?;
+      if (errs != null && errs.isNotEmpty) {
+        final first = errs.values.first;
+        if (first is List && first.isNotEmpty) return first.first.toString();
+      }
+    }
+    return e.message ?? 'Request failed';
   }
 
   @override
@@ -184,12 +243,21 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 FilledButton(
-                  onPressed: _submit,
+                  onPressed: _submitting ? null : _submit,
                   style: FilledButton.styleFrom(
                     backgroundColor: AppConfig.primaryColor,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  child: const Text('Update Password'),
+                  child: _submitting
+                      ? const SizedBox(
+                          height: 22,
+                          width: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Update Password'),
                 ),
               ],
             ),

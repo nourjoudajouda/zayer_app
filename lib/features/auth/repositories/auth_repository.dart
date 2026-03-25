@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:zayer_app/core/fcm/fcm_service.dart';
+import 'package:zayer_app/core/platform/device_locale_region.dart';
 import 'package:zayer_app/core/platform/device_platform.dart';
+import 'package:zayer_app/core/platform/session_device_label.dart';
 
+import '../device_name_for_api.dart';
 import '../../../core/auth/token_store.dart';
 import '../../../core/network/api_client.dart';
 import '../models/auth_result.dart';
@@ -19,13 +23,20 @@ abstract class AuthRepository {
     String? countryId,
     String? cityId,
   });
-  Future<AuthResult> login({required String phone, required String password});
+  Future<AuthResult> login({
+    required String phone,
+    required String password,
+    String? appCountry,
+  });
+  /// Request OTP for passwordless login (user must already be registered).
+  Future<AuthResult> requestLoginOtp({required String phone});
   Future<AuthResult> verifyOtp({
     required String phone,
     required String code,
     String mode = 'signup',
     String? password,
     String? passwordConfirmation,
+    String? appCountry,
   });
   Future<AuthResult> forgotPassword({required String phone});
   Future<void> logout();
@@ -46,6 +57,31 @@ class AuthRepositoryImpl implements AuthRepository {
   final TokenStore _tokenStore;
   // final FcmService? _fcmService;
   final Dio _dio;
+
+  /// FCM + device metadata for login / verify-otp (matches Laravel AuthController).
+  Future<Map<String, dynamic>> _fcmDevicePayload({String? appCountry}) async {
+    final fcmToken = await FcmService.getToken();
+    final dt = kIsWeb ? 'web' : deviceType;
+    final model = await sessionDeviceLabelForApi();
+    final payload = <String, dynamic>{
+      'device_type': dt,
+      'platform': dt,
+      'device_name': deviceNameForApi(),
+      'device_model': model,
+    };
+    final explicit = appCountry?.trim();
+    final country = (explicit != null && explicit.isNotEmpty)
+        ? explicit
+        : deviceRegionLabelForSession();
+    if (country != null && country.isNotEmpty) {
+      payload['app_country'] =
+          country.length > 191 ? country.substring(0, 191) : country;
+    }
+    if (fcmToken != null && fcmToken.isNotEmpty) {
+      payload['fcm_token'] = fcmToken;
+    }
+    return payload;
+  }
 
   String _extractMessage(DioException e) {
     final data = e.response?.data;
@@ -119,6 +155,7 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<AuthResult> login({
     required String phone,
     required String password,
+    String? appCountry,
   }) async {
     try {
       final fcmToken = await FcmService.getToken();
@@ -133,10 +170,7 @@ class AuthRepositoryImpl implements AuthRepository {
         'phone': phone,
         'password': password,
       };
-      if (fcmToken != null && fcmToken.isNotEmpty) {
-        data['fcm_token'] = fcmToken;
-        data['device_type'] = kIsWeb ? 'web' : deviceType;
-      }
+      data.addAll(await _fcmDevicePayload(appCountry: appCountry));
       final res = await _dio.post<Map<String, dynamic>>(
         '/api/auth/login',
         data: data,
@@ -150,8 +184,41 @@ class AuthRepositoryImpl implements AuthRepository {
         final token = responseData['token'] as String?;
         if (token != null && token.isNotEmpty) {
           await _tokenStore.setToken(token);
+          unawaited(updateFcmToken());
           return AuthSuccess(token: token);
         }
+      }
+      return AuthFailure(_extractMessage(
+        DioException(
+          requestOptions: res.requestOptions,
+          response: res,
+          type: DioExceptionType.badResponse,
+        ),
+      ));
+    } on DioException catch (e) {
+      return AuthFailure(_extractMessage(e));
+    }
+  }
+
+  @override
+  Future<AuthResult> requestLoginOtp({required String phone}) async {
+    try {
+      final res = await _dio.post<Map<String, dynamic>>(
+        '/api/auth/login-otp',
+        data: {'phone': phone},
+        options: Options(
+          contentType: 'application/json',
+          validateStatus: (s) => s != null && s < 500,
+        ),
+      );
+      final data = res.data;
+      if (res.statusCode == 200 && data != null) {
+        final devOtp = kDebugMode ? _readOtpFromResponse(data) : null;
+        return AuthRequiresOtp(
+          phone: (data['phone'] ?? phone).toString(),
+          mode: 'login',
+          devOtp: devOtp,
+        );
       }
       return AuthFailure(_extractMessage(
         DioException(
@@ -172,6 +239,7 @@ class AuthRepositoryImpl implements AuthRepository {
     String mode = 'signup',
     String? password,
     String? passwordConfirmation,
+    String? appCountry,
   }) async {
     try {
       final body = <String, dynamic>{
@@ -183,11 +251,7 @@ class AuthRepositoryImpl implements AuthRepository {
         body['password'] = password;
         body['password_confirmation'] = passwordConfirmation ?? password;
       }
-      final fcmToken = await FcmService.getToken();
-      if (fcmToken != null && fcmToken.isNotEmpty) {
-        body['fcm_token'] = fcmToken;
-        body['device_type'] = kIsWeb ? 'web' : deviceType;
-      }
+      body.addAll(await _fcmDevicePayload(appCountry: appCountry));
       final res = await _dio.post<Map<String, dynamic>>(
         '/api/auth/verify-otp',
         data: body,
@@ -201,6 +265,7 @@ class AuthRepositoryImpl implements AuthRepository {
         final token = responseData['token'] as String?;
         if (token != null && token.isNotEmpty) {
           await _tokenStore.setToken(token);
+          unawaited(updateFcmToken());
           return AuthSuccess(token: token);
         }
       }
@@ -271,12 +336,19 @@ class AuthRepositoryImpl implements AuthRepository {
     if (token == null || token.isEmpty) return;
     final fcmToken = await FcmService.getToken();
     if (fcmToken == null || fcmToken.isEmpty) return;
+    final dt = kIsWeb ? 'web' : deviceType;
+    final model = await sessionDeviceLabelForApi();
+    final region = deviceRegionLabelForSession();
     try {
       await _dio.patch<Map<String, dynamic>>(
         '/api/me/fcm-token',
         data: {
           'fcm_token': fcmToken,
-          'device_type': kIsWeb ? 'web' : deviceType,
+          'device_type': dt,
+          'platform': dt,
+          'device_name': deviceNameForApi(),
+          'device_model': model,
+          if (region != null && region.isNotEmpty) 'app_country': region,
         },
         options: Options(validateStatus: (s) => s != null && s < 500),
       );

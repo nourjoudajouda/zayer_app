@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/network/app_country_label.dart';
 import '../../core/localization/app_locale.dart';
 import 'models/auth_result.dart';
 import 'models/country_city.dart';
@@ -126,6 +127,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final result = await repo.login(
         phone: phone,
         password: _passwordController.text,
+        appCountry: formatAppCountryLabel(_countryById(_selectedCountryId)),
       );
       if (!mounted) return;
       switch (result) {
@@ -308,7 +310,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 TextButton(
-                  onPressed: () => context.go(AppRoutes.otp),
+                  onPressed: () => context.push(AppRoutes.loginOtp),
                   child: Column(
                     children: [
                       Text(l10n.loginWithOtp),

@@ -22,6 +22,7 @@ class OtpScreen extends ConsumerStatefulWidget {
     this.mode = 'signup',
     this.initialPhone = '',
     this.devOtp,
+    this.appCountry,
   });
 
   /// signup | reset
@@ -30,6 +31,8 @@ class OtpScreen extends ConsumerStatefulWidget {
   final String initialPhone;
   /// When in debug mode, OTP returned by API (e.g. from register/forgot) to show on screen.
   final String? devOtp;
+  /// Country label for session location (from login/register country picker).
+  final String? appCountry;
 
   @override
   ConsumerState<OtpScreen> createState() => _OtpScreenState();
@@ -133,6 +136,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       password: widget.mode == 'reset' ? _passwordController.text : null,
       passwordConfirmation:
           widget.mode == 'reset' ? _passwordConfirmController.text : null,
+      appCountry: widget.appCountry,
     );
     if (!mounted) return;
     setState(() => _verifying = false);
@@ -239,6 +243,8 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                       onEdit: () {
                         if (widget.mode == 'signup') {
                           context.go(AppRoutes.register);
+                        } else if (widget.mode == 'login') {
+                          context.go(AppRoutes.loginOtp);
                         } else {
                           context.go(AppRoutes.forgotPassword);
                         }

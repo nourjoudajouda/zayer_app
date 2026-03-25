@@ -312,6 +312,32 @@ class _PaymentStatusChip extends StatelessWidget {
 
   final String status;
 
+  static String _displayLabel(String normalized, String rawFallback) {
+    if (normalized.contains('pending_payment')) {
+      return 'Pending payment';
+    }
+    if (normalized.contains('under_review') ||
+        normalized.contains('under review')) {
+      return 'Under review';
+    }
+    if (normalized.contains('paid') && !normalized.contains('unpaid')) {
+      return 'Paid';
+    }
+    if (normalized.contains('pending')) {
+      return 'Pending';
+    }
+    final raw = rawFallback.trim();
+    if (raw.isEmpty) return '—';
+    return raw
+        .replaceAll('_', ' ')
+        .split(RegExp(r'\s+'))
+        .map(
+          (w) =>
+              w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}',
+        )
+        .join(' ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final normalized = status.toLowerCase().trim();
@@ -324,31 +350,41 @@ class _PaymentStatusChip extends StatelessWidget {
         ),
       );
     }
-    final isPaid = normalized.contains('paid');
-    final isPending = normalized.contains('pending');
+    final isPaid = normalized.contains('paid') &&
+        !normalized.contains('unpaid') &&
+        !normalized.contains('pending_payment') &&
+        !normalized.contains('under_review');
+    final isPendingFlow = normalized.contains('pending') ||
+        normalized.contains('under_review') ||
+        normalized.contains('under review');
     final color = isPaid
         ? AppConfig.successGreen
-        : isPending
+        : isPendingFlow
         ? AppConfig.warningOrange
         : AppConfig.primaryColor;
-    final label = isPaid
-        ? 'Paid'
-        : isPending
-        ? 'Pending'
-        : status.toUpperCase();
+    final label = _displayLabel(normalized, status);
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(
-          isPaid ? Icons.check_circle : Icons.hourglass_bottom,
-          color: color,
-          size: 22,
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(
+            isPaid ? Icons.check_circle : Icons.hourglass_bottom,
+            color: color,
+            size: 22,
+          ),
         ),
         const SizedBox(width: 6),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: color,
-            fontWeight: FontWeight.w600,
+        Expanded(
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                  height: 1.2,
+                ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
@@ -706,8 +742,13 @@ class _CostBreakdownSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final normalized = paymentStatus.toLowerCase();
-    final isPaid = normalized.contains('paid');
-    final isPending = normalized.contains('pending');
+    final isPaid = normalized.contains('paid') &&
+        !normalized.contains('unpaid') &&
+        !normalized.contains('pending_payment') &&
+        !normalized.contains('under_review');
+    final isPending = normalized.contains('pending') ||
+        normalized.contains('under_review') ||
+        normalized.contains('under review');
 
     final totalText = () {
       if (isPaid) return total;
@@ -722,6 +763,8 @@ class _CostBreakdownSection extends StatelessWidget {
         : isPending
         ? 'Total Amount Due'
         : 'Total Amount';
+
+    final showPaidCheck = isPaid;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -776,24 +819,22 @@ class _CostBreakdownSection extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: 6),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.check_circle,
-                        color: AppConfig.successGreen,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Consolidation Savings',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppConfig.successGreen,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+                  Icon(
+                    Icons.check_circle,
+                    color: AppConfig.successGreen,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Consolidation Savings',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppConfig.successGreen,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
                   ),
                   Text(
                     consolidationSavings!,
@@ -807,29 +848,36 @@ class _CostBreakdownSection extends StatelessWidget {
             ),
           const Divider(height: 24),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                headline.toUpperCase(),
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: AppConfig.subtitleColor,
+              Expanded(
+                child: Text(
+                  headline.toUpperCase(),
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppConfig.subtitleColor,
+                        height: 1.25,
+                      ),
                 ),
               ),
+              const SizedBox(width: 8),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     totalText,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: AppConfig.primaryColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  if (showPaidCheck) ...[
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.check_circle,
                       color: AppConfig.primaryColor,
-                      fontWeight: FontWeight.w700,
+                      size: 22,
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    Icons.check_circle,
-                    color: AppConfig.primaryColor,
-                    size: 22,
-                  ),
+                  ],
                 ],
               ),
             ],

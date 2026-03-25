@@ -115,6 +115,16 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
   bool _confirming = false;
 
   @override
+  void dispose() {
+    // Cart sets proceedingToCheckout while awaiting push; if navigation uses
+    // go/replace, the awaiting callback can fail to clear the flag — always reset here.
+    try {
+      ref.read(proceedingToCheckoutProvider.notifier).state = false;
+    } catch (_) {}
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final reviewAsync = ref.watch(checkoutReviewProvider);
     final review = reviewAsync.valueOrNull;
@@ -360,6 +370,7 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
                         );
                     if (!context.mounted) return;
                     context.go('${AppRoutes.orderDetail}/$orderId');
+                    ref.invalidate(cartItemsProvider);
                     ref.invalidate(orderByIdProvider(orderId));
                     ref.invalidate(ordersProvider);
                     ref.invalidate(checkoutReviewProvider);

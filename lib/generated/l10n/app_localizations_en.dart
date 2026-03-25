@@ -106,6 +106,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noPasswordNeeded => 'No password needed';
 
   @override
+  String get loginOtpSubtitle =>
+      'Enter the phone registered on your account. We will send a login code by SMS.';
+
+  @override
   String get orContinueWith => 'OR CONTINUE WITH';
 
   @override

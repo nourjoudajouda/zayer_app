@@ -30,13 +30,27 @@
 
 ---
 
+## POST /api/auth/login-otp
+
+طلب رمز OTP لتسجيل الدخول بدون كلمة مرور (يجب أن يكون الحساب مسجّلاً مسبقاً).
+
+| Field | Type | Required |
+|-------|------|----------|
+| `phone` | string | نعم | E.164 |
+
+**استجابة ناجحة (200):** مثل forgot-password (`message`, `phone`؛ وفي وضع التطوير قد يُرفق `otp`).
+
+**أخطاء شائعة:** `404` إذا لم يكن الرقم مسجّلاً (`Phone not registered`).
+
+---
+
 ## POST /api/auth/verify-otp
 
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
 | `phone` | string | نعم | E.164 |
 | `code` | string | نعم | رمز OTP (6 أرقام) |
-| `mode` | string | نعم | `signup` أو `reset` |
+| `mode` | string | نعم | `signup` أو `reset` أو `login` |
 | `password` | string | شرطي | عند mode=reset |
 | `password_confirmation` | string | شرطي | عند mode=reset |
 | `fcm_token` | string | لا | اختياري |
@@ -64,6 +78,7 @@
 
 - **register (201):** أضف `otp` أو `code` في JSON للاستجابة.
 - **forgot-password (200):** أضف `otp` أو `code` في JSON للاستجابة.
+- **login-otp (200):** أضف `otp` أو `code` في JSON للاستجابة.
 
 مثال استجابة:
 ```json

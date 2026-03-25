@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/forgot_password_screen.dart';
 import '../../features/auth/login_screen.dart';
+import '../../features/auth/login_otp_phone_screen.dart';
 import '../../features/auth/otp_screen.dart';
 import '../../features/auth/register_screen.dart';
 import '../../features/home/home_screen.dart';
@@ -57,6 +58,7 @@ class AppRoutes {
   static const String splash = '/splash';
   static const String onboarding = '/onboarding';
   static const String login = '/login';
+  static const String loginOtp = '/login-otp';
   static const String register = '/register';
   static const String otp = '/otp';
   static const String forgotPassword = '/forgot-password';
@@ -120,6 +122,10 @@ GoRouter _createAppRouter() {
         builder: (context, state) => const LoginScreen(),
       ),
       GoRoute(
+        path: AppRoutes.loginOtp,
+        builder: (context, state) => const LoginOtpPhoneScreen(),
+      ),
+      GoRoute(
         path: AppRoutes.register,
         builder: (context, state) => const RegisterScreen(),
       ),
@@ -129,10 +135,12 @@ GoRouter _createAppRouter() {
           final mode = state.uri.queryParameters['mode'] ?? 'signup';
           final phone = state.uri.queryParameters['phone'] ?? '';
           final devOtp = state.uri.queryParameters['dev_otp'];
+          final appCountry = state.uri.queryParameters['app_country'];
           return OtpScreen(
             mode: mode,
             initialPhone: phone,
             devOtp: devOtp,
+            appCountry: appCountry,
           );
         },
       ),

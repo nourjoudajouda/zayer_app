@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/providers/auth_providers.dart';
+import '../../features/cart/providers/cart_providers.dart';
 import '../../features/home/providers/home_providers.dart';
 
 class MainShell extends ConsumerStatefulWidget {
@@ -34,7 +35,14 @@ class _MainShellState extends ConsumerState<MainShell> {
       body: widget.navigationShell,
       bottomNavigationBar: NavigationBar(
         selectedIndex: widget.navigationShell.currentIndex,
-        onDestinationSelected: (index) => widget.navigationShell.goBranch(index),
+        onDestinationSelected: (index) {
+          // Cart "Proceed to checkout" can leave proceeding=true if push/go doesn't
+          // complete the awaited future; opening Cart again must clear the spinner.
+          if (index == 2) {
+            ref.read(proceedingToCheckoutProvider.notifier).state = false;
+          }
+          widget.navigationShell.goBranch(index);
+        },
         destinations: [
           const NavigationDestination(
             icon: Icon(Icons.home_outlined),

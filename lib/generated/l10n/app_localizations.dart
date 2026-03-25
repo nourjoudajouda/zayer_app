@@ -284,6 +284,12 @@ abstract class AppLocalizations {
   /// **'No password needed'**
   String get noPasswordNeeded;
 
+  /// No description provided for @loginOtpSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the phone registered on your account. We will send a login code by SMS.'**
+  String get loginOtpSubtitle;
+
   /// No description provided for @orContinueWith.
   ///
   /// In en, this message translates to:

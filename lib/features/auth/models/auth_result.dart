@@ -9,7 +9,7 @@ class AuthSuccess extends AuthResult {
   final String token;
 }
 
-/// Auth step succeeded but requires OTP verification (register/forgot).
+/// Auth step succeeded but requires OTP verification (register/forgot/login OTP).
 class AuthRequiresOtp extends AuthResult {
   const AuthRequiresOtp({
     required this.phone,
@@ -19,7 +19,7 @@ class AuthRequiresOtp extends AuthResult {
   });
   final String phone;
   final int? userId;
-  final String mode; // 'signup' | 'reset'
+  final String mode; // 'signup' | 'reset' | 'login'
   /// When API returns OTP in response (e.g. in dev), pass it to show on OTP screen.
   final String? devOtp;
 }

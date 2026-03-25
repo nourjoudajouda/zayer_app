@@ -105,6 +105,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get noPasswordNeeded => 'لا تحتاج كلمة مرور';
 
   @override
+  String get loginOtpSubtitle =>
+      'أدخل رقم الهاتف المسجّل في حسابك. سنرسل رمز تسجيل الدخول عبر الرسائل.';
+
+  @override
   String get orContinueWith => 'أو تابع باستخدام';
 
   @override

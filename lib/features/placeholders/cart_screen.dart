@@ -806,7 +806,10 @@ class _CartSummary extends ConsumerWidget {
                             try {
                               await context.push(AppRoutes.reviewPay);
                             } finally {
-                              ref.read(proceedingToCheckoutProvider.notifier).state = false;
+                              try {
+                                ref.read(proceedingToCheckoutProvider.notifier).state =
+                                    false;
+                              } catch (_) {}
                             }
                           },
                     style: FilledButton.styleFrom(

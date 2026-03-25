@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -63,15 +64,27 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
     if (amount == null || amount <= 0) return;
     setState(() => _isConfirming = true);
     try {
+      final gateway = ref.read(bootstrapConfigProvider).valueOrNull?.paymentGateways?.defaultGatewayCode;
       final res = await ApiClient.instance.post<Map<String, dynamic>>(
         '/api/wallet/top-up',
         data: {
           'amount': amount,
+          if (gateway != null && gateway.isNotEmpty) 'gateway': gateway,
           // Best-effort: only meaningful if backend supports saving a method.
           'save_payment_method': _savePaymentMethod,
         },
+        options: Options(validateStatus: (s) => s != null && s < 500),
       );
       final data = res.data ?? const <String, dynamic>{};
+      if (res.statusCode != null && res.statusCode! >= 400) {
+        final msg = data['message']?.toString() ?? 'Top-up could not start.';
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), backgroundColor: Colors.orange.shade800),
+          );
+        }
+        return;
+      }
       final topUp = data['top_up'] is Map<String, dynamic>
           ? data['top_up'] as Map<String, dynamic>
           : (data['data'] is Map<String, dynamic> ? data['data'] as Map<String, dynamic> : null);
@@ -81,6 +94,7 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
 
       // If backend provides a real payment URL, launch hosted checkout flow.
       if (checkoutUrl != null && checkoutUrl.isNotEmpty) {
+        if (!mounted) return;
         final result = await context.push<PaymentWebViewResult>(
           AppRoutes.paymentWebView,
           extra: checkoutUrl,
@@ -111,6 +125,16 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
             content: Text('Top-up payment is not available right now. Please try again later.'),
             backgroundColor: Colors.orange,
           ),
+        );
+      }
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final msg = data is Map
+          ? (data['message']?.toString() ?? e.message ?? 'Top-up failed.')
+          : (e.message ?? 'Top-up failed.');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg)),
         );
       }
     } catch (_) {

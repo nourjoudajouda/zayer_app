@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/network/app_country_label.dart';
 import '../../core/localization/app_locale.dart';
 import 'models/auth_result.dart';
 import 'models/country_city.dart';
@@ -177,11 +178,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         case AuthSuccess():
           context.go(AppRoutes.home);
         case AuthRequiresOtp(:final phone, :final devOtp):
-          var path = '${AppRoutes.otp}?phone=${Uri.encodeComponent(phone)}&mode=signup';
-          if (devOtp != null && devOtp.isNotEmpty) {
-            path += '&dev_otp=${Uri.encodeComponent(devOtp)}';
+          final qp = <String, String>{
+            'phone': phone,
+            'mode': 'signup',
+          };
+          final label = formatAppCountryLabel(_countryById(_selectedCountryId));
+          if (label != null && label.isNotEmpty) {
+            qp['app_country'] = label;
           }
-          context.go(path);
+          if (devOtp != null && devOtp.isNotEmpty) {
+            qp['dev_otp'] = devOtp;
+          }
+          context.go(Uri(path: AppRoutes.otp, queryParameters: qp).toString());
         case AuthFailure(:final message):
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       }

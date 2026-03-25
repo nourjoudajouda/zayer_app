@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/network/app_country_label.dart';
 import 'models/auth_result.dart';
 import 'models/country_city.dart';
 import 'providers/auth_providers.dart';
@@ -32,6 +33,14 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   void initState() {
     super.initState();
     _loadCountries();
+  }
+
+  CountryItem? _countryForDial() {
+    for (final c in _countries) {
+      final d = c.dialCode.isNotEmpty ? c.dialCode : c.id;
+      if (d == _countryCode) return c;
+    }
+    return null;
   }
 
   Future<void> _loadCountries() async {
@@ -66,11 +75,18 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         case AuthSuccess():
           context.go(AppRoutes.home);
         case AuthRequiresOtp(:final phone, :final devOtp):
-          var path = '${AppRoutes.otp}?phone=${Uri.encodeComponent(phone)}&mode=reset';
-          if (devOtp != null && devOtp.isNotEmpty) {
-            path += '&dev_otp=${Uri.encodeComponent(devOtp)}';
+          final qp = <String, String>{
+            'phone': phone,
+            'mode': 'reset',
+          };
+          final label = formatAppCountryLabel(_countryForDial());
+          if (label != null && label.isNotEmpty) {
+            qp['app_country'] = label;
           }
-          context.go(path);
+          if (devOtp != null && devOtp.isNotEmpty) {
+            qp['dev_otp'] = devOtp;
+          }
+          context.go(Uri(path: AppRoutes.otp, queryParameters: qp).toString());
         case AuthFailure(:final message):
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       }

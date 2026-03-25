@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/network/api_client.dart';
@@ -36,20 +37,16 @@ class LoginActivityItem {
   }
 }
 
-/// Fetches from API when available; returns empty list otherwise so we don't show fake data.
-final _loginActivityProvider = FutureProvider<List<LoginActivityItem>>((ref) async {
-  try {
-    final res = await ApiClient.instance.get<List<dynamic>>('/api/me/login-history');
-    final list = res.data;
-    if (list != null && list.isNotEmpty) {
-      return list
-          .whereType<Map<String, dynamic>>()
-          .map((e) => LoginActivityItem.fromJson(e))
-          .whereType<LoginActivityItem>()
-          .toList();
-    }
-  } catch (_) {}
-  return [];
+/// GET /api/me/login-history (Sanctum sessions as activity).
+final loginActivityProvider = FutureProvider<List<LoginActivityItem>>((ref) async {
+  final res = await ApiClient.instance.get<List<dynamic>>('/api/me/login-history');
+  final list = res.data;
+  if (list == null || list.isEmpty) return [];
+  return list
+      .whereType<Map<String, dynamic>>()
+      .map((e) => LoginActivityItem.fromJson(e))
+      .whereType<LoginActivityItem>()
+      .toList();
 });
 
 /// Recent Activity: list of locations/devices where login was performed.
@@ -58,7 +55,7 @@ class RecentActivityScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final activityAsync = ref.watch(_loginActivityProvider);
+    final activityAsync = ref.watch(loginActivityProvider);
 
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
@@ -71,13 +68,23 @@ class RecentActivityScreen extends ConsumerWidget {
       ),
       body: activityAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, __) => Center(
+        error: (e, _) => Center(
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Text(
-              'Recent activity will appear here when available.',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium(AppConfig.subtitleColor),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'Could not load activity.',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMedium(AppConfig.subtitleColor),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                FilledButton(
+                  onPressed: () => ref.invalidate(loginActivityProvider),
+                  child: const Text('Retry'),
+                ),
+              ],
             ),
           ),
         ),
@@ -86,7 +93,7 @@ class RecentActivityScreen extends ConsumerWidget {
                 child: Padding(
                   padding: const EdgeInsets.all(AppSpacing.lg),
                   child: Text(
-                    'Recent activity will appear here when available.',
+                    'No login activity yet. It will list devices that used your account.',
                     textAlign: TextAlign.center,
                     style: AppTextStyles.bodyMedium(AppConfig.subtitleColor),
                   ),
@@ -96,6 +103,12 @@ class RecentActivityScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+String _formatActivityTime(String raw) {
+  final d = DateTime.tryParse(raw);
+  if (d == null) return raw;
+  return DateFormat.yMMMd().add_jm().format(d.toLocal());
 }
 
 class _RecentActivityContent extends StatelessWidget {
@@ -167,7 +180,7 @@ class _RecentActivityContent extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              item.timestamp,
+                              _formatActivityTime(item.timestamp),
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                     color: AppConfig.subtitleColor,
                                     fontStyle: FontStyle.italic,

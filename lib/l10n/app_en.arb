@@ -31,6 +31,7 @@
   "login": "Login",
   "loginWithOtp": "Login with OTP instead",
   "noPasswordNeeded": "No password needed",
+  "loginOtpSubtitle": "Enter the phone registered on your account. We will send a login code by SMS.",
   "orContinueWith": "OR CONTINUE WITH",
   "apple": "Apple",
   "google": "Google",

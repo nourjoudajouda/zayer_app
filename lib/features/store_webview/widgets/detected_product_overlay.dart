@@ -12,12 +12,15 @@ class DetectedProductOverlay extends StatefulWidget {
   const DetectedProductOverlay({
     super.key,
     required this.product,
+    required this.appName,
     required this.onAddToCart,
     required this.onFavorite,
     this.isExtracting = false,
   });
 
   final DetectedProduct product;
+  /// From bootstrap (admin) app name — shown in "Detected by …" header.
+  final String appName;
   final VoidCallback onAddToCart;
   final VoidCallback onFavorite;
   final bool isExtracting;
@@ -129,7 +132,7 @@ class _DetectedProductOverlayState extends State<DetectedProductOverlay>
           ),
           const SizedBox(width: AppSpacing.sm),
           Text(
-            'DETECTED BY ZAYER',
+            'DETECTED BY ${widget.appName.toUpperCase()}',
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: AppConfig.successGreen,
                   fontWeight: FontWeight.w600,
@@ -340,7 +343,7 @@ class _DetectedProductOverlayState extends State<DetectedProductOverlay>
                       child: FilledButton.icon(
                         onPressed: widget.onAddToCart,
                         icon: const Icon(Icons.shopping_cart_outlined, size: 20),
-                        label: const Text('Add to Zayer Cart'),
+                        label: Text('Add to ${widget.appName} Cart'),
                         style: FilledButton.styleFrom(
                           backgroundColor: AppConfig.primaryColor,
                           foregroundColor: Colors.white,

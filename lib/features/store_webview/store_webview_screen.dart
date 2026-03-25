@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/config/app_config_provider.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_config.dart';
 import '../../core/platform/webview_supported.dart';
@@ -493,6 +494,7 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
             bottom: 0,
             child: DetectedProductOverlay(
               product: _detectedProduct!,
+              appName: ref.watch(appDisplayNameProvider),
               onAddToCart: _handleAddToCart,
               onFavorite: _handleFavorite,
               isExtracting: _showExtractionLoader,
@@ -503,6 +505,7 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
   }
 
   Widget _buildHintBanner() {
+    final appName = ref.watch(appDisplayNameProvider);
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -523,7 +526,7 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
-                'Open a product page to add items to your Zayer cart.',
+                'Open a product page to add items to your $appName cart.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppConfig.textColor,
                     ),
