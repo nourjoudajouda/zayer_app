@@ -118,7 +118,7 @@ class FavoritesScreen extends ConsumerWidget {
                 child: ListView.separated(
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
                   itemCount: items.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
+                  separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
                   itemBuilder: (context, index) => _FavoriteCard(item: items[index]),
                 ),
               ),

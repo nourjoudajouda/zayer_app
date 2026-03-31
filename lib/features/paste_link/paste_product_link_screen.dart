@@ -304,7 +304,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
         padding: EdgeInsets.only(bottom: AppSpacing.md),
         child: LinearProgressIndicator(),
       ),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
       data: (list) {
         if (list.isEmpty) {
           return Padding(
@@ -354,7 +354,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
                 isExpanded: true,
-                value: effective,
+                initialValue: effective,
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
@@ -1238,7 +1238,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
                 ...List.generate(_result!.variations!.length, (i) {
                   final v = _result!.variations![i];
                   final selectedIndex = _selectedVariationIndices[i] ?? 0;
-                  final safeIndex = selectedIndex.clamp(0, v.options.length > 0 ? v.options.length - 1 : 0);
+                  final safeIndex = selectedIndex.clamp(0, v.options.isNotEmpty ? v.options.length - 1 : 0);
                   return Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                     child: Column(
@@ -1537,7 +1537,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: DropdownButtonFormField<String>(
-                value: _weightUnit,
+                initialValue: _weightUnit,
                 decoration: _inputDecoration('Unit'),
                 items: const [
                   DropdownMenuItem(value: 'lb', child: Text('lb')),
@@ -1597,7 +1597,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
             SizedBox(
               width: 72,
               child: DropdownButtonFormField<String>(
-                value: _dimensionUnit,
+                initialValue: _dimensionUnit,
                 decoration: _inputDecoration('Unit'),
                 isExpanded: true,
                 items: const [

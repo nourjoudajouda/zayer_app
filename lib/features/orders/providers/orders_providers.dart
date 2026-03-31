@@ -55,7 +55,7 @@ final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
   final originFilter = ref.watch(ordersOriginFilterProvider);
   final sortOption = ref.watch(ordersSortProvider);
 
-  DateTime? _parsePlacedDate(String v) {
+  DateTime? parsePlacedDate(String v) {
     var cleaned = v.trim();
     // Some mock/legacy data may include "Placed on <date>"
     cleaned = cleaned
@@ -76,11 +76,11 @@ final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
     }
   }
 
-  int _parseOrderId(String id) => int.tryParse(id.trim()) ?? 0;
+  int parseOrderId(String id) => int.tryParse(id.trim()) ?? 0;
 
-  int _compareByPlacedDateDesc(OrderModel a, OrderModel b) {
-    final da = _parsePlacedDate(a.placedDate);
-    final db = _parsePlacedDate(b.placedDate);
+  int compareByPlacedDateDesc(OrderModel a, OrderModel b) {
+    final da = parsePlacedDate(a.placedDate);
+    final db = parsePlacedDate(b.placedDate);
     if (da != null && db != null) {
       final byDate = db.compareTo(da);
       if (byDate != 0) return byDate;
@@ -91,12 +91,12 @@ final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
     }
 
     // Stable fallback: higher id treated as newer.
-    return _parseOrderId(b.id).compareTo(_parseOrderId(a.id));
+    return parseOrderId(b.id).compareTo(parseOrderId(a.id));
   }
 
-  int _compareByPlacedDateAsc(OrderModel a, OrderModel b) {
-    final da = _parsePlacedDate(a.placedDate);
-    final db = _parsePlacedDate(b.placedDate);
+  int compareByPlacedDateAsc(OrderModel a, OrderModel b) {
+    final da = parsePlacedDate(a.placedDate);
+    final db = parsePlacedDate(b.placedDate);
     if (da != null && db != null) {
       final byDate = da.compareTo(db);
       if (byDate != 0) return byDate;
@@ -107,7 +107,7 @@ final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
     }
 
     // Stable fallback: lower id treated as older.
-    return _parseOrderId(a.id).compareTo(_parseOrderId(b.id));
+    return parseOrderId(a.id).compareTo(parseOrderId(b.id));
   }
 
   return async.when(
@@ -118,8 +118,9 @@ final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
             break;
           case OrdersFilter.inProgress:
             if (o.status == OrderStatus.delivered ||
-                o.status == OrderStatus.cancelled)
+                o.status == OrderStatus.cancelled) {
               return false;
+            }
             break;
           case OrdersFilter.delivered:
             if (o.status != OrderStatus.delivered) return false;
@@ -146,10 +147,10 @@ final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
 
       switch (sortOption) {
         case OrdersSortOption.newestFirst:
-          filtered = List.from(filtered)..sort(_compareByPlacedDateDesc);
+          filtered = List.from(filtered)..sort(compareByPlacedDateDesc);
           break;
         case OrdersSortOption.oldestFirst:
-          filtered = List.from(filtered)..sort(_compareByPlacedDateAsc);
+          filtered = List.from(filtered)..sort(compareByPlacedDateAsc);
           break;
         case OrdersSortOption.amountHighToLow:
           filtered = List.from(filtered)

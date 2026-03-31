@@ -138,7 +138,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
       final saveAsDefault = widget.requireDefault ? true : _isDefault;
       await repo.saveAddress(
         id: widget.addressId,
-        addressLine: addressLine.isEmpty ? '${_cityName}, $countryName' : addressLine,
+        addressLine: addressLine.isEmpty ? '$_cityName, $countryName' : addressLine,
         countryId: countryId,
         countryName: countryName,
         cityId: cityId?.isEmpty == true ? null : cityId,
@@ -351,7 +351,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
             decoration: InputDecoration(border: OutlineInputBorder()),
             child: SizedBox(height: 48, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
           ),
-          error: (_, __) => const SizedBox.shrink(),
+          error: (_, _) => const SizedBox.shrink(),
         ),
         const SizedBox(height: AppSpacing.md),
         // Area / District

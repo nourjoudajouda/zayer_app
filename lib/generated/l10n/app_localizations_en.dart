@@ -380,4 +380,12 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get defaultAddressChangeCartReviewNote =>
       'Note: If you change your default delivery address, all items in your cart will be sent for admin review again.';
+
+  @override
+  String get shippingReviewNoteFull =>
+      'The shipping cost shown is an estimate only and will be reviewed and confirmed by admin after inspecting the product and its specifications.';
+
+  @override
+  String get shippingReviewNoteShort =>
+      'Note: Shipping cost is subject to admin review before final confirmation.';
 }

@@ -11,7 +11,6 @@ import '../../features/auth/register_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/onboarding/splash_screen.dart';
-import '../../features/cart/cart_empty_screen.dart';
 import '../../features/placeholders/cart_screen.dart';
 import '../../features/favorites/favorites_screen.dart';
 import '../../features/markets/markets_screen.dart';
@@ -46,6 +45,7 @@ import '../../features/settings/default_warehouse_screen.dart';
 import '../../features/settings/privacy_policy_screen.dart';
 import '../../features/paste_link/paste_product_link_screen.dart';
 import '../../features/product_import/confirm_product_screen.dart';
+import '../../features/paste_link/models/product_import_result.dart';
 import '../../features/product_import/models/product_variation.dart';
 import '../../features/store_webview/models/detected_product.dart';
 import '../../features/development/dev_mode_screen.dart';
@@ -264,7 +264,7 @@ GoRouter _createAppRouter() {
               final vList = productData['variations'];
               if (vList is List && vList.isNotEmpty) {
                 variations = vList
-                    .map((e) => e is Map ? ProductVariation.fromJson(Map<String, dynamic>.from(e as Map)) : null)
+                    .map((e) => e is Map ? ProductVariation.fromJson(Map<String, dynamic>.from(e)) : null)
                     .whereType<ProductVariation>()
                     .toList();
                 if (variations.isEmpty) variations = null;
@@ -286,9 +286,13 @@ GoRouter _createAppRouter() {
             }
           }
           
+          final importResult = state.extra is ProductImportResult
+              ? state.extra as ProductImportResult
+              : null;
           return ConfirmProductScreen(
             productUrl: url,
             product: product,
+            importResult: importResult,
           );
         },
       ),

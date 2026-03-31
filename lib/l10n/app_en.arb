@@ -120,5 +120,7 @@
   "import": "Import",
   "checkConnectionAndRetry": "No connection. Check network and retry.",
   "retry": "Retry",
-  "defaultAddressChangeCartReviewNote": "Note: If you change your default delivery address, all items in your cart will be sent for admin review again."
+  "defaultAddressChangeCartReviewNote": "Note: If you change your default delivery address, all items in your cart will be sent for admin review again.",
+  "shippingReviewNoteFull": "The shipping cost shown is an estimate only and will be reviewed and confirmed by admin after inspecting the product and its specifications.",
+  "shippingReviewNoteShort": "Note: Shipping cost is subject to admin review before final confirmation."
 }

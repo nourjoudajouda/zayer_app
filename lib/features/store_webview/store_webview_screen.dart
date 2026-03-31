@@ -15,6 +15,7 @@ import '../../core/platform/webview_supported.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../features/favorites/providers/favorites_providers.dart';
+import '../../features/paste_link/models/product_import_result.dart';
 import '../../features/paste_link/providers/paste_link_providers.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'extractors/product_data_extractor.dart';
@@ -40,6 +41,8 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
   DetectedProduct? _detectedProduct;
   bool _isExtractingProduct = false;
   bool _showExtractionLoader = false;
+  /// Full import result from API (contains shipping quote, review flags).
+  ProductImportResult? _importResult;
 
   String get _resolvedUrl =>
       widget.initialUrl.trim().isNotEmpty
@@ -64,6 +67,7 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
               setState(() {
                 _isLoading = true;
                 _detectedProduct = null;
+                _importResult = null;
                 _showExtractionLoader = false;
                 _isExtractingProduct = false;
               });
@@ -136,6 +140,7 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
         );
         setState(() {
           _detectedProduct = updatedFromApi;
+          _importResult = apiResult;
           _showExtractionLoader = false;
           _isExtractingProduct = false;
         });
@@ -345,7 +350,6 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
 
   void _handleAddToCart() {
     if (_detectedProduct != null) {
-      // Encode product data as JSON and pass it to ConfirmProductScreen
       final productJson = jsonEncode({
         'storeKey': _detectedProduct!.storeKey,
         'storeName': _detectedProduct!.storeName,
@@ -358,9 +362,10 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
         if (_detectedProduct!.variations != null && _detectedProduct!.variations!.isNotEmpty)
           'variations': _detectedProduct!.variations!.map((v) => v.toJson()).toList(),
       });
-      
+
       context.push(
         '${AppRoutes.confirmProduct}?url=${Uri.encodeComponent(_detectedProduct!.productUrl)}&product=${Uri.encodeComponent(productJson)}',
+        extra: _importResult,
       );
     }
   }

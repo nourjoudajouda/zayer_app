@@ -113,15 +113,13 @@ class _ZayerAppState extends ConsumerState<ZayerApp> {
     }
 
     // One-time pending notification listener: register once and dispose in [dispose].
-    if (_pendingSubscription == null) {
-      _pendingSubscription = ref.listenManual<NotificationNavigationTarget?>(
+    _pendingSubscription ??= ref.listenManual<NotificationNavigationTarget?>(
         pendingNotificationTargetProvider,
         (prev, next) {
           if (next == null) return;
           _handlePendingNotification(context, ref, next);
         },
       );
-    }
 
     final theme = configAsync.whenOrNull(
           data: (config) => AppTheme.fromConfig(config.theme),

@@ -34,10 +34,17 @@ class ProductLinkImportRepositoryApi implements ProductLinkImportRepository {
     final vList = d['variations'];
     if (vList is List && vList.isNotEmpty) {
       variations = vList
-          .map((e) => e is Map ? ProductVariation.fromJson(Map<String, dynamic>.from(e as Map)) : null)
+          .map((e) => e is Map ? ProductVariation.fromJson(Map<String, dynamic>.from(e)) : null)
           .whereType<ProductVariation>()
           .toList();
       if (variations.isEmpty) variations = null;
+    }
+
+    // Parse shipping quote if available
+    ShippingQuotePreview? shippingQuote;
+    final sq = d['shipping_quote'];
+    if (sq is Map<String, dynamic>) {
+      shippingQuote = ShippingQuotePreview.fromJson(sq);
     }
 
     return ProductImportResult(
@@ -48,6 +55,11 @@ class ProductLinkImportRepositoryApi implements ProductLinkImportRepository {
       imageUrl: d['image_url'] as String?,
       canonicalUrl: d['canonical_url'] as String? ?? normalized.canonicalUrl,
       variations: variations,
+      shippingQuote: shippingQuote,
+      shippingReviewRequired: d['shipping_review_required'] != false,
+      shippingNoteAr: d['shipping_note_ar'] as String?,
+      shippingNoteEn: d['shipping_note_en'] as String?,
+      extractionSource: d['extraction_source'] as String?,
     );
   }
 }

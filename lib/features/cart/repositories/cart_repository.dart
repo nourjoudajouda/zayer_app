@@ -183,7 +183,7 @@ class CartRepositoryImpl implements CartRepository {
         estimated: data['estimated'] == true,
         destinationCountry: data['destination_country'] as String?,
         destinationLabel: data['destination_label'] as String?,
-        destinationAddressId: destAddrRaw == null ? null : destAddrRaw.toString(),
+        destinationAddressId: destAddrRaw?.toString(),
       );
     } catch (_) {
       return const CartShippingEstimateDto(available: false);

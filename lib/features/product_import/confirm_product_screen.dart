@@ -11,23 +11,28 @@ import '../../core/network/api_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/add_to_cart_success_sheet.dart';
+import '../../generated/l10n/app_localizations.dart';
 import '../cart/models/cart_item_model.dart';
 import '../cart/providers/cart_providers.dart';
 import '../cart/repositories/cart_repository.dart';
+import '../paste_link/models/product_import_result.dart';
 import '../store_webview/models/detected_product.dart';
-import 'models/product_variation.dart';
 
-/// Confirm Product screen (MVP mock).
-/// Shows product details and mock shipping/duties before adding to cart.
+/// Confirm Product screen.
+/// Shows product details, variations, and shipping estimate before adding to cart.
 class ConfirmProductScreen extends ConsumerStatefulWidget {
   const ConfirmProductScreen({
     super.key,
     this.productUrl,
     this.product,
+    this.importResult,
   });
 
   final String? productUrl;
   final DetectedProduct? product;
+
+  /// Optional: full import result from paste-link flow (contains shipping quote).
+  final ProductImportResult? importResult;
 
   @override
   ConsumerState<ConfirmProductScreen> createState() => _ConfirmProductScreenState();
@@ -83,11 +88,16 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
     final storeName = widget.product?.storeName ?? 'Amazon US';
     final productCurrency = widget.product?.currency ?? 'USD';
     final productImageUrl = widget.product?.imageUrl;
-    // User can edit unit price when product has multiple variations (size/color)
     final usdPrice = _unitPrice;
     final subtotal = usdPrice * _quantity;
-    // Until backend provides an actual quote/final pricing, we must not show invented shipping/duties/totals.
-    final pricingPendingReview = true;
+
+    // Shipping data: prefer importResult if available, else treat as pending review.
+    final importResult = widget.importResult;
+    final shippingQuote = importResult?.shippingQuote;
+    final shippingReviewRequired = importResult?.shippingReviewRequired ?? true;
+    final hasShippingAmount = shippingQuote != null && shippingQuote.amount > 0;
+
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -255,7 +265,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                               ),
                               Expanded(
                                 child: DropdownButtonFormField<int>(
-                                  value: selectedIndex.clamp(0, v.options.length - 1),
+                                  initialValue: selectedIndex.clamp(0, v.options.length - 1),
                                   decoration: InputDecoration(
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
@@ -416,25 +426,51 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                     const SizedBox(height: AppSpacing.sm),
                     _buildCostRow(
                       'Shipping',
-                      pricingPendingReview ? 'Pending Review' : '—',
+                      hasShippingAmount
+                          ? '≈ ${shippingQuote.currency} ${shippingQuote.amount.toStringAsFixed(2)}'
+                          : 'Pending Review',
+                      isEstimated: hasShippingAmount && shippingReviewRequired,
                     ),
                     const Divider(height: AppSpacing.lg),
                     _buildCostRow(
                       'Total',
-                      pricingPendingReview ? 'Pending Review' : '—',
+                      hasShippingAmount
+                          ? 'USD ${(subtotal + shippingQuote.amount).toStringAsFixed(2)}'
+                          : 'Pending Review',
                       isTotal: true,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'Final shipping will be confirmed after review.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppConfig.subtitleColor,
-                    ),
-                textAlign: TextAlign.center,
-              ),
+              // Shipping review banner — shown when shipping is estimated/pending
+              if (shippingReviewRequired) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                    border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.info_outline, size: 18, color: Colors.orange),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          l10n?.shippingReviewNoteFull ??
+                              'The shipping cost shown is an estimate only and will be reviewed and confirmed by admin.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppConfig.textColor,
+                                height: 1.4,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: AppSpacing.xxl),
             ],
           ),
@@ -444,7 +480,12 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
     );
   }
 
-  Widget _buildCostRow(String label, String value, {bool isTotal = false}) {
+  Widget _buildCostRow(
+    String label,
+    String value, {
+    bool isTotal = false,
+    bool isEstimated = false,
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -455,12 +496,23 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                 color: isTotal ? AppConfig.textColor : AppConfig.subtitleColor,
               ),
         ),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: isTotal ? FontWeight.w700 : FontWeight.w500,
-                color: isTotal ? AppConfig.primaryColor : AppConfig.textColor,
+        Row(
+          children: [
+            if (isEstimated)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Icon(Icons.info_outline, size: 14, color: Colors.orange.shade700),
               ),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: isTotal ? FontWeight.w700 : FontWeight.w500,
+                    color: isEstimated
+                        ? Colors.orange.shade800
+                        : (isTotal ? AppConfig.primaryColor : AppConfig.textColor),
+                  ),
+            ),
+          ],
         ),
       ],
     );

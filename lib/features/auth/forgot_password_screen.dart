@@ -46,13 +46,15 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   Future<void> _loadCountries() async {
     final repo = ref.read(authRepositoryProvider);
     final list = await repo.getCountries();
-    if (mounted) setState(() {
+    if (mounted) {
+      setState(() {
       _countries = list;
       if (list.isNotEmpty && _countryCode == '966') {
         final first = list.first;
         _countryCode = first.dialCode.isNotEmpty ? first.dialCode : '966';
       }
     });
+    }
   }
 
   @override
@@ -145,7 +147,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                       SizedBox(
                         width: 120,
                         child: DropdownButtonFormField<String>(
-                          value: _countries.any((c) => (c.dialCode.isNotEmpty ? c.dialCode : c.id) == _countryCode)
+                          initialValue: _countries.any((c) => (c.dialCode.isNotEmpty ? c.dialCode : c.id) == _countryCode)
                               ? _countryCode
                               : (_countries.isNotEmpty ? (_countries.first.dialCode.isNotEmpty ? _countries.first.dialCode : _countries.first.id) : '966'),
                           decoration: InputDecoration(

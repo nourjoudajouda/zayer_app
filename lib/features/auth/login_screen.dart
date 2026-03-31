@@ -40,7 +40,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   CountryItem? _countryById(String? id) {
     if (id == null || id.isEmpty) return null;
-    for (final c in _countries) if (c.id == id) return c;
+    for (final c in _countries) {
+      if (c.id == id) return c;
+    }
     return null;
   }
 
@@ -64,10 +66,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       list = await repo.getCountries();
     } catch (_) {
-      if (mounted) setState(() {
+      if (mounted) {
+        setState(() {
         _loadingCountries = false;
         _countriesLoadError = true;
       });
+      }
       return;
     }
     if (!mounted) return;

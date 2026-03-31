@@ -274,7 +274,7 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
                 ),
                 contentPadding: EdgeInsets.zero,
-                activeColor: AppConfig.primaryColor,
+                activeThumbColor: AppConfig.primaryColor,
               ),
               const SizedBox(height: AppSpacing.lg),
               Text('ORDER SUMMARY', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppConfig.subtitleColor, fontWeight: FontWeight.w600)),

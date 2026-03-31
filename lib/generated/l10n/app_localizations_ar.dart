@@ -379,4 +379,12 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get defaultAddressChangeCartReviewNote =>
       'ملاحظة: عند تغيير عنوان التوصيل الافتراضي، تُعاد جميع عناصر السلة إلى مراجعة الإدارة.';
+
+  @override
+  String get shippingReviewNoteFull =>
+      'سعر الشحن المعروض حاليًا تقديري فقط، وسيتم مراجعته واعتماده من الإدارة بعد فحص المنتج والمواصفات.';
+
+  @override
+  String get shippingReviewNoteShort =>
+      'ملاحظة: سعر الشحن سيخضع لمراجعة الإدارة قبل الاعتماد النهائي.';
 }

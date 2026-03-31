@@ -805,6 +805,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Note: If you change your default delivery address, all items in your cart will be sent for admin review again.'**
   String get defaultAddressChangeCartReviewNote;
+
+  /// No description provided for @shippingReviewNoteFull.
+  ///
+  /// In en, this message translates to:
+  /// **'The shipping cost shown is an estimate only and will be reviewed and confirmed by admin after inspecting the product and its specifications.'**
+  String get shippingReviewNoteFull;
+
+  /// No description provided for @shippingReviewNoteShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Note: Shipping cost is subject to admin review before final confirmation.'**
+  String get shippingReviewNoteShort;
 }
 
 class _AppLocalizationsDelegate

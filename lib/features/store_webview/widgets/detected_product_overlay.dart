@@ -4,6 +4,7 @@ import '../../../core/config/app_config.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_config.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../generated/l10n/app_localizations.dart';
 import '../models/detected_product.dart';
 
 /// Bottom overlay shown when PDP is detected in WebView.
@@ -331,7 +332,8 @@ class _DetectedProductOverlayState extends State<DetectedProductOverlay>
                   ),
                 const SizedBox(height: 2),
                 Text(
-                  'Intl. shipping calculated at checkout',
+                  AppLocalizations.of(context)?.shippingReviewNoteShort ??
+                      'Note: Shipping cost is subject to admin review.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppConfig.subtitleColor,
                       ),

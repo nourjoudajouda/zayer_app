@@ -12,6 +12,11 @@ class ProductImportResult {
     this.dimensions,
     this.canonicalUrl,
     this.variations,
+    this.shippingQuote,
+    this.shippingReviewRequired = true,
+    this.shippingNoteAr,
+    this.shippingNoteEn,
+    this.extractionSource,
   });
 
   final String name;
@@ -25,6 +30,51 @@ class ProductImportResult {
   final String? canonicalUrl;
   /// Size/color options when API returns them.
   final List<ProductVariation>? variations;
+
+  /// Shipping quote preview from the backend (may be null if insufficient data).
+  final ShippingQuotePreview? shippingQuote;
+
+  /// True when the shipping cost is estimated / pending admin review.
+  final bool shippingReviewRequired;
+
+  /// Arabic shipping review note from the backend.
+  final String? shippingNoteAr;
+
+  /// English shipping review note from the backend.
+  final String? shippingNoteEn;
+
+  /// Which extraction pipeline was used (e.g. 'amazon_structured_api', 'jsonld').
+  final String? extractionSource;
+}
+
+/// Shipping quote preview returned alongside the product import result.
+class ShippingQuotePreview {
+  const ShippingQuotePreview({
+    required this.amount,
+    required this.currency,
+    required this.estimated,
+    this.carrier,
+    this.missingFields = const [],
+  });
+
+  final double amount;
+  final String currency;
+  final bool estimated;
+  final String? carrier;
+  final List<String> missingFields;
+
+  factory ShippingQuotePreview.fromJson(Map<String, dynamic> json) {
+    final missing = json['missing_fields'];
+    return ShippingQuotePreview(
+      amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
+      currency: (json['currency'] as String?) ?? 'USD',
+      estimated: json['estimated'] == true,
+      carrier: json['carrier'] as String?,
+      missingFields: missing is List
+          ? missing.map((e) => e.toString()).toList()
+          : const [],
+    );
+  }
 }
 
 /// Thrown when the URL is invalid (malformed, not http(s)).
