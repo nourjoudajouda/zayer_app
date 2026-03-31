@@ -17,6 +17,8 @@ class ProductImportResult {
     this.shippingNoteAr,
     this.shippingNoteEn,
     this.extractionSource,
+    this.measurementsFound = false,
+    this.shippingEstimateSource,
   });
 
   final String name;
@@ -45,6 +47,12 @@ class ProductImportResult {
 
   /// Which extraction pipeline was used (e.g. 'amazon_structured_api', 'jsonld').
   final String? extractionSource;
+
+  /// True when the backend found real weight AND dimensions for this product.
+  final bool measurementsFound;
+
+  /// 'exact' when real measurements were used, 'fallback' when defaults were applied.
+  final String? shippingEstimateSource;
 }
 
 /// Shipping quote preview returned alongside the product import result.

@@ -60,6 +60,8 @@ class ProductLinkImportRepositoryApi implements ProductLinkImportRepository {
       shippingNoteAr: d['shipping_note_ar'] as String?,
       shippingNoteEn: d['shipping_note_en'] as String?,
       extractionSource: d['extraction_source'] as String?,
+      measurementsFound: d['measurements_found'] == true,
+      shippingEstimateSource: d['shipping_estimate_source'] as String?,
     );
   }
 }

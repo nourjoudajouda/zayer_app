@@ -96,6 +96,8 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
     final shippingQuote = importResult?.shippingQuote;
     final shippingReviewRequired = importResult?.shippingReviewRequired ?? true;
     final hasShippingAmount = shippingQuote != null && shippingQuote.amount > 0;
+    final measurementsFound = importResult?.measurementsFound ?? false;
+    final shippingEstimateSource = importResult?.shippingEstimateSource;
 
     final l10n = AppLocalizations.of(context);
 
@@ -425,11 +427,14 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     _buildCostRow(
-                      'Shipping',
+                      shippingEstimateSource == 'exact'
+                          ? 'Shipping (exact)'
+                          : 'Shipping (estimated)',
                       hasShippingAmount
                           ? '≈ ${shippingQuote.currency} ${shippingQuote.amount.toStringAsFixed(2)}'
                           : 'Pending Review',
                       isEstimated: hasShippingAmount && shippingReviewRequired,
+                      isFallback: !measurementsFound,
                     ),
                     const Divider(height: AppSpacing.lg),
                     _buildCostRow(
@@ -459,8 +464,11 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          l10n?.shippingReviewNoteFull ??
-                              'The shipping cost shown is an estimate only and will be reviewed and confirmed by admin.',
+                          (!measurementsFound
+                              ? 'Shipping is estimated using default dimensions. '
+                              : '') +
+                          (l10n?.shippingReviewNoteFull ??
+                              'The shipping cost shown is an estimate only and will be reviewed and confirmed by admin.'),
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: AppConfig.textColor,
                                 height: 1.4,
@@ -485,6 +493,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
     String value, {
     bool isTotal = false,
     bool isEstimated = false,
+    bool isFallback = false,
   }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -498,16 +507,20 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
         ),
         Row(
           children: [
-            if (isEstimated)
+            if (isEstimated || isFallback)
               Padding(
                 padding: const EdgeInsets.only(right: 4),
-                child: Icon(Icons.info_outline, size: 14, color: Colors.orange.shade700),
+                child: Icon(
+                  isFallback ? Icons.straighten_outlined : Icons.info_outline,
+                  size: 14,
+                  color: Colors.orange.shade700,
+                ),
               ),
             Text(
               value,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontWeight: isTotal ? FontWeight.w700 : FontWeight.w500,
-                    color: isEstimated
+                    color: (isEstimated || isFallback)
                         ? Colors.orange.shade800
                         : (isTotal ? AppConfig.primaryColor : AppConfig.textColor),
                   ),

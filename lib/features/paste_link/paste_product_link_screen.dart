@@ -78,6 +78,10 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
   bool _isAddingToCart = false;
   Timer? _shippingEstimateDebounce;
   bool _shippingEstimateLoading = false;
+
+  /// Current step index for the animated import progress (0–2).
+  int _importStep = 0;
+  Timer? _importStepTimer;
   double? _shippingPreviewPerUnit;
   String _shippingPreviewCurrency = 'USD';
   bool _shippingPreviewEstimated = false;
@@ -101,6 +105,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
   void dispose() {
     _debounceTimer?.cancel();
     _shippingEstimateDebounce?.cancel();
+    _importStepTimer?.cancel();
     _urlController.removeListener(_onUrlChanged);
     _weightController.removeListener(_scheduleShippingEstimate);
     _lengthController.removeListener(_scheduleShippingEstimate);
@@ -462,10 +467,20 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
 
     setState(() {
       _state = _PasteLinkState.loading;
+      _importStep = 0;
       _invalidError = null;
       _result = null;
       _showNormalizedHint = false;
       _clearShippingPreview();
+    });
+
+    // Advance the step indicator every ~2.5 s so the user sees progress.
+    _importStepTimer?.cancel();
+    _importStepTimer = Timer.periodic(const Duration(milliseconds: 2500), (t) {
+      if (!mounted) { t.cancel(); return; }
+      setState(() {
+        if (_importStep < 2) _importStep++;
+      });
     });
 
     final repo = ref.read(productLinkImportRepositoryProvider);
@@ -487,6 +502,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
         _isUpdatingFromCanonical = false;
       }
 
+      _importStepTimer?.cancel();
       setState(() {
         _state = _PasteLinkState.success;
         _result = result;
@@ -505,6 +521,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
     } on InvalidLinkException catch (e) {
       if (!mounted) return;
       if (currentRequestId != _requestId) return;
+      _importStepTimer?.cancel();
       setState(() {
         _state = _PasteLinkState.invalid;
         _invalidError = e.message;
@@ -513,6 +530,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
     } on UnsupportedLinkException {
       if (!mounted) return;
       if (currentRequestId != _requestId) return;
+      _importStepTimer?.cancel();
       setState(() {
         _state = _PasteLinkState.manual;
         _unitPrice = null;
@@ -528,6 +546,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
     } catch (e, st) {
       if (!mounted) return;
       if (currentRequestId != _requestId) return;
+      _importStepTimer?.cancel();
       debugPrint('Import error: $e $st');
       setState(() {
         _state = _PasteLinkState.idle;
@@ -794,6 +813,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
                 color: Colors.black.withValues(alpha: 0.3),
                 child: Center(
                   child: Container(
+                    width: 280,
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.xl,
                       vertical: AppSpacing.lg,
@@ -813,28 +833,52 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         SizedBox(
-                          width: 48,
-                          height: 48,
+                          width: 40,
+                          height: 40,
                           child: CircularProgressIndicator(
                             strokeWidth: 3,
                             color: AppConfig.primaryColor,
                           ),
                         ),
                         const SizedBox(height: AppSpacing.md),
-                        Text(
-                          'Importing product...',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: AppConfig.textColor,
-                              ),
-                        ),
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          'Fetching details from store',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppConfig.subtitleColor,
-                              ),
-                        ),
+                        ...[
+                          (Icons.download_outlined, 'Fetching product page'),
+                          (Icons.search_outlined, 'Reading product details'),
+                          (Icons.local_shipping_outlined, 'Calculating shipping'),
+                        ].indexed.map((entry) {
+                          final i = entry.$1;
+                          final (icon, label) = entry.$2;
+                          final isDone = i < _importStep;
+                          final isActive = i == _importStep;
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  isDone ? Icons.check_circle : icon,
+                                  size: 18,
+                                  color: isDone
+                                      ? Colors.green
+                                      : isActive
+                                          ? AppConfig.primaryColor
+                                          : AppConfig.subtitleColor.withValues(alpha: 0.4),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  label,
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: isDone
+                                            ? AppConfig.subtitleColor
+                                            : isActive
+                                                ? AppConfig.textColor
+                                                : AppConfig.subtitleColor.withValues(alpha: 0.4),
+                                        fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
                       ],
                     ),
                   ),
