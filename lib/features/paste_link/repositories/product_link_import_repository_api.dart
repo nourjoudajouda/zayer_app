@@ -47,15 +47,38 @@ class ProductLinkImportRepositoryApi implements ProductLinkImportRepository {
       shippingQuote = ShippingQuotePreview.fromJson(sq);
     }
 
+    // Parse shipping estimate (required normalized block)
+    ShippingEstimate? shippingEstimate;
+    final se = d['shipping_estimate'];
+    if (se is Map<String, dynamic>) {
+      shippingEstimate = ShippingEstimate.fromJson(se);
+    }
+
+    // Parse measurements (do not fake)
+    final weight = (d['weight'] as num?)?.toDouble();
+    ProductDimensions? dimsData;
+    String? dimsFormatted;
+    final dims = d['dimensions'];
+    if (dims is Map) {
+      dimsData = ProductDimensions.fromJson(Map<String, dynamic>.from(dims));
+      if (dimsData.isValid) dimsFormatted = dimsData.format();
+    } else if (dims is String) {
+      dimsFormatted = dims.trim().isNotEmpty ? dims.trim() : null;
+    }
+
     return ProductImportResult(
       name: (d['name'] ?? 'Product').toString(),
       price: (d['price'] as num?)?.toDouble() ?? 0,
       storeName: (d['store_name'] ?? 'Unknown').toString(),
       country: (d['country'] ?? 'Unknown').toString(),
       imageUrl: d['image_url'] as String?,
+      weight: weight,
+      dimensions: dimsFormatted,
+      dimensionsData: dimsData,
       canonicalUrl: d['canonical_url'] as String? ?? normalized.canonicalUrl,
       variations: variations,
       shippingQuote: shippingQuote,
+      shippingEstimate: shippingEstimate,
       shippingReviewRequired: d['shipping_review_required'] != false,
       shippingNoteAr: d['shipping_note_ar'] as String?,
       shippingNoteEn: d['shipping_note_en'] as String?,

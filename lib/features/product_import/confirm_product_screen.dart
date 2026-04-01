@@ -98,6 +98,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
     final hasShippingAmount = shippingQuote != null && shippingQuote.amount > 0;
     final measurementsFound = importResult?.measurementsFound ?? false;
     final shippingEstimateSource = importResult?.shippingEstimateSource;
+    final shippingEstimate = importResult?.shippingEstimate;
 
     final l10n = AppLocalizations.of(context);
 
@@ -477,6 +478,58 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                       ),
                     ],
                   ),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.sm),
+              // Measurements (show only when real)
+              if (measurementsFound) ...[
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                    border: Border.all(color: AppConfig.borderColor),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Measurements',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: 6),
+                      if (importResult?.weight != null) Text('Weight: ${importResult!.weight}'),
+                      if (importResult?.dimensions != null) Text('Dimensions: ${importResult!.dimensions}'),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                // CASE 2: missing — do not show fake data
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                    border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
+                  ),
+                  child: Text(
+                    'Estimated shipping (approximate). Measurements were not found for this product.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppConfig.textColor,
+                          height: 1.35,
+                        ),
+                  ),
+                ),
+              ],
+              if (shippingEstimate != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Shipping note: ${shippingEstimate.note}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppConfig.subtitleColor,
+                      ),
                 ),
               ],
               const SizedBox(height: AppSpacing.xxl),
