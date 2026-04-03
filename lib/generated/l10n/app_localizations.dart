@@ -817,6 +817,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Note: Shipping cost is subject to admin review before final confirmation.'**
   String get shippingReviewNoteShort;
+
+  /// No description provided for @exactMeasurementsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Exact measurements'**
+  String get exactMeasurementsLabel;
+
+  /// No description provided for @estimatedShippingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated shipping'**
+  String get estimatedShippingLabel;
+
+  /// No description provided for @estimatedTotalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated total'**
+  String get estimatedTotalLabel;
+
+  /// No description provided for @shippingFallbackPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated shipping based on fallback measurements. '**
+  String get shippingFallbackPrefix;
+
+  /// No description provided for @measurementsNotAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Measurements not available from store. Shipping is estimated and subject to review.'**
+  String get measurementsNotAvailable;
+
+  /// No description provided for @weightLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight'**
+  String get weightLabel;
+
+  /// No description provided for @dimensionsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Dimensions'**
+  String get dimensionsLabel;
+
+  /// No description provided for @shippingNoteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipping note'**
+  String get shippingNoteLabel;
+
+  /// No description provided for @importProgressTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing your product…'**
+  String get importProgressTitle;
+
+  /// No description provided for @importProgressSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We’ll fetch product details and calculate shipping before confirmation.'**
+  String get importProgressSubtitle;
+
+  /// No description provided for @importProgressKeepOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep this screen open…'**
+  String get importProgressKeepOpen;
+
+  /// No description provided for @importProgressReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready for confirmation'**
+  String get importProgressReady;
+
+  /// No description provided for @importProgressFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Import failed'**
+  String get importProgressFailed;
+
+  /// No description provided for @importProgressTryAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Please check your connection and try again.'**
+  String get importProgressTryAgain;
+
+  /// No description provided for @importProgressStepImporting.
+  ///
+  /// In en, this message translates to:
+  /// **'Importing product'**
+  String get importProgressStepImporting;
+
+  /// No description provided for @importProgressStepReading.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading product details'**
+  String get importProgressStepReading;
+
+  /// No description provided for @importProgressStepShipping.
+  ///
+  /// In en, this message translates to:
+  /// **'Calculating shipping'**
+  String get importProgressStepShipping;
+
+  /// No description provided for @importProgressStepPreparing.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing confirmation'**
+  String get importProgressStepPreparing;
+
+  /// No description provided for @reviewAndAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Review & Add'**
+  String get reviewAndAdd;
 }
 
 class _AppLocalizationsDelegate

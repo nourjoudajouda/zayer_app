@@ -18,6 +18,7 @@ import '../../features/favorites/providers/favorites_providers.dart';
 import '../../features/paste_link/models/product_import_result.dart';
 import '../../features/paste_link/providers/paste_link_providers.dart';
 import '../../generated/l10n/app_localizations.dart';
+import '../product_import/import_progress_screen.dart';
 import 'extractors/product_data_extractor.dart';
 import 'models/detected_product.dart';
 import 'rules/webview_import_rules.dart';
@@ -350,24 +351,62 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
 
   void _handleAddToCart() {
     if (_detectedProduct != null) {
-      final productJson = jsonEncode({
-        'storeKey': _detectedProduct!.storeKey,
-        'storeName': _detectedProduct!.storeName,
-        'productUrl': _detectedProduct!.productUrl,
-        'title': _detectedProduct!.title,
-        'price': _detectedProduct!.price,
-        'currency': _detectedProduct!.currency,
-        'imageUrl': _detectedProduct!.imageUrl,
-        'productId': _detectedProduct!.productId,
-        if (_detectedProduct!.variations != null && _detectedProduct!.variations!.isNotEmpty)
-          'variations': _detectedProduct!.variations!.map((v) => v.toJson()).toList(),
-      });
+      _startImportAndNavigate();
+    }
+  }
 
+  Future<void> _startImportAndNavigate() async {
+    final p = _detectedProduct;
+    if (p == null || !mounted) return;
+
+    // If we already have the normalized result, go straight to confirm.
+    if (_importResult != null) {
+      final productJson = jsonEncode({
+        'storeKey': p.storeKey,
+        'storeName': _importResult!.storeName,
+        'productUrl': _importResult!.canonicalUrl ?? p.productUrl,
+        'title': _importResult!.name,
+        'price': _importResult!.price,
+        'currency': 'USD',
+        'imageUrl': _importResult!.imageUrl,
+        'productId': p.productId,
+        if (_importResult!.variations != null && _importResult!.variations!.isNotEmpty)
+          'variations': _importResult!.variations!.map((v) => v.toJson()).toList(),
+      });
       context.push(
-        '${AppRoutes.confirmProduct}?url=${Uri.encodeComponent(_detectedProduct!.productUrl)}&product=${Uri.encodeComponent(productJson)}',
+        '${AppRoutes.confirmProduct}?url=${Uri.encodeComponent(_importResult!.canonicalUrl ?? p.productUrl)}&product=${Uri.encodeComponent(productJson)}',
         extra: _importResult,
       );
+      return;
     }
+
+    // Otherwise show a dedicated progress experience, then confirm.
+    final result = await Navigator.of(context).push<ProductImportResult>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => ImportProgressScreen(url: p.productUrl),
+      ),
+    );
+    if (!mounted || result == null) return;
+    setState(() => _importResult = result);
+
+    final productJson = jsonEncode({
+      'storeKey': p.storeKey,
+      'storeName': result.storeName,
+      'productUrl': result.canonicalUrl ?? p.productUrl,
+      'title': result.name,
+      'price': result.price,
+      'currency': 'USD',
+      'imageUrl': result.imageUrl,
+      'productId': p.productId,
+      if (result.variations != null && result.variations!.isNotEmpty)
+        'variations': result.variations!.map((v) => v.toJson()).toList(),
+    });
+
+    context.push(
+      '${AppRoutes.confirmProduct}?url=${Uri.encodeComponent(result.canonicalUrl ?? p.productUrl)}&product=${Uri.encodeComponent(productJson)}',
+      extra: result,
+    );
   }
 
   void _handleFavorite() {

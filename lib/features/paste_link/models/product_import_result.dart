@@ -5,6 +5,7 @@ class ProductImportResult {
   const ProductImportResult({
     required this.name,
     required this.price,
+    this.storeKey,
     required this.storeName,
     required this.country,
     this.imageUrl,
@@ -25,6 +26,8 @@ class ProductImportResult {
 
   final String name;
   final double price;
+  /// Normalized store key from backend (e.g. 'amazon', 'ebay').
+  final String? storeKey;
   final String storeName;
   final String country;
   final String? imageUrl;

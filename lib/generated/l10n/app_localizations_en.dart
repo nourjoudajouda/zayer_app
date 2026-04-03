@@ -388,4 +388,64 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get shippingReviewNoteShort =>
       'Note: Shipping cost is subject to admin review before final confirmation.';
+
+  @override
+  String get exactMeasurementsLabel => 'Exact measurements';
+
+  @override
+  String get estimatedShippingLabel => 'Estimated shipping';
+
+  @override
+  String get estimatedTotalLabel => 'Estimated total';
+
+  @override
+  String get shippingFallbackPrefix =>
+      'Estimated shipping based on fallback measurements. ';
+
+  @override
+  String get measurementsNotAvailable =>
+      'Measurements not available from store. Shipping is estimated and subject to review.';
+
+  @override
+  String get weightLabel => 'Weight';
+
+  @override
+  String get dimensionsLabel => 'Dimensions';
+
+  @override
+  String get shippingNoteLabel => 'Shipping note';
+
+  @override
+  String get importProgressTitle => 'Preparing your product…';
+
+  @override
+  String get importProgressSubtitle =>
+      'We’ll fetch product details and calculate shipping before confirmation.';
+
+  @override
+  String get importProgressKeepOpen => 'Keep this screen open…';
+
+  @override
+  String get importProgressReady => 'Ready for confirmation';
+
+  @override
+  String get importProgressFailed => 'Import failed';
+
+  @override
+  String get importProgressTryAgain => 'Please check your connection and try again.';
+
+  @override
+  String get importProgressStepImporting => 'Importing product';
+
+  @override
+  String get importProgressStepReading => 'Reading product details';
+
+  @override
+  String get importProgressStepShipping => 'Calculating shipping';
+
+  @override
+  String get importProgressStepPreparing => 'Preparing confirmation';
+
+  @override
+  String get reviewAndAdd => 'Review & Add';
 }

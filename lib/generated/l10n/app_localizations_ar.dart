@@ -387,4 +387,63 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get shippingReviewNoteShort =>
       'ملاحظة: سعر الشحن سيخضع لمراجعة الإدارة قبل الاعتماد النهائي.';
+
+  @override
+  String get exactMeasurementsLabel => 'قياسات دقيقة';
+
+  @override
+  String get estimatedShippingLabel => 'شحن تقديري';
+
+  @override
+  String get estimatedTotalLabel => 'الإجمالي التقديري';
+
+  @override
+  String get shippingFallbackPrefix => 'شحن تقديري بناءً على قياسات افتراضية. ';
+
+  @override
+  String get measurementsNotAvailable =>
+      'المقاسات غير متاحة من المتجر. الشحن تقديري ويخضع للمراجعة.';
+
+  @override
+  String get weightLabel => 'الوزن';
+
+  @override
+  String get dimensionsLabel => 'الأبعاد';
+
+  @override
+  String get shippingNoteLabel => 'ملاحظة الشحن';
+
+  @override
+  String get importProgressTitle => 'جارٍ تجهيز المنتج…';
+
+  @override
+  String get importProgressSubtitle =>
+      'سنقوم بجلب تفاصيل المنتج وحساب الشحن قبل التأكيد.';
+
+  @override
+  String get importProgressKeepOpen => 'اترك هذه الشاشة مفتوحة…';
+
+  @override
+  String get importProgressReady => 'جاهز للتأكيد';
+
+  @override
+  String get importProgressFailed => 'فشل الاستيراد';
+
+  @override
+  String get importProgressTryAgain => 'تحقق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get importProgressStepImporting => 'جارٍ استيراد المنتج';
+
+  @override
+  String get importProgressStepReading => 'جارٍ قراءة تفاصيل المنتج';
+
+  @override
+  String get importProgressStepShipping => 'جارٍ حساب الشحن';
+
+  @override
+  String get importProgressStepPreparing => 'جارٍ تجهيز التأكيد';
+
+  @override
+  String get reviewAndAdd => 'مراجعة ثم إضافة';
 }

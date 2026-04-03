@@ -568,6 +568,10 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
     return unitPrice != null && unitPrice > 0;
   }
 
+  bool get _canGoToConfirm {
+    return _state == _PasteLinkState.success && _result != null;
+  }
+
   Future<void> _addToCart() async {
     if (!_canAddToCart) {
       if (mounted) {
@@ -1692,6 +1696,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
   Widget _buildBottomBar() {
     final loading = _isAddingToCart;
     final showHint = !loading && _fieldsEnabled && !_canAddToCart;
+    final l10n = AppLocalizations.of(context);
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -1710,8 +1715,19 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
                 ),
               ),
             ZayerPrimaryButton(
-              label: loading ? 'Adding...' : 'Add to Cart',
-              onPressed: (!loading && _canAddToCart) ? _addToCart : null,
+              label: _canGoToConfirm
+                  ? (l10n?.reviewAndAdd ?? 'Review & Add')
+                  : (loading ? 'Adding...' : 'Add to Cart'),
+              onPressed: (!loading && _canGoToConfirm)
+                  ? () {
+                      final r = _result;
+                      if (r == null) return;
+                      context.push(
+                        '${AppRoutes.confirmProduct}?url=${Uri.encodeComponent(r.canonicalUrl ?? _urlController.text.trim())}',
+                        extra: r,
+                      );
+                    }
+                  : ((!loading && _canAddToCart) ? _addToCart : null),
               icon: loading
                   ? const SizedBox(
                       width: 22,

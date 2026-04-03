@@ -48,7 +48,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
   @override
   void initState() {
     super.initState();
-    final p = widget.product?.price ?? 0.0;
+    final p = widget.importResult?.price ?? widget.product?.price ?? 0.0;
     _unitPriceController = TextEditingController(
       text: p > 0 ? p.toStringAsFixed(2) : '',
     );
@@ -83,22 +83,31 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Use actual product data if available, otherwise use mock data
-    final productName = widget.product?.title ?? 'HP 14" Laptop - Intel Core i3 (Mock)';
-    final storeName = widget.product?.storeName ?? 'Amazon US';
+    final importResult = widget.importResult;
+    final productName = importResult?.name ?? widget.product?.title ?? 'Product';
+    final storeName = importResult?.storeName ?? widget.product?.storeName ?? '';
     final productCurrency = widget.product?.currency ?? 'USD';
-    final productImageUrl = widget.product?.imageUrl;
+    final productImageUrl = importResult?.imageUrl ?? widget.product?.imageUrl;
     final usdPrice = _unitPrice;
     final subtotal = usdPrice * _quantity;
+    final variations = importResult?.variations ?? widget.product?.variations;
 
-    // Shipping data: prefer importResult if available, else treat as pending review.
-    final importResult = widget.importResult;
+    // Shipping data: prefer normalized shipping_estimate if available.
     final shippingQuote = importResult?.shippingQuote;
-    final shippingReviewRequired = importResult?.shippingReviewRequired ?? true;
-    final hasShippingAmount = shippingQuote != null && shippingQuote.amount > 0;
-    final measurementsFound = importResult?.measurementsFound ?? false;
-    final shippingEstimateSource = importResult?.shippingEstimateSource;
     final shippingEstimate = importResult?.shippingEstimate;
+    final shippingReviewRequired = importResult?.shippingReviewRequired ?? true;
+    final shippingAmount = (shippingEstimate?.amount != null && (shippingEstimate!.amount ?? 0) > 0)
+        ? shippingEstimate.amount
+        : (shippingQuote != null && shippingQuote.amount > 0 ? shippingQuote.amount : null);
+    final hasShippingAmount = shippingAmount != null && shippingAmount > 0;
+    final shippingAmountValue = shippingAmount ?? 0.0;
+    final measurementsFound = importResult?.measurementsFound ?? false;
+    final shippingEstimateSource = shippingEstimate?.source ?? importResult?.shippingEstimateSource;
+    final isExactShipping = shippingEstimateSource == 'exact';
+    final isFallbackShipping = shippingEstimateSource == 'fallback' || (!measurementsFound);
+    final hasAnyMeasurement = (importResult?.weight != null && (importResult!.weight ?? 0) > 0) ||
+        (importResult?.dimensionsData?.isValid == true) ||
+        ((importResult?.dimensions ?? '').trim().isNotEmpty);
 
     final l10n = AppLocalizations.of(context);
 
@@ -231,8 +240,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
               ),
                     const SizedBox(height: AppSpacing.lg),
               // Variations (size / color) when available
-              if (widget.product?.variations != null &&
-                  widget.product!.variations!.isNotEmpty) ...[
+              if (variations != null && variations.isNotEmpty) ...[
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
@@ -250,8 +258,8 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                             ),
                       ),
                       const SizedBox(height: AppSpacing.sm),
-                      ...List.generate(widget.product!.variations!.length, (i) {
-                        final v = widget.product!.variations![i];
+                      ...List.generate(variations.length, (i) {
+                        final v = variations[i];
                         final selectedIndex = _selectedVariationIndices[i] ?? 0;
                         return Padding(
                           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -432,16 +440,16 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                           ? 'Shipping (exact)'
                           : 'Shipping (estimated)',
                       hasShippingAmount
-                          ? '≈ ${shippingQuote.currency} ${shippingQuote.amount.toStringAsFixed(2)}'
+                          ? '≈ ${(shippingQuote?.currency ?? 'USD')} ${shippingAmountValue.toStringAsFixed(2)}'
                           : 'Pending Review',
-                      isEstimated: hasShippingAmount && shippingReviewRequired,
-                      isFallback: !measurementsFound,
+                      isEstimated: hasShippingAmount && !isExactShipping,
+                      isFallback: hasShippingAmount && isFallbackShipping,
                     ),
                     const Divider(height: AppSpacing.lg),
                     _buildCostRow(
                       'Total',
                       hasShippingAmount
-                          ? 'USD ${(subtotal + shippingQuote.amount).toStringAsFixed(2)}'
+                          ? 'USD ${(subtotal + shippingAmountValue).toStringAsFixed(2)}'
                           : 'Pending Review',
                       isTotal: true,
                     ),
@@ -449,7 +457,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                 ),
               ),
               // Shipping review banner — shown when shipping is estimated/pending
-              if (shippingReviewRequired) ...[
+              if (shippingReviewRequired && hasShippingAmount) ...[
                 const SizedBox(height: AppSpacing.sm),
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
@@ -465,11 +473,12 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          (!measurementsFound
-                              ? 'Shipping is estimated using default dimensions. '
-                              : '') +
-                          (l10n?.shippingReviewNoteFull ??
-                              'The shipping cost shown is an estimate only and will be reviewed and confirmed by admin.'),
+                          (isFallbackShipping
+                                  ? (l10n?.shippingFallbackPrefix ??
+                                      'Estimated shipping based on fallback measurements. ')
+                                  : '') +
+                              (l10n?.shippingReviewNoteFull ??
+                                  'The shipping cost shown is an estimate only and will be reviewed and confirmed by admin after inspecting the product and its specifications.'),
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: AppConfig.textColor,
                                 height: 1.4,
@@ -481,8 +490,8 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                 ),
               ],
               const SizedBox(height: AppSpacing.sm),
-              // Measurements (show only when real)
-              if (measurementsFound) ...[
+              // Measurements: show only what is actually present (no fake values)
+              if (hasAnyMeasurement) ...[
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
@@ -500,13 +509,59 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                             ),
                       ),
                       const SizedBox(height: 6),
-                      if (importResult?.weight != null) Text('Weight: ${importResult!.weight}'),
-                      if (importResult?.dimensions != null) Text('Dimensions: ${importResult!.dimensions}'),
+                      if (importResult?.weight != null && (importResult!.weight ?? 0) > 0)
+                        Text('${l10n?.weightLabel ?? 'Weight'}: ${importResult.weight}'),
+                      if (importResult?.dimensionsData?.isValid == true)
+                        Text('${l10n?.dimensionsLabel ?? 'Dimensions'}: ${importResult!.dimensionsData!.format()}'),
+                      if (importResult?.dimensionsData?.isValid != true &&
+                          importResult?.dimensions != null &&
+                          importResult!.dimensions!.trim().isNotEmpty)
+                        Text('${l10n?.dimensionsLabel ?? 'Dimensions'}: ${importResult.dimensions}'),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isExactShipping
+                                ? AppConfig.successGreen.withValues(alpha: 0.10)
+                                : Colors.orange.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                            border: Border.all(
+                              color: isExactShipping
+                                  ? AppConfig.successGreen.withValues(alpha: 0.25)
+                                  : Colors.orange.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Text(
+                            (measurementsFound && isExactShipping)
+                                ? (l10n?.exactMeasurementsLabel ?? 'Exact measurements')
+                                : (l10n?.estimatedShippingLabel ?? 'Estimated shipping'),
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: (measurementsFound && isExactShipping)
+                                      ? AppConfig.successGreen
+                                      : Colors.orange.shade800,
+                                ),
+                          ),
+                        ),
+                      ),
+                      if (!measurementsFound) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          l10n?.measurementsNotAvailable ??
+                              'Measurements not available from store. Shipping is estimated and subject to review.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppConfig.subtitleColor,
+                                height: 1.35,
+                              ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
-              ] else ...[
-                // CASE 2: missing — do not show fake data
+              ] else if (hasShippingAmount && isFallbackShipping) ...[
+                // Fallback shipping used — do not show fake measurements
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
@@ -515,7 +570,8 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                     border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
                   ),
                   child: Text(
-                    'Estimated shipping (approximate). Measurements were not found for this product.',
+                    l10n?.measurementsNotAvailable ??
+                        'Measurements not available from store. Shipping is estimated and subject to review.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppConfig.textColor,
                           height: 1.35,
@@ -526,7 +582,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
               if (shippingEstimate != null) ...[
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Shipping note: ${shippingEstimate.note}',
+                  '${l10n?.shippingNoteLabel ?? 'Shipping note'}: ${shippingEstimate.note}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppConfig.subtitleColor,
                       ),
@@ -585,11 +641,12 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
   }
 
   Future<void> _addToCart() async {
+    final importResult = widget.importResult;
     final product = widget.product;
-    final productUrl = widget.productUrl ?? product?.productUrl ?? '';
+    final productUrl = importResult?.canonicalUrl ?? widget.productUrl ?? product?.productUrl ?? '';
     final unitPrice = _unitPrice;
 
-    if (productUrl.isEmpty || product == null) {
+    if (productUrl.isEmpty || (product == null && importResult == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Missing product information'),
@@ -608,10 +665,14 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
       return;
     }
 
-    final country = _countryFromStoreKey(product.storeKey);
+    final storeKey = importResult?.storeKey ?? product?.storeKey;
+    final storeName = importResult?.storeName ?? product?.storeName;
+    final country = importResult?.country ??
+        (storeKey != null ? _countryFromStoreKey(storeKey) : (product?.storeKey != null ? _countryFromStoreKey(product!.storeKey) : 'USA'));
     String? variationText;
-    if (product.variations != null && product.variations!.isNotEmpty) {
-      variationText = product.variations!
+    final variations = importResult?.variations ?? product?.variations;
+    if (variations != null && variations.isNotEmpty) {
+      variationText = variations
           .asMap()
           .entries
           .map((e) {
@@ -624,16 +685,16 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
     final cartItem = CartItem(
       id: generateCartItemId(),
       productUrl: productUrl,
-      name: product.title ?? 'Product',
+      name: importResult?.name ?? product?.title ?? 'Product',
       unitPrice: unitPrice,
       quantity: _quantity,
-      currency: product.currency,
-      imageUrl: product.imageUrl,
-      storeKey: product.storeKey,
-      storeName: product.storeName,
-      productId: product.productId,
+      currency: 'USD',
+      imageUrl: importResult?.imageUrl ?? product?.imageUrl,
+      storeKey: storeKey,
+      storeName: storeName,
+      productId: product?.productId,
       country: country,
-      source: 'webview',
+      source: product != null ? 'webview' : 'paste_link',
       variationText: variationText,
     );
 

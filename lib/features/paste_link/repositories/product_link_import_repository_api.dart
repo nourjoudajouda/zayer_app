@@ -65,10 +65,30 @@ class ProductLinkImportRepositoryApi implements ProductLinkImportRepository {
     } else if (dims is String) {
       dimsFormatted = dims.trim().isNotEmpty ? dims.trim() : null;
     }
+    // Fallback: accept flat L/W/H fields if backend provided them.
+    if ((dimsData == null || !dimsData.isValid) &&
+        d['length'] is num &&
+        d['width'] is num &&
+        d['height'] is num) {
+      final unit = (d['dimension_unit'] as String?) ??
+          (d['dimensions_unit'] as String?) ??
+          'cm';
+      final tmp = ProductDimensions(
+        length: (d['length'] as num).toDouble(),
+        width: (d['width'] as num).toDouble(),
+        height: (d['height'] as num).toDouble(),
+        unit: unit,
+      );
+      if (tmp.isValid) {
+        dimsData = tmp;
+        dimsFormatted = tmp.format();
+      }
+    }
 
     return ProductImportResult(
       name: (d['name'] ?? 'Product').toString(),
       price: (d['price'] as num?)?.toDouble() ?? 0,
+      storeKey: d['store_key'] as String?,
       storeName: (d['store_name'] ?? 'Unknown').toString(),
       country: (d['country'] ?? 'Unknown').toString(),
       imageUrl: d['image_url'] as String?,
