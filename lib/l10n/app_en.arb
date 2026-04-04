@@ -141,6 +141,7 @@
   "importProgressStepReading": "Reading product details",
   "importProgressStepShipping": "Calculating shipping",
   "importProgressStepPreparing": "Preparing confirmation",
+  "importPasteStepDetectingMeasurements": "Detecting measurements",
   "reviewAndAdd": "Review & Add",
   "collectingProductInformation": "Collecting product information…",
   "importProgressAddingToCart": "Adding the product to your cart",

@@ -448,6 +448,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get importProgressStepPreparing => 'Preparing confirmation';
 
   @override
+  String get importPasteStepDetectingMeasurements => 'Detecting measurements';
+
+  @override
   String get reviewAndAdd => 'Review & Add';
 
   @override

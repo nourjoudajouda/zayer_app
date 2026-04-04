@@ -19,10 +19,13 @@ class ImportProgressScreen extends ConsumerStatefulWidget {
     super.key,
     required this.url,
     this.cachedResult,
+    /// When true (Add via Link), header copy matches product fetch; exceptions pop to caller for manual/invalid flows.
+    this.pasteLinkMode = false,
   });
 
   final String url;
   final ProductImportResult? cachedResult;
+  final bool pasteLinkMode;
 
   @override
   ConsumerState<ImportProgressScreen> createState() => _ImportProgressScreenState();
@@ -117,6 +120,14 @@ class _ImportProgressScreenState extends ConsumerState<ImportProgressScreen> {
         _done = true;
         _pulseStep = _stepCount - 1;
       });
+    } on UnsupportedLinkException catch (e) {
+      if (!mounted) return;
+      _stepTimer?.cancel();
+      Navigator.of(context).pop(e);
+    } on InvalidLinkException catch (e) {
+      if (!mounted) return;
+      _stepTimer?.cancel();
+      Navigator.of(context).pop(e);
     } catch (e) {
       if (!mounted) return;
       _stepTimer?.cancel();
@@ -161,7 +172,9 @@ class _ImportProgressScreenState extends ConsumerState<ImportProgressScreen> {
                   borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
                 ),
                 child: Text(
-                  l10n?.importProgressAddingToCart ?? 'Adding the product to your cart',
+                  widget.pasteLinkMode
+                      ? (l10n?.importProgressTitle ?? 'Preparing your product…')
+                      : (l10n?.importProgressAddingToCart ?? 'Adding the product to your cart'),
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: Colors.white,
@@ -306,6 +319,19 @@ class _ImportProgressScreenState extends ConsumerState<ImportProgressScreen> {
   }
 
   List<(IconData, String)> _stepLabels(AppLocalizations? l10n) {
+    if (widget.pasteLinkMode) {
+      return [
+        (Icons.link_outlined, l10n?.importProgressStepImporting ?? 'Importing product'),
+        (Icons.description_outlined, l10n?.importProgressStepReading ?? 'Reading product details'),
+        (
+          Icons.straighten_outlined,
+          l10n?.importPasteStepDetectingMeasurements ?? 'Detecting measurements',
+        ),
+        (Icons.local_shipping_outlined, l10n?.importProgressStepShippingCosts ?? 'Calculating shipping costs'),
+        (Icons.verified_outlined, l10n?.importProgressStepCustomsCompliance ?? 'Checking customs compliance'),
+        (Icons.fact_check_outlined, l10n?.importProgressStepPreparing ?? 'Preparing confirmation'),
+      ];
+    }
     return [
       (Icons.inventory_2_outlined, l10n?.importProgressStepExtractDetails ?? 'Extracting product details'),
       (Icons.verified_outlined, l10n?.importProgressStepCustomsCompliance ?? 'Checking customs compliance'),

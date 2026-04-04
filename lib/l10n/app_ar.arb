@@ -104,6 +104,7 @@
   "importProgressStepReading": "جارٍ قراءة تفاصيل المنتج",
   "importProgressStepShipping": "جارٍ حساب الشحن",
   "importProgressStepPreparing": "جارٍ تجهيز التأكيد",
+  "importPasteStepDetectingMeasurements": "جارٍ اكتشاف المقاسات",
   "reviewAndAdd": "مراجعة ثم إضافة",
   "collectingProductInformation": "جارٍ جمع معلومات المنتج…",
   "importProgressAddingToCart": "جارٍ إضافة المنتج إلى سلتك",

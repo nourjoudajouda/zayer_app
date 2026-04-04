@@ -22,8 +22,7 @@ import '../../generated/l10n/app_localizations.dart';
 import '../cart/models/cart_item_model.dart';
 import '../cart/providers/cart_providers.dart';
 import '../cart/repositories/cart_repository.dart';
-import '../profile/models/address_model.dart';
-import '../profile/providers/profile_providers.dart';
+import '../product_import/import_progress_screen.dart';
 import 'models/product_import_result.dart';
 import 'providers/paste_link_providers.dart';
 
@@ -35,7 +34,6 @@ const _shippingEstimateDebounceMs = 650;
 /// States for the paste link flow.
 enum _PasteLinkState {
   idle,
-  loading,
   success,
   invalid,
   manual,
@@ -79,17 +77,11 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
   Timer? _shippingEstimateDebounce;
   bool _shippingEstimateLoading = false;
 
-  /// Current step index for the animated import progress (0–2).
-  int _importStep = 0;
-  Timer? _importStepTimer;
   double? _shippingPreviewPerUnit;
   String _shippingPreviewCurrency = 'USD';
   bool _shippingPreviewEstimated = false;
   String? _shippingPreviewFootnote;
   bool _shippingPreviewUnavailable = false;
-
-  /// Which saved address to use for shipping preview and add-to-cart (server falls back to default if omitted).
-  String? _quoteShippingAddressId;
 
   @override
   void initState() {
@@ -105,7 +97,6 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
   void dispose() {
     _debounceTimer?.cancel();
     _shippingEstimateDebounce?.cancel();
-    _importStepTimer?.cancel();
     _urlController.removeListener(_onUrlChanged);
     _weightController.removeListener(_scheduleShippingEstimate);
     _lengthController.removeListener(_scheduleShippingEstimate);
@@ -145,16 +136,6 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
     );
   }
 
-  String? _effectiveQuoteAddressId(List<Address> list) {
-    if (list.isEmpty) return null;
-    final cur = _quoteShippingAddressId;
-    if (cur != null && list.any((a) => a.id == cur)) return cur;
-    for (final a in list) {
-      if (a.isDefault) return a.id;
-    }
-    return list.first.id;
-  }
-
   Future<void> _loadShippingEstimate() async {
     if (!_fieldsEnabled || !mounted) return;
     setState(() {
@@ -163,8 +144,6 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
       _shippingPreviewFootnote = null;
     });
     final repo = ref.read(cartRepositoryProvider);
-    final list = ref.read(addressesProvider).valueOrNull ?? [];
-    final destId = _effectiveQuoteAddressId(list);
     final w = double.tryParse(_weightController.text.trim());
     final l = double.tryParse(_lengthController.text.trim());
     final wi = double.tryParse(_widthController.text.trim());
@@ -180,7 +159,6 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
       width: wi,
       height: h,
       dimensionUnit: hasAnyDim ? _dimensionUnit : null,
-      destinationAddressId: destId,
     );
     if (!mounted) return;
     setState(() {
@@ -302,115 +280,6 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
     );
   }
 
-  Widget _buildShippingDestinationRow() {
-    final addressesAsync = ref.watch(addressesProvider);
-    return addressesAsync.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.only(bottom: AppSpacing.md),
-        child: LinearProgressIndicator(),
-      ),
-      error: (_, _) => const SizedBox.shrink(),
-      data: (list) {
-        if (list.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
-                border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Add a delivery address to calculate shipping.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppConfig.textColor,
-                        ),
-                  ),
-                  TextButton(
-                    onPressed: () async {
-                      await context.push(AppRoutes.myAddresses);
-                      if (mounted) ref.invalidate(addressesProvider);
-                    },
-                    child: const Text('My addresses'),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-        final effective = _effectiveQuoteAddressId(list)!;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Delivery address',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppConfig.textColor,
-                    ),
-              ),
-              const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
-                isExpanded: true,
-                initialValue: effective,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                ),
-                items: list
-                    .map(
-                      (a) => DropdownMenuItem<String>(
-                        value: a.id,
-                        child: Text(
-                          '${a.displayTitle}${a.isDefault ? ' (default)' : ''} · ${a.countryName}',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: _fieldsEnabled
-                    ? (v) {
-                        if (v == null) return;
-                        setState(() => _quoteShippingAddressId = v);
-                        _scheduleShippingEstimate();
-                      }
-                    : null,
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () async {
-                    await context.push(AppRoutes.myAddresses);
-                    if (mounted) ref.invalidate(addressesProvider);
-                  },
-                  child: const Text('Manage addresses'),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                AppLocalizations.of(context)?.defaultAddressChangeCartReviewNote ??
-                    'Note: If you change your default delivery address, all items in your cart will be sent for admin review again.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppConfig.subtitleColor,
-                      height: 1.35,
-                    ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   void _focusNameField() {
     _nameFocusNode.requestFocus();
     _nameController.selection = TextSelection.fromPosition(
@@ -456,6 +325,43 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
     }
   }
 
+  void _applyMeasurementsFromResult(ProductImportResult result) {
+    final w = result.weight;
+    final wu = (result.weightUnit ?? '').toLowerCase().trim();
+    if (w != null && w > 0) {
+      if (wu == 'kg' || wu.contains('kilogram')) {
+        _weightController.text = (w * 1000).toStringAsFixed(0);
+        _weightUnit = 'g';
+      } else if (wu.contains('lb') || wu.contains('pound')) {
+        _weightController.text = w.toStringAsFixed(2);
+        _weightUnit = 'lb';
+      } else if (wu == 'g' || wu.contains('gram')) {
+        _weightController.text = w.toStringAsFixed(0);
+        _weightUnit = 'g';
+      } else {
+        _weightController.text = w.toStringAsFixed(2);
+      }
+    }
+    final dd = result.dimensionsData;
+    if (dd != null && dd.isValid) {
+      String fmt(double v) =>
+          (v == v.roundToDouble()) ? v.round().toString() : v.toStringAsFixed(2);
+      _lengthController.text = fmt(dd.length);
+      _widthController.text = fmt(dd.width);
+      _heightController.text = fmt(dd.height);
+      final u = dd.unit.toLowerCase();
+      _dimensionUnit = (u == 'in' || u == 'inch' || u == 'inches') ? 'in' : 'cm';
+    }
+  }
+
+  void _applyImportResult(ProductImportResult result) {
+    _nameController.text = result.name;
+    _unitPrice = result.price;
+    _unitPriceController.text = result.price.toStringAsFixed(2);
+    _selectedVariationIndices.clear();
+    _applyMeasurementsFromResult(result);
+  }
+
   Future<void> _fetchProduct() async {
     final url = _urlController.text.trim();
     if (url.isEmpty) {
@@ -465,30 +371,57 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
     _requestId++;
     final currentRequestId = _requestId;
 
+    if (!mounted) return;
+    final outcome = await Navigator.of(context).push<dynamic>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (ctx) => ImportProgressScreen(
+          url: url,
+          pasteLinkMode: true,
+        ),
+      ),
+    );
+
+    if (!mounted || currentRequestId != _requestId) return;
+
     setState(() {
-      _state = _PasteLinkState.loading;
-      _importStep = 0;
       _invalidError = null;
-      _result = null;
       _showNormalizedHint = false;
       _clearShippingPreview();
     });
 
-    // Advance the step indicator every ~2.5 s so the user sees progress.
-    _importStepTimer?.cancel();
-    _importStepTimer = Timer.periodic(const Duration(milliseconds: 2500), (t) {
-      if (!mounted) { t.cancel(); return; }
+    if (outcome is UnsupportedLinkException) {
       setState(() {
-        if (_importStep < 2) _importStep++;
+        _state = _PasteLinkState.manual;
+        _result = null;
+        _unitPrice = null;
+        _quantity = 1;
+        _nameController.clear();
+        _unitPriceController.clear();
+        _weightController.clear();
+        _lengthController.clear();
+        _widthController.clear();
+        _heightController.clear();
+        _selectedVariationIndices.clear();
+        _showNormalizedHint = false;
       });
-    });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scheduleShippingEstimate();
+      });
+      return;
+    }
 
-    final repo = ref.read(productLinkImportRepositoryProvider);
-    try {
-      final result = await repo.fetchByUrl(url);
-      if (!mounted) return;
-      if (currentRequestId != _requestId) return;
+    if (outcome is InvalidLinkException) {
+      setState(() {
+        _state = _PasteLinkState.invalid;
+        _invalidError = outcome.message;
+        _result = null;
+      });
+      return;
+    }
 
+    if (outcome is ProductImportResult) {
+      final result = outcome;
       final canonical = result.canonicalUrl;
       if (canonical != null &&
           canonical.isNotEmpty &&
@@ -502,64 +435,25 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
         _isUpdatingFromCanonical = false;
       }
 
-      _importStepTimer?.cancel();
       setState(() {
         _state = _PasteLinkState.success;
         _result = result;
-        _nameController.text = result.name;
-        _unitPrice = result.price;
-        _unitPriceController.text = result.price.toStringAsFixed(2);
-        _selectedVariationIndices.clear();
-        final w = result.weight;
-        if (w != null && w > 0) {
-          _weightController.text = w.toStringAsFixed(2);
-        }
+        _applyImportResult(result);
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _scheduleShippingEstimate();
       });
-    } on InvalidLinkException catch (e) {
-      if (!mounted) return;
-      if (currentRequestId != _requestId) return;
-      _importStepTimer?.cancel();
-      setState(() {
-        _state = _PasteLinkState.invalid;
-        _invalidError = e.message;
-        _clearShippingPreview();
-      });
-    } on UnsupportedLinkException {
-      if (!mounted) return;
-      if (currentRequestId != _requestId) return;
-      _importStepTimer?.cancel();
-      setState(() {
-        _state = _PasteLinkState.manual;
-        _unitPrice = null;
-        _quantity = 1;
-        _nameController.clear();
-        _unitPriceController.clear();
-        _showNormalizedHint = false;
-        _clearShippingPreview();
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _scheduleShippingEstimate();
-      });
-    } catch (e, st) {
-      if (!mounted) return;
-      if (currentRequestId != _requestId) return;
-      _importStepTimer?.cancel();
-      debugPrint('Import error: $e $st');
-      setState(() {
-        _state = _PasteLinkState.idle;
-        _invalidError = 'Failed to load product. Please try again.';
-        _clearShippingPreview();
-      });
+      return;
     }
+
+    setState(() {
+      _state = _PasteLinkState.idle;
+      _result = null;
+    });
   }
 
   bool get _canAddToCart {
-    if (_state == _PasteLinkState.idle ||
-        _state == _PasteLinkState.loading ||
-        _state == _PasteLinkState.invalid) {
+    if (_state == _PasteLinkState.idle || _state == _PasteLinkState.invalid) {
       return false;
     }
     final name = _nameController.text.trim();
@@ -641,9 +535,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
           .join(', ');
     }
 
-    // Build cart item from form data
-    final addrList = ref.read(addressesProvider).valueOrNull ?? [];
-    final shipDestId = _effectiveQuoteAddressId(addrList);
+    // Build cart item from form data (server uses default saved address when destination omitted).
     final cartItem = CartItem(
       id: generateCartItemId(),
       productUrl: productUrl,
@@ -668,7 +560,6 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
           : null,
       source: 'paste_link',
       variationText: variationText,
-      destinationAddressId: shipDestId,
     );
 
     if (!mounted) return;
@@ -741,24 +632,6 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<AsyncValue<List<Address>>>(addressesProvider, (prev, next) {
-      next.whenData((list) {
-        if (!mounted) return;
-        final cur = _quoteShippingAddressId;
-        final valid = cur != null && list.any((a) => a.id == cur);
-        if (list.isEmpty) {
-          if (cur != null) setState(() => _quoteShippingAddressId = null);
-          return;
-        }
-        if (!valid) {
-          final id = _effectiveQuoteAddressId(list);
-          if (id != null) {
-            setState(() => _quoteShippingAddressId = id);
-            _scheduleShippingEstimate();
-          }
-        }
-      });
-    });
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -774,122 +647,39 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    'Paste Product Link',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: AppConfig.textColor,
-                        ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    'Paste the product URL from any international store to add it to your Zayer cart.',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppConfig.subtitleColor,
-                        ),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  _buildUrlInput(),
-                  const SizedBox(height: AppSpacing.md),
-                  if (_state == _PasteLinkState.loading) _buildLoading(),
-                  if (_state == _PasteLinkState.invalid) _buildInvalidError(),
-                  if (_state == _PasteLinkState.success || _state == _PasteLinkState.manual)
-                    _buildStoreCard(),
-                  if (_state == _PasteLinkState.success || _state == _PasteLinkState.manual)
-                    _buildProductDetails(),
-                  const SizedBox(height: AppSpacing.xxl),
-                ],
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Paste Product Link',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppConfig.textColor,
+                    ),
               ),
-            ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Paste the product URL from any international store to add it to your Zayer cart.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppConfig.subtitleColor,
+                    ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              _buildUrlInput(),
+              const SizedBox(height: AppSpacing.md),
+              if (_state == _PasteLinkState.invalid) _buildInvalidError(),
+              if (_state == _PasteLinkState.success || _state == _PasteLinkState.manual)
+                _buildStoreCard(),
+              if (_state == _PasteLinkState.success || _state == _PasteLinkState.manual)
+                _buildProductDetails(),
+              const SizedBox(height: AppSpacing.xxl),
+            ],
           ),
-          if (_state == _PasteLinkState.loading)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.3),
-                child: Center(
-                  child: Container(
-                    width: 280,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.xl,
-                      vertical: AppSpacing.lg,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3,
-                            color: AppConfig.primaryColor,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        ...[
-                          (Icons.download_outlined, 'Fetching product page'),
-                          (Icons.search_outlined, 'Reading product details'),
-                          (Icons.local_shipping_outlined, 'Calculating shipping'),
-                        ].indexed.map((entry) {
-                          final i = entry.$1;
-                          final (icon, label) = entry.$2;
-                          final isDone = i < _importStep;
-                          final isActive = i == _importStep;
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  isDone ? Icons.check_circle : icon,
-                                  size: 18,
-                                  color: isDone
-                                      ? Colors.green
-                                      : isActive
-                                          ? AppConfig.primaryColor
-                                          : AppConfig.subtitleColor.withValues(alpha: 0.4),
-                                ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  label,
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: isDone
-                                            ? AppConfig.subtitleColor
-                                            : isActive
-                                                ? AppConfig.textColor
-                                                : AppConfig.subtitleColor.withValues(alpha: 0.4),
-                                        fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
+        ),
       ),
       bottomNavigationBar: _buildBottomBar(),
     );
@@ -1040,31 +830,6 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
             ),
           ),
       ],
-    );
-  }
-
-  Widget _buildLoading() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: AppConfig.primaryColor,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Text(
-            'Fetching details...',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppConfig.subtitleColor,
-                ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -1557,7 +1322,6 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
         ),
         if (_fieldsEnabled) ...[
           const SizedBox(height: AppSpacing.md),
-          _buildShippingDestinationRow(),
           _buildShippingEstimateBanner(),
         ],
         // Weight - optional, with unit (lb / g)
@@ -1673,7 +1437,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
             border: Border.all(color: AppConfig.borderColor),
           ),
           child: Text(
-            'Shipping above is an estimate to your default delivery address. Final total may change if admin adjusts weight or fees.',
+            'Shipping estimate uses your default saved address on the server. Final total may change if admin adjusts weight or fees.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppConfig.subtitleColor,
                 ),

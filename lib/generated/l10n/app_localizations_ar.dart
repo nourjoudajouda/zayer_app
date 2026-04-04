@@ -445,6 +445,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get importProgressStepPreparing => 'جارٍ تجهيز التأكيد';
 
   @override
+  String get importPasteStepDetectingMeasurements => 'جارٍ اكتشاف المقاسات';
+
+  @override
   String get reviewAndAdd => 'مراجعة ثم إضافة';
 
   @override

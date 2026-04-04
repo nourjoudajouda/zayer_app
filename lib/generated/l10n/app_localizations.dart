@@ -926,6 +926,12 @@ abstract class AppLocalizations {
   /// **'Preparing confirmation'**
   String get importProgressStepPreparing;
 
+  /// No description provided for @importPasteStepDetectingMeasurements.
+  ///
+  /// In en, this message translates to:
+  /// **'Detecting measurements'**
+  String get importPasteStepDetectingMeasurements;
+
   /// No description provided for @reviewAndAdd.
   ///
   /// In en, this message translates to:
