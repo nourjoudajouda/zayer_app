@@ -141,5 +141,13 @@
   "importProgressStepReading": "Reading product details",
   "importProgressStepShipping": "Calculating shipping",
   "importProgressStepPreparing": "Preparing confirmation",
-  "reviewAndAdd": "Review & Add"
+  "reviewAndAdd": "Review & Add",
+  "collectingProductInformation": "Collecting product information…",
+  "importProgressAddingToCart": "Adding the product to your cart",
+  "importProgressStepExtractDetails": "Extracting product details",
+  "importProgressStepCustomsCompliance": "Checking customs compliance",
+  "importProgressStepShippingCosts": "Calculating shipping costs",
+  "importProgressStepCustomsDuties": "Calculating customs duties",
+  "importProgressStepShippingMethod": "Identifying shipping method",
+  "importProgressStepFinishingCart": "Finishing adding to cart"
 }

@@ -432,7 +432,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get importProgressFailed => 'Import failed';
 
   @override
-  String get importProgressTryAgain => 'Please check your connection and try again.';
+  String get importProgressTryAgain =>
+      'Please check your connection and try again.';
 
   @override
   String get importProgressStepImporting => 'Importing product';
@@ -448,4 +449,29 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get reviewAndAdd => 'Review & Add';
+
+  @override
+  String get collectingProductInformation => 'Collecting product information…';
+
+  @override
+  String get importProgressAddingToCart => 'Adding the product to your cart';
+
+  @override
+  String get importProgressStepExtractDetails => 'Extracting product details';
+
+  @override
+  String get importProgressStepCustomsCompliance =>
+      'Checking customs compliance';
+
+  @override
+  String get importProgressStepShippingCosts => 'Calculating shipping costs';
+
+  @override
+  String get importProgressStepCustomsDuties => 'Calculating customs duties';
+
+  @override
+  String get importProgressStepShippingMethod => 'Identifying shipping method';
+
+  @override
+  String get importProgressStepFinishingCart => 'Finishing adding to cart';
 }

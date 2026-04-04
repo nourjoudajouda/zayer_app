@@ -22,6 +22,7 @@ import '../product_import/import_progress_screen.dart';
 import 'extractors/product_data_extractor.dart';
 import 'models/detected_product.dart';
 import 'rules/webview_import_rules.dart';
+import 'widgets/collecting_product_banner.dart';
 import 'widgets/detected_product_overlay.dart';
 
 class StoreWebViewScreen extends ConsumerStatefulWidget {
@@ -41,7 +42,8 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
   bool _isLoading = true;
   DetectedProduct? _detectedProduct;
   bool _isExtractingProduct = false;
-  bool _showExtractionLoader = false;
+  /// True while fetching product metadata on PDP (compact collecting banner).
+  bool _isCollectingProductInfo = false;
   /// Full import result from API (contains shipping quote, review flags).
   ProductImportResult? _importResult;
 
@@ -69,7 +71,7 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
                 _isLoading = true;
                 _detectedProduct = null;
                 _importResult = null;
-                _showExtractionLoader = false;
+                _isCollectingProductInfo = false;
                 _isExtractingProduct = false;
               });
               // Don't check PDP on page start, wait for page to finish
@@ -106,7 +108,7 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
       if (mounted) {
         setState(() {
           _detectedProduct = result.product;
-          _showExtractionLoader = true; // Show loader immediately
+          _isCollectingProductInfo = true;
           _isExtractingProduct = true;
         });
       }
@@ -142,7 +144,7 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
         setState(() {
           _detectedProduct = updatedFromApi;
           _importResult = apiResult;
-          _showExtractionLoader = false;
+          _isCollectingProductInfo = false;
           _isExtractingProduct = false;
         });
         return;
@@ -164,7 +166,7 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
       } else {
         if (mounted) {
           setState(() {
-            _showExtractionLoader = false;
+            _isCollectingProductInfo = false;
             _isExtractingProduct = false;
           });
         }
@@ -174,7 +176,7 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
       if (mounted) {
         setState(() {
           _detectedProduct = null;
-          _showExtractionLoader = false;
+          _isCollectingProductInfo = false;
           _isExtractingProduct = false;
         });
       }
@@ -203,7 +205,7 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
     if (mounted) {
       setState(() {
         _isExtractingProduct = true;
-        _showExtractionLoader = true;
+        _isCollectingProductInfo = true;
       });
     }
 
@@ -276,7 +278,7 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
             setState(() {
               _detectedProduct = updatedProduct;
               _isExtractingProduct = false;
-              _showExtractionLoader = false; // Hide loader when data is ready
+              _isCollectingProductInfo = false; // Hide loader when data is ready
             });
           }
           return;
@@ -307,7 +309,7 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
       debugPrint('🔄 Hiding extraction loader');
       setState(() {
         _isExtractingProduct = false;
-        _showExtractionLoader = false;
+        _isCollectingProductInfo = false;
       });
     } else {
       debugPrint('⚠️ Cannot hide loader - widget not mounted');
@@ -359,32 +361,13 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
     final p = _detectedProduct;
     if (p == null || !mounted) return;
 
-    // If we already have the normalized result, go straight to confirm.
-    if (_importResult != null) {
-      final productJson = jsonEncode({
-        'storeKey': p.storeKey,
-        'storeName': _importResult!.storeName,
-        'productUrl': _importResult!.canonicalUrl ?? p.productUrl,
-        'title': _importResult!.name,
-        'price': _importResult!.price,
-        'currency': 'USD',
-        'imageUrl': _importResult!.imageUrl,
-        'productId': p.productId,
-        if (_importResult!.variations != null && _importResult!.variations!.isNotEmpty)
-          'variations': _importResult!.variations!.map((v) => v.toJson()).toList(),
-      });
-      context.push(
-        '${AppRoutes.confirmProduct}?url=${Uri.encodeComponent(_importResult!.canonicalUrl ?? p.productUrl)}&product=${Uri.encodeComponent(productJson)}',
-        extra: _importResult,
-      );
-      return;
-    }
-
-    // Otherwise show a dedicated progress experience, then confirm.
     final result = await Navigator.of(context).push<ProductImportResult>(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => ImportProgressScreen(url: p.productUrl),
+        builder: (_) => ImportProgressScreen(
+          url: p.productUrl,
+          cachedResult: _importResult,
+        ),
       ),
     );
     if (!mounted || result == null) return;
@@ -524,14 +507,23 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
           const Center(
             child: CircularProgressIndicator(),
           ),
-        if (_detectedProduct == null && !_isLoading && !_showExtractionLoader)
+        if (_detectedProduct == null && !_isLoading)
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
             child: _buildHintBanner(),
           ),
-        if (_detectedProduct != null)
+        if (_detectedProduct != null && _isCollectingProductInfo)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: CollectingProductBanner(
+              appIconUrl: ref.watch(bootstrapConfigProvider).valueOrNull?.appIconUrl,
+            ),
+          ),
+        if (_detectedProduct != null && !_isCollectingProductInfo)
           Positioned(
             left: 0,
             right: 0,
@@ -541,7 +533,6 @@ class _StoreWebViewScreenState extends ConsumerState<StoreWebViewScreen> {
               appName: ref.watch(appDisplayNameProvider),
               onAddToCart: _handleAddToCart,
               onFavorite: _handleFavorite,
-              isExtracting: _showExtractionLoader,
             ),
           ),
       ],

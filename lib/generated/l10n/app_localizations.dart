@@ -931,6 +931,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Review & Add'**
   String get reviewAndAdd;
+
+  /// No description provided for @collectingProductInformation.
+  ///
+  /// In en, this message translates to:
+  /// **'Collecting product information…'**
+  String get collectingProductInformation;
+
+  /// No description provided for @importProgressAddingToCart.
+  ///
+  /// In en, this message translates to:
+  /// **'Adding the product to your cart'**
+  String get importProgressAddingToCart;
+
+  /// No description provided for @importProgressStepExtractDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Extracting product details'**
+  String get importProgressStepExtractDetails;
+
+  /// No description provided for @importProgressStepCustomsCompliance.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking customs compliance'**
+  String get importProgressStepCustomsCompliance;
+
+  /// No description provided for @importProgressStepShippingCosts.
+  ///
+  /// In en, this message translates to:
+  /// **'Calculating shipping costs'**
+  String get importProgressStepShippingCosts;
+
+  /// No description provided for @importProgressStepCustomsDuties.
+  ///
+  /// In en, this message translates to:
+  /// **'Calculating customs duties'**
+  String get importProgressStepCustomsDuties;
+
+  /// No description provided for @importProgressStepShippingMethod.
+  ///
+  /// In en, this message translates to:
+  /// **'Identifying shipping method'**
+  String get importProgressStepShippingMethod;
+
+  /// No description provided for @importProgressStepFinishingCart.
+  ///
+  /// In en, this message translates to:
+  /// **'Finishing adding to cart'**
+  String get importProgressStepFinishingCart;
 }
 
 class _AppLocalizationsDelegate

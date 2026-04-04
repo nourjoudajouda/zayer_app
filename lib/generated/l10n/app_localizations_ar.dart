@@ -446,4 +446,29 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get reviewAndAdd => 'مراجعة ثم إضافة';
+
+  @override
+  String get collectingProductInformation => 'جارٍ جمع معلومات المنتج…';
+
+  @override
+  String get importProgressAddingToCart => 'جارٍ إضافة المنتج إلى سلتك';
+
+  @override
+  String get importProgressStepExtractDetails => 'استخراج تفاصيل المنتج';
+
+  @override
+  String get importProgressStepCustomsCompliance =>
+      'التحقق من الامتثال الجمركي';
+
+  @override
+  String get importProgressStepShippingCosts => 'حساب تكاليف الشحن';
+
+  @override
+  String get importProgressStepCustomsDuties => 'حساب الرسوم الجمركية';
+
+  @override
+  String get importProgressStepShippingMethod => 'تحديد طريقة الشحن';
+
+  @override
+  String get importProgressStepFinishingCart => 'إنهاء الإضافة إلى السلة';
 }

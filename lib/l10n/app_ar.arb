@@ -104,5 +104,13 @@
   "importProgressStepReading": "جارٍ قراءة تفاصيل المنتج",
   "importProgressStepShipping": "جارٍ حساب الشحن",
   "importProgressStepPreparing": "جارٍ تجهيز التأكيد",
-  "reviewAndAdd": "مراجعة ثم إضافة"
+  "reviewAndAdd": "مراجعة ثم إضافة",
+  "collectingProductInformation": "جارٍ جمع معلومات المنتج…",
+  "importProgressAddingToCart": "جارٍ إضافة المنتج إلى سلتك",
+  "importProgressStepExtractDetails": "استخراج تفاصيل المنتج",
+  "importProgressStepCustomsCompliance": "التحقق من الامتثال الجمركي",
+  "importProgressStepShippingCosts": "حساب تكاليف الشحن",
+  "importProgressStepCustomsDuties": "حساب الرسوم الجمركية",
+  "importProgressStepShippingMethod": "تحديد طريقة الشحن",
+  "importProgressStepFinishingCart": "إنهاء الإضافة إلى السلة"
 }
