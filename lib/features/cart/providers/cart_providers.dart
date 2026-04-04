@@ -28,16 +28,24 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
 
   final CartRepository _repository;
 
+  /// In-flight GET so overlapping callers (shell refresh + constructor, etc.) share one request.
+  Future<void>? _loadItemsInFlight;
+
   Future<void> loadItems() async {
-    await _repository.loadItems();
-    state = List.from(_repository.items);
+    if (_loadItemsInFlight != null) return _loadItemsInFlight!;
+    _loadItemsInFlight = () async {
+      await _repository.loadItems();
+      state = List.from(_repository.items);
+    }().whenComplete(() => _loadItemsInFlight = null);
+    return _loadItemsInFlight!;
   }
 
   /// Returns true if item was added, false if same product+variation already in cart.
   Future<bool> addItem(CartItem item) async {
     if (_isDuplicate(item)) return false;
     await _repository.addItem(item);
-    state = List.from(_repository.items);
+    // Full GET keeps totals/shipping/server fields aligned (same pattern as [updateQuantity] / [removeItem]).
+    await loadItems();
     return true;
   }
 
@@ -52,16 +60,12 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
 
   Future<void> updateQuantity(String id, int quantity) async {
     await _repository.updateQuantity(id, quantity);
-    // Refresh from backend to keep totals/shipping as source of truth.
-    await _repository.loadItems();
-    state = List.from(_repository.items);
+    await loadItems();
   }
 
   Future<void> removeItem(String id) async {
     await _repository.removeItem(id);
-    // Refresh from backend to keep totals/shipping as source of truth.
-    await _repository.loadItems();
-    state = List.from(_repository.items);
+    await loadItems();
   }
 
   Future<void> clear() async {
