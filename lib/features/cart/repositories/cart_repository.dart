@@ -16,6 +16,7 @@ class CartShippingEstimateDto {
     this.destinationCountry,
     this.destinationLabel,
     this.destinationAddressId,
+    this.snapshot,
   });
 
   final bool available;
@@ -26,6 +27,9 @@ class CartShippingEstimateDto {
   final String? destinationCountry;
   final String? destinationLabel;
   final String? destinationAddressId;
+
+  /// Full quote from [CartShippingEstimateService::quoteForUser] (same as persisted on cart_items.shipping_snapshot).
+  final Map<String, dynamic>? snapshot;
 }
 
 /// Cart: load from API, add/update/remove via API.
@@ -174,6 +178,13 @@ class CartRepositoryImpl implements CartRepository {
       }
       final cost = (data['shipping_cost'] as num?)?.toDouble();
       final destAddrRaw = data['destination_address_id'];
+      Map<String, dynamic>? snap;
+      final rawSnap = data['snapshot'];
+      if (rawSnap is Map<String, dynamic>) {
+        snap = rawSnap;
+      } else if (rawSnap is Map) {
+        snap = Map<String, dynamic>.from(rawSnap);
+      }
       return CartShippingEstimateDto(
         available: true,
         shippingCost: cost,
@@ -184,6 +195,7 @@ class CartRepositoryImpl implements CartRepository {
         destinationCountry: data['destination_country'] as String?,
         destinationLabel: data['destination_label'] as String?,
         destinationAddressId: destAddrRaw?.toString(),
+        snapshot: snap,
       );
     } catch (_) {
       return const CartShippingEstimateDto(available: false);

@@ -45,6 +45,11 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
   final Map<int, int> _selectedVariationIndices = {};
   bool _isAddingToCart = false;
 
+  /// Same API as cart: POST /api/cart/shipping-estimate → [CartShippingEstimateService::quoteForUser].
+  CartShippingEstimateDto? _cartShipping;
+  bool _shippingLoading = false;
+  String? _shippingDestAddressId;
+
   @override
   void initState() {
     super.initState();
@@ -52,12 +57,57 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
     _unitPriceController = TextEditingController(
       text: p > 0 ? p.toStringAsFixed(2) : '',
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshCartShippingEstimate());
   }
 
   @override
   void dispose() {
     _unitPriceController.dispose();
     super.dispose();
+  }
+
+  Future<void> _refreshCartShippingEstimate() async {
+    if (!mounted) return;
+    setState(() {
+      _shippingLoading = true;
+    });
+    final repo = ref.read(cartRepositoryProvider);
+    final ir = widget.importResult;
+    final dims = ir?.dimensionsData;
+    try {
+      final dto = await repo.estimateShipping(
+        quantity: _quantity,
+        weight: ir?.weight,
+        weightUnit: ir?.weightUnit,
+        length: dims?.length,
+        width: dims?.width,
+        height: dims?.height,
+        dimensionUnit: dims?.unit,
+        destinationAddressId: _shippingDestAddressId,
+      );
+      if (!mounted) return;
+      if (dto.available &&
+          dto.destinationAddressId != null &&
+          dto.destinationAddressId!.trim().isNotEmpty) {
+        _shippingDestAddressId = dto.destinationAddressId;
+      }
+      setState(() {
+        _cartShipping = dto;
+        _shippingLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _cartShipping = const CartShippingEstimateDto(available: false);
+        _shippingLoading = false;
+      });
+    }
+  }
+
+  void _setQuantity(int q) {
+    final next = q < 1 ? 1 : q;
+    setState(() => _quantity = next);
+    _refreshCartShippingEstimate();
   }
 
   /// Current unit price from field (for display and add to cart). Falls back to product price.
@@ -92,24 +142,17 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
     final subtotal = usdPrice * _quantity;
     final variations = importResult?.variations ?? widget.product?.variations;
 
-    // Shipping data: prefer normalized shipping_estimate if available; fall back to shipping_quote.amount.
-    final shippingQuote = importResult?.shippingQuote;
-    final shippingEstimate = importResult?.shippingEstimate;
-    final double? shippingAmount = () {
-      final a = shippingEstimate?.amount;
-      if (a != null && a > 0) return a;
-      final q = shippingQuote?.amount;
-      if (q != null && q > 0) return q;
-      return null;
-    }();
-    final hasShippingAmount = shippingAmount != null && shippingAmount > 0;
-    final shippingAmountValue = shippingAmount ?? 0.0;
+    // Shipping: single source of truth — same POST /api/cart/shipping-estimate used before cart add.
+    final cartShip = _cartShipping;
+    final snapMs = cartShip?.snapshot?['measurements_source']?.toString();
+    final hasShippingAmount = !_shippingLoading &&
+        cartShip?.available == true &&
+        (cartShip?.shippingCost ?? 0) > 0;
+    final shippingAmountValue = cartShip?.shippingCost ?? 0.0;
+    final shipCurrency = cartShip?.currency ?? 'USD';
     final measurementsFound = importResult?.measurementsFound ?? false;
-    final String? shippingEstimateSource =
-        importResult?.shippingEstimateSource ?? shippingEstimate?.source;
-    final isExactShipping = shippingEstimateSource == 'exact';
-    /// Any non-exact source (fallback, unknown, null) uses estimated labeling when an amount exists.
-    final isFallbackShipping = !isExactShipping;
+    final isExactShipping = hasShippingAmount && snapMs == 'exact';
+    final isFallbackShipping = hasShippingAmount && !isExactShipping;
     final hasAnyMeasurement = (importResult?.weight != null && (importResult!.weight ?? 0) > 0) ||
         (importResult?.dimensionsData?.isValid == true) ||
         ((importResult?.dimensions ?? '').trim().isNotEmpty);
@@ -380,8 +423,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                     Row(
                       children: [
                         IconButton.filled(
-                          onPressed: () => setState(
-                              () => _quantity = math.max(1, _quantity - 1)),
+                          onPressed: () => _setQuantity(_quantity - 1),
                           icon: const Icon(Icons.remove, size: 20),
                           style: IconButton.styleFrom(
                             backgroundColor: AppConfig.borderColor,
@@ -403,7 +445,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                           ),
                         ),
                         IconButton.filled(
-                          onPressed: () => setState(() => _quantity++),
+                          onPressed: () => _setQuantity(_quantity + 1),
                           icon: const Icon(Icons.add, size: 20),
                           style: IconButton.styleFrom(
                             backgroundColor: AppConfig.primaryColor,
@@ -442,9 +484,15 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                     const SizedBox(height: AppSpacing.sm),
                     _buildCostRow(
                       isExactShipping ? 'Shipping (exact)' : 'Shipping (estimated)',
-                      hasShippingAmount
-                          ? '≈ ${(shippingQuote?.currency ?? 'USD')} ${shippingAmountValue.toStringAsFixed(2)}'
-                          : 'Pending Review',
+                      _shippingLoading
+                          ? '…'
+                          : (hasShippingAmount
+                              ? '≈ $shipCurrency ${shippingAmountValue.toStringAsFixed(2)}'
+                              : (cartShip?.available == false &&
+                                      (cartShip?.message != null &&
+                                          cartShip!.message!.trim().isNotEmpty)
+                                  ? cartShip!.message!
+                                  : 'Pending Review')),
                       isEstimated: hasShippingAmount && !isExactShipping,
                       isFallback: hasShippingAmount && isFallbackShipping,
                     ),
@@ -582,15 +630,6 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                   ),
                 ),
               ],
-              if (shippingEstimate != null) ...[
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  '${l10n?.shippingNoteLabel ?? 'Shipping note'}: ${shippingEstimate.note}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppConfig.subtitleColor,
-                      ),
-                ),
-              ],
               const SizedBox(height: AppSpacing.xxl),
             ],
           ),
@@ -706,6 +745,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
       width: dims?.width,
       height: dims?.height,
       dimensionUnit: dims?.unit,
+      destinationAddressId: _shippingDestAddressId,
     );
 
     if (!mounted) return;
