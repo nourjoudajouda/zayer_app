@@ -92,19 +92,24 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
     final subtotal = usdPrice * _quantity;
     final variations = importResult?.variations ?? widget.product?.variations;
 
-    // Shipping data: prefer normalized shipping_estimate if available.
+    // Shipping data: prefer normalized shipping_estimate if available; fall back to shipping_quote.amount.
     final shippingQuote = importResult?.shippingQuote;
     final shippingEstimate = importResult?.shippingEstimate;
-    final shippingReviewRequired = importResult?.shippingReviewRequired ?? true;
-    final shippingAmount = (shippingEstimate?.amount != null && (shippingEstimate!.amount ?? 0) > 0)
-        ? shippingEstimate.amount
-        : (shippingQuote != null && shippingQuote.amount > 0 ? shippingQuote.amount : null);
+    final double? shippingAmount = () {
+      final a = shippingEstimate?.amount;
+      if (a != null && a > 0) return a;
+      final q = shippingQuote?.amount;
+      if (q != null && q > 0) return q;
+      return null;
+    }();
     final hasShippingAmount = shippingAmount != null && shippingAmount > 0;
     final shippingAmountValue = shippingAmount ?? 0.0;
     final measurementsFound = importResult?.measurementsFound ?? false;
-    final shippingEstimateSource = shippingEstimate?.source ?? importResult?.shippingEstimateSource;
+    final String? shippingEstimateSource =
+        importResult?.shippingEstimateSource ?? shippingEstimate?.source;
     final isExactShipping = shippingEstimateSource == 'exact';
-    final isFallbackShipping = shippingEstimateSource == 'fallback' || (!measurementsFound);
+    /// Any non-exact source (fallback, unknown, null) uses estimated labeling when an amount exists.
+    final isFallbackShipping = !isExactShipping;
     final hasAnyMeasurement = (importResult?.weight != null && (importResult!.weight ?? 0) > 0) ||
         (importResult?.dimensionsData?.isValid == true) ||
         ((importResult?.dimensions ?? '').trim().isNotEmpty);
@@ -436,9 +441,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     _buildCostRow(
-                      shippingEstimateSource == 'exact'
-                          ? 'Shipping (exact)'
-                          : 'Shipping (estimated)',
+                      isExactShipping ? 'Shipping (exact)' : 'Shipping (estimated)',
                       hasShippingAmount
                           ? '≈ ${(shippingQuote?.currency ?? 'USD')} ${shippingAmountValue.toStringAsFixed(2)}'
                           : 'Pending Review',
@@ -456,8 +459,8 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                   ],
                 ),
               ),
-              // Shipping review banner — shown when shipping is estimated/pending
-              if (shippingReviewRequired && hasShippingAmount) ...[
+              // Approximate-shipping disclaimer when backend used fallback defaults but returned an amount.
+              if (hasShippingAmount && isFallbackShipping) ...[
                 const SizedBox(height: AppSpacing.sm),
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
@@ -534,12 +537,12 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                             ),
                           ),
                           child: Text(
-                            (measurementsFound && isExactShipping)
+                            isExactShipping
                                 ? (l10n?.exactMeasurementsLabel ?? 'Exact measurements')
                                 : (l10n?.estimatedShippingLabel ?? 'Estimated shipping'),
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                   fontWeight: FontWeight.w600,
-                                  color: (measurementsFound && isExactShipping)
+                                  color: isExactShipping
                                       ? AppConfig.successGreen
                                       : Colors.orange.shade800,
                                 ),
@@ -682,6 +685,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
           })
           .join(', ');
     }
+    final dims = importResult?.dimensionsData;
     final cartItem = CartItem(
       id: generateCartItemId(),
       productUrl: productUrl,
@@ -696,6 +700,12 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
       country: country,
       source: product != null ? 'webview' : 'paste_link',
       variationText: variationText,
+      weight: importResult?.weight,
+      weightUnit: importResult?.weightUnit,
+      length: dims?.length,
+      width: dims?.width,
+      height: dims?.height,
+      dimensionUnit: dims?.unit,
     );
 
     if (!mounted) return;

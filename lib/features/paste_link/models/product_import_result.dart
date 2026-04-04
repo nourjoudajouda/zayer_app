@@ -22,6 +22,7 @@ class ProductImportResult {
     this.extractionSource,
     this.measurementsFound = false,
     this.shippingEstimateSource,
+    this.weightUnit,
   });
 
   final String name;
@@ -32,6 +33,8 @@ class ProductImportResult {
   final String country;
   final String? imageUrl;
   final double? weight;
+  /// e.g. lb, kg — from API when present.
+  final String? weightUnit;
   /// Dimensions as a formatted string for UI (backwards compatible).
   final String? dimensions;
   /// Structured dimensions from backend (if provided).
