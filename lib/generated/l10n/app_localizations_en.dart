@@ -390,6 +390,25 @@ class AppLocalizationsEn extends AppLocalizations {
       'Note: Shipping cost is subject to admin review before final confirmation.';
 
   @override
+  String get shippingInformationTitle => 'Shipping Information';
+
+  @override
+  String get shippingInformationDialogBody =>
+      'This shipping cost is for reference only and is not charged at this stage. The final shipping amount may change after admin review.';
+
+  @override
+  String get totalToPayNowLabel => 'Total to Pay Now';
+
+  @override
+  String get shippingEstimateReferenceLabel =>
+      'Shipping estimate (reference only)';
+
+  @override
+  String serviceFeePercentLine(String percent) {
+    return 'Service Fee ($percent)';
+  }
+
+  @override
   String get exactMeasurementsLabel => 'Exact measurements';
 
   @override

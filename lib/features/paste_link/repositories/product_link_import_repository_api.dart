@@ -65,27 +65,26 @@ class ProductLinkImportRepositoryApi implements ProductLinkImportRepository {
     final dims = d['dimensions'];
     if (dims is Map) {
       dimsData = ProductDimensions.fromJson(Map<String, dynamic>.from(dims));
-      if (dimsData.isValid) dimsFormatted = dimsData.format();
+      if (dimsData.hasAnyDimension) dimsFormatted = dimsData.format();
     } else if (dims is String) {
       dimsFormatted = dims.trim().isNotEmpty ? dims.trim() : null;
     }
-    // Fallback: accept flat L/W/H fields if backend provided them.
-    if ((dimsData == null || !dimsData.isValid) &&
-        d['length'] is num &&
-        d['width'] is num &&
-        d['height'] is num) {
+    // Fallback: accept flat L/W/H when any dimension is present (partial OK).
+    if ((dimsData == null || !dimsData.hasAnyDimension) &&
+        (d['length'] is num || d['width'] is num || d['height'] is num)) {
       final unit = (d['dimension_unit'] as String?) ??
           (d['dimensions_unit'] as String?) ??
           'cm';
       final tmp = ProductDimensions(
-        length: (d['length'] as num).toDouble(),
-        width: (d['width'] as num).toDouble(),
-        height: (d['height'] as num).toDouble(),
+        length: d['length'] is num ? (d['length'] as num).toDouble() : null,
+        width: d['width'] is num ? (d['width'] as num).toDouble() : null,
+        height: d['height'] is num ? (d['height'] as num).toDouble() : null,
         unit: unit,
       );
-      if (tmp.isValid) {
+      if (tmp.hasAnyDimension) {
         dimsData = tmp;
-        dimsFormatted = tmp.format();
+        final f = tmp.format();
+        if (f.isNotEmpty) dimsFormatted = f;
       }
     }
 
@@ -110,6 +109,10 @@ class ProductLinkImportRepositoryApi implements ProductLinkImportRepository {
       extractionSource: d['extraction_source'] as String?,
       measurementsFound: d['measurements_found'] == true,
       shippingEstimateSource: d['shipping_estimate_source'] as String?,
+      appFeePercent: (d['app_fee_percent'] as num?)?.toDouble() ?? 0,
+      appFeeAmount: (d['app_fee_amount'] as num?)?.toDouble() ?? 0,
+      payableNowTotal: (d['payable_now_total'] as num?)?.toDouble() ?? 0,
+      shippingPayableNow: (d['shipping_payable_now'] as num?)?.toInt() ?? 0,
     );
   }
 }

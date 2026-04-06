@@ -110,6 +110,31 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
     _refreshCartShippingEstimate();
   }
 
+  String _formatFeePercentForLabel(double p) {
+    if (p <= 0) return '0%';
+    if (p == p.roundToDouble()) return '${p.round()}%';
+    return '${p.toStringAsFixed(2)}%';
+  }
+
+  void _showShippingInfoDialog(AppLocalizations? l10n) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n?.shippingInformationTitle ?? 'Shipping Information'),
+        content: Text(
+          l10n?.shippingInformationDialogBody ??
+              'This shipping cost is for reference only and is not charged at this stage. The final shipping amount may change after admin review.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Current unit price from field (for display and add to cart). Falls back to product price.
   double get _unitPrice {
     final parsed = double.tryParse(_unitPriceController.text.trim());
@@ -140,6 +165,12 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
     final productImageUrl = importResult?.imageUrl ?? widget.product?.imageUrl;
     final usdPrice = _unitPrice;
     final subtotal = usdPrice * _quantity;
+    final feePercent = importResult?.appFeePercent ?? 0.0;
+    final serviceFeeAmount = double.parse(
+      (subtotal * feePercent / 100.0).toStringAsFixed(2),
+    );
+    final totalPayNow =
+        double.parse((subtotal + serviceFeeAmount).toStringAsFixed(2));
     final variations = importResult?.variations ?? widget.product?.variations;
 
     // Shipping: single source of truth — same POST /api/cart/shipping-estimate used before cart add.
@@ -154,7 +185,7 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
     final isExactShipping = hasShippingAmount && snapMs == 'exact';
     final isFallbackShipping = hasShippingAmount && !isExactShipping;
     final hasAnyMeasurement = (importResult?.weight != null && (importResult!.weight ?? 0) > 0) ||
-        (importResult?.dimensionsData?.isValid == true) ||
+        (importResult?.dimensionsData?.hasAnyDimension == true) ||
         ((importResult?.dimensions ?? '').trim().isNotEmpty);
 
     final l10n = AppLocalizations.of(context);
@@ -481,27 +512,29 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                       'Product × $_quantity',
                       'USD ${subtotal.toStringAsFixed(2)}',
                     ),
+                    if (feePercent > 0) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      _buildCostRow(
+                        l10n?.serviceFeePercentLine(_formatFeePercentForLabel(feePercent)) ??
+                            'Service Fee (${_formatFeePercentForLabel(feePercent)})',
+                        'USD ${serviceFeeAmount.toStringAsFixed(2)}',
+                      ),
+                    ],
                     const SizedBox(height: AppSpacing.sm),
-                    _buildCostRow(
-                      isExactShipping ? 'Shipping (exact)' : 'Shipping (estimated)',
-                      _shippingLoading
-                          ? '…'
-                          : (hasShippingAmount
-                              ? '≈ $shipCurrency ${shippingAmountValue.toStringAsFixed(2)}'
-                              : (cartShip?.available == false &&
-                                      (cartShip?.message != null &&
-                                          cartShip!.message!.trim().isNotEmpty)
-                                  ? cartShip!.message!
-                                  : 'Pending Review')),
-                      isEstimated: hasShippingAmount && !isExactShipping,
-                      isFallback: hasShippingAmount && isFallbackShipping,
+                    _buildShippingEstimateSection(
+                      l10n: l10n,
+                      loading: _shippingLoading,
+                      hasShippingAmount: hasShippingAmount,
+                      shipCurrency: shipCurrency,
+                      shippingAmountValue: shippingAmountValue,
+                      cartShip: cartShip,
+                      isExactShipping: isExactShipping,
+                      isFallbackShipping: isFallbackShipping,
                     ),
                     const Divider(height: AppSpacing.lg),
                     _buildCostRow(
-                      'Total',
-                      hasShippingAmount
-                          ? 'USD ${(subtotal + shippingAmountValue).toStringAsFixed(2)}'
-                          : 'Pending Review',
+                      l10n?.totalToPayNowLabel ?? 'Total to Pay Now',
+                      'USD ${totalPayNow.toStringAsFixed(2)}',
                       isTotal: true,
                     ),
                   ],
@@ -562,9 +595,9 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
                       const SizedBox(height: 6),
                       if (importResult?.weight != null && (importResult!.weight ?? 0) > 0)
                         Text('${l10n?.weightLabel ?? 'Weight'}: ${importResult.weight}'),
-                      if (importResult?.dimensionsData?.isValid == true)
+                      if (importResult?.dimensionsData?.hasAnyDimension == true)
                         Text('${l10n?.dimensionsLabel ?? 'Dimensions'}: ${importResult!.dimensionsData!.format()}'),
-                      if (importResult?.dimensionsData?.isValid != true &&
+                      if (importResult?.dimensionsData?.hasAnyDimension != true &&
                           importResult?.dimensions != null &&
                           importResult!.dimensions!.trim().isNotEmpty)
                         Text('${l10n?.dimensionsLabel ?? 'Dimensions'}: ${importResult.dimensions}'),
@@ -636,6 +669,93 @@ class _ConfirmProductScreenState extends ConsumerState<ConfirmProductScreen> {
         ),
       ),
       bottomNavigationBar: _buildBottomBar(context),
+    );
+  }
+
+  Widget _buildShippingEstimateSection({
+    required AppLocalizations? l10n,
+    required bool loading,
+    required bool hasShippingAmount,
+    required String shipCurrency,
+    required double shippingAmountValue,
+    required CartShippingEstimateDto? cartShip,
+    required bool isExactShipping,
+    required bool isFallbackShipping,
+  }) {
+    final valueText = loading
+        ? '…'
+        : (hasShippingAmount
+            ? '≈ $shipCurrency ${shippingAmountValue.toStringAsFixed(2)}'
+            : (cartShip?.available == false &&
+                    (cartShip?.message != null &&
+                        cartShip!.message!.trim().isNotEmpty)
+                ? cartShip!.message!
+                : '—'));
+
+    final highlightShipping =
+        hasShippingAmount && (!isExactShipping || isFallbackShipping);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n?.shippingEstimateReferenceLabel ??
+                          'Shipping estimate (reference only)',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppConfig.subtitleColor,
+                          ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.info_outline,
+                      size: 20,
+                      color: AppConfig.primaryColor,
+                    ),
+                    onPressed: () => _showShippingInfoDialog(l10n),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                valueText,
+                textAlign: TextAlign.right,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                      color: highlightShipping
+                          ? Colors.orange.shade800
+                          : AppConfig.textColor,
+                    ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          l10n?.shippingReviewNoteShort ??
+              'Note: Shipping cost is subject to admin review before final confirmation.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppConfig.subtitleColor,
+                height: 1.35,
+              ),
+        ),
+      ],
     );
   }
 

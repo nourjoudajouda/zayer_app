@@ -23,6 +23,10 @@ class ProductImportResult {
     this.measurementsFound = false,
     this.shippingEstimateSource,
     this.weightUnit,
+    this.appFeePercent = 0,
+    this.appFeeAmount = 0,
+    this.payableNowTotal = 0,
+    this.shippingPayableNow = 0,
   });
 
   final String name;
@@ -67,33 +71,64 @@ class ProductImportResult {
 
   /// 'exact' when real measurements were used, 'fallback' when defaults were applied.
   final String? shippingEstimateSource;
+
+  /// Admin-configured app fee percent (product subtotal only; not shipping).
+  final double appFeePercent;
+
+  /// Fee amount for current line subtotal from import API (informational; recalc if user edits price).
+  final double appFeeAmount;
+
+  /// Product subtotal + app fee at import time (shipping not included).
+  final double payableNowTotal;
+
+  /// Always 0 at this stage — shipping is not charged with product yet.
+  final int shippingPayableNow;
 }
 
 class ProductDimensions {
   const ProductDimensions({
-    required this.length,
-    required this.width,
-    required this.height,
+    this.length,
+    this.width,
+    this.height,
     required this.unit,
   });
 
-  final double length;
-  final double width;
-  final double height;
+  final double? length;
+  final double? width;
+  final double? height;
   final String unit; // 'cm' | 'in' | 'mm' etc.
 
   factory ProductDimensions.fromJson(Map<String, dynamic> json) {
+    double? p(String k) {
+      final v = json[k];
+      if (v is num) return v.toDouble();
+      return null;
+    }
+
     return ProductDimensions(
-      length: (json['length'] as num?)?.toDouble() ?? 0.0,
-      width: (json['width'] as num?)?.toDouble() ?? 0.0,
-      height: (json['height'] as num?)?.toDouble() ?? 0.0,
+      length: p('length'),
+      width: p('width'),
+      height: p('height'),
       unit: (json['unit'] as String?) ?? (json['dimension_unit'] as String?) ?? 'cm',
     );
   }
 
-  bool get isValid => length > 0 && width > 0 && height > 0;
+  /// All three dimensions present and positive (e.g. volumetric box complete).
+  bool get isValid =>
+      (length ?? 0) > 0 && (width ?? 0) > 0 && (height ?? 0) > 0;
 
-  String format() => 'L=$length × W=$width × H=$height $unit';
+  /// At least one positive dimension (partial extraction, e.g. height-only).
+  bool get hasAnyDimension =>
+      (length ?? 0) > 0 || (width ?? 0) > 0 || (height ?? 0) > 0;
+
+  String format() {
+    final parts = <String>[];
+    if ((length ?? 0) > 0) parts.add('L=$length');
+    if ((width ?? 0) > 0) parts.add('W=$width');
+    if ((height ?? 0) > 0) parts.add('H=$height');
+    if (parts.isEmpty) return '';
+    return '${parts.join(' × ')} $unit';
+  }
 }
 
 /// Shipping quote preview returned alongside the product import result.

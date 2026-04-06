@@ -818,6 +818,36 @@ abstract class AppLocalizations {
   /// **'Note: Shipping cost is subject to admin review before final confirmation.'**
   String get shippingReviewNoteShort;
 
+  /// No description provided for @shippingInformationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipping Information'**
+  String get shippingInformationTitle;
+
+  /// No description provided for @shippingInformationDialogBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This shipping cost is for reference only and is not charged at this stage. The final shipping amount may change after admin review.'**
+  String get shippingInformationDialogBody;
+
+  /// No description provided for @totalToPayNowLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Total to Pay Now'**
+  String get totalToPayNowLabel;
+
+  /// No description provided for @shippingEstimateReferenceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipping estimate (reference only)'**
+  String get shippingEstimateReferenceLabel;
+
+  /// No description provided for @serviceFeePercentLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Service Fee ({percent})'**
+  String serviceFeePercentLine(String percent);
+
   /// No description provided for @exactMeasurementsLabel.
   ///
   /// In en, this message translates to:

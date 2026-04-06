@@ -389,6 +389,24 @@ class AppLocalizationsAr extends AppLocalizations {
       'ملاحظة: سعر الشحن سيخضع لمراجعة الإدارة قبل الاعتماد النهائي.';
 
   @override
+  String get shippingInformationTitle => 'معلومات الشحن';
+
+  @override
+  String get shippingInformationDialogBody =>
+      'تكلفة الشحن المعروضة للاطلاع فقط ولن تُحسب في هذه المرحلة. قد يتغير مبلغ الشحن النهائي بعد مراجعة الإدارة.';
+
+  @override
+  String get totalToPayNowLabel => 'الإجمالي المستحق الآن';
+
+  @override
+  String get shippingEstimateReferenceLabel => 'تقدير الشحن (للاطلاع فقط)';
+
+  @override
+  String serviceFeePercentLine(String percent) {
+    return 'رسوم الخدمة ($percent)';
+  }
+
+  @override
   String get exactMeasurementsLabel => 'قياسات دقيقة';
 
   @override

@@ -343,12 +343,27 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
       }
     }
     final dd = result.dimensionsData;
-    if (dd != null && dd.isValid) {
-      String fmt(double v) =>
-          (v == v.roundToDouble()) ? v.round().toString() : v.toStringAsFixed(2);
-      _lengthController.text = fmt(dd.length);
-      _widthController.text = fmt(dd.width);
-      _heightController.text = fmt(dd.height);
+    if (dd != null && dd.hasAnyDimension) {
+      String fmt(double? v) {
+        if (v == null || v <= 0) return '';
+        return (v == v.roundToDouble()) ? v.round().toString() : v.toStringAsFixed(2);
+      }
+
+      if ((dd.length ?? 0) > 0) {
+        _lengthController.text = fmt(dd.length);
+      } else {
+        _lengthController.clear();
+      }
+      if ((dd.width ?? 0) > 0) {
+        _widthController.text = fmt(dd.width);
+      } else {
+        _widthController.clear();
+      }
+      if ((dd.height ?? 0) > 0) {
+        _heightController.text = fmt(dd.height);
+      } else {
+        _heightController.clear();
+      }
       final u = dd.unit.toLowerCase();
       _dimensionUnit = (u == 'in' || u == 'inch' || u == 'inches') ? 'in' : 'cm';
     }
