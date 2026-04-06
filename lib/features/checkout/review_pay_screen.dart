@@ -128,26 +128,33 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AsyncValue<CheckoutReviewModel>>(checkoutReviewProvider, (prev, next) {
+      ref.read(checkoutPaymentMethodSelectionProvider.notifier).state = null;
+    });
     final reviewAsync = ref.watch(checkoutReviewProvider);
     final review = reviewAsync.valueOrNull;
-    final walletEnabled = ref.watch(checkoutWalletEnabledProvider);
-    final total = review != null ? (_tryParseMoney(review.total) ?? 0.0) : 0.0;
-    final walletBalance = review != null
-        ? (_tryParseMoney(review.walletBalance) ?? 0.0)
+    final methodOverride = ref.watch(checkoutPaymentMethodSelectionProvider);
+    final payable = review != null
+        ? (review.payableNowTotal ?? _tryParseMoney(review.total) ?? 0.0)
         : 0.0;
-    final walletAppliedNow = review?.walletApplied != null
-        ? (walletEnabled ? (review!.walletApplied ?? 0.0) : 0.0)
-        : (walletEnabled
-              ? (walletBalance > 0
-                    ? (walletBalance > total ? total : walletBalance)
-                    : 0.0)
-              : 0.0);
-    final amountDueNow = walletEnabled
-        ? (review?.amountDueNow ??
-              ((total - walletAppliedNow) > 0
-                  ? (total - walletAppliedNow)
-                  : 0.0))
-        : total;
+    final walletBalance =
+        review != null ? (_tryParseMoney(review.walletBalance) ?? 0.0) : 0.0;
+    final method =
+        review != null ? _effectivePaymentMethod(review, methodOverride) : 'gateway';
+    final canWalletPay = review != null
+        ? _canPayWithWallet(review, walletBalance, payable)
+        : false;
+    double walletAppliedNow;
+    double amountDueNow;
+    if (review != null && method == 'wallet' && canWalletPay) {
+      walletAppliedNow = payable;
+      amountDueNow = 0.0;
+    } else {
+      walletAppliedNow = 0.0;
+      amountDueNow = payable;
+    }
+    final canConfirm =
+        review != null ? _canPlaceOrder(review, method, canWalletPay) : false;
 
     // Guard against bypassing address requirement:
     // - must have a default shipping address (required for accurate shipping)
@@ -305,16 +312,31 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
         }
         return _ReviewPayContent(
           review: r,
-          walletEnabled: walletEnabled,
+          paymentMethod: method,
+          payableNow: payable,
+          walletBalanceAmount: walletBalance,
+          canWalletPay: canWalletPay,
+          walletAppliedNow: walletAppliedNow,
           amountDueNow: amountDueNow,
           confirming: _confirming,
           onRefresh: () async {
             ref.invalidate(checkoutReviewProvider);
             await ref.read(checkoutReviewProvider.future);
           },
-          onWalletToggle: (v) =>
-              ref.read(checkoutWalletEnabledProvider.notifier).state = v,
-          onConfirm: _confirming
+          onSelectPaymentMethod: (m) => ref
+              .read(checkoutPaymentMethodSelectionProvider.notifier)
+              .state = m,
+          onTopUpWallet: (shortage) async {
+            await context.push<double?>(
+              AppRoutes.topUpWallet,
+              extra: shortage,
+            );
+            if (context.mounted) {
+              ref.invalidate(checkoutReviewProvider);
+              ref.invalidate(walletBalanceProvider);
+            }
+          },
+          onConfirm: _confirming || !canConfirm
               ? null
               : () async {
                   if (!hasDefaultAddress) {
@@ -330,14 +352,27 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
                   setState(() => _confirming = true);
                   final result = await confirmCheckout(
                     ref,
-                    useWallet: walletEnabled,
+                    paymentMethod: method,
                   );
                   if (!context.mounted) return;
                   if (!result.ok) {
                     setState(() => _confirming = false);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Checkout failed')),
-                    );
+                    final code = result.errorCode;
+                    if (code == 'insufficient_wallet_balance') {
+                      final msg = result.message ??
+                          'Please top up your wallet to cover this order.';
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(msg)),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            result.message ?? 'Checkout failed',
+                          ),
+                        ),
+                      );
+                    }
                     return;
                   }
                   ref.invalidate(cartItemsProvider);
@@ -418,6 +453,32 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
 double? _tryParseMoney(String v) {
   final cleaned = v.replaceAll(RegExp(r'[^0-9\.\-]'), '');
   return double.tryParse(cleaned);
+}
+
+String _effectivePaymentMethod(CheckoutReviewModel r, String? override) {
+  if (override == 'wallet' || override == 'gateway') {
+    return override!;
+  }
+  switch (r.checkoutPaymentMode) {
+    case 'wallet_only':
+      return 'wallet';
+    default:
+      return 'gateway';
+  }
+}
+
+bool _canPayWithWallet(CheckoutReviewModel r, double balance, double payable) {
+  if (payable <= 0.0001) return true;
+  return r.walletCanPayNow || balance + 0.0001 >= payable;
+}
+
+bool _canPlaceOrder(
+  CheckoutReviewModel r,
+  String method,
+  bool canWalletPay,
+) {
+  if (method == 'wallet' && !canWalletPay) return false;
+  return true;
 }
 
 /// Derive "5%" style label for service fee line when API does not send percent.
@@ -504,30 +565,34 @@ String _formatUsd(double v) => '\$${v.toStringAsFixed(2)}';
 class _ReviewPayContent extends StatelessWidget {
   const _ReviewPayContent({
     required this.review,
-    required this.walletEnabled,
+    required this.paymentMethod,
+    required this.payableNow,
+    required this.walletBalanceAmount,
+    required this.canWalletPay,
+    required this.walletAppliedNow,
     required this.amountDueNow,
     required this.confirming,
-    required this.onWalletToggle,
+    required this.onSelectPaymentMethod,
+    required this.onTopUpWallet,
     this.onConfirm,
     this.onRefresh,
   });
 
   final CheckoutReviewModel review;
-  final bool walletEnabled;
+  final String paymentMethod;
+  final double payableNow;
+  final double walletBalanceAmount;
+  final bool canWalletPay;
+  final double walletAppliedNow;
   final double amountDueNow;
   final bool confirming;
-  final ValueChanged<bool> onWalletToggle;
+  final ValueChanged<String> onSelectPaymentMethod;
+  final Future<void> Function(double shortage) onTopUpWallet;
   final VoidCallback? onConfirm;
   final Future<void> Function()? onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    final total = _tryParseMoney(review.total) ?? 0.0;
-    final walletBalance = _tryParseMoney(review.walletBalance) ?? 0.0;
-    final walletAppliedNow = walletEnabled
-        ? (review.walletApplied ??
-              (walletBalance > total ? total : walletBalance))
-        : 0.0;
     final allocated = _perItemAppFeeAllocated(review);
     final orderPct = _globalAppFeePercentForShipmentItems(review);
     return Scaffold(
@@ -574,15 +639,18 @@ class _ReviewPayContent extends StatelessWidget {
                           ),
                         ),
                       ),
-                      _WalletBalanceRow(
-                        balance: review.walletBalance,
-                        enabled: walletEnabled,
-                        onToggle: onWalletToggle,
+                      _CheckoutPaymentSection(
+                        review: review,
+                        paymentMethod: paymentMethod,
+                        payableNow: payableNow,
+                        walletBalanceAmount: walletBalanceAmount,
+                        canWalletPay: canWalletPay,
+                        onSelectPaymentMethod: onSelectPaymentMethod,
+                        onTopUpWallet: onTopUpWallet,
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       _PriceDetailsSection(
                         review: review,
-                        walletEnabled: walletEnabled,
                         walletAppliedNow: walletAppliedNow,
                         amountDueNow: amountDueNow,
                       ),
@@ -895,19 +963,34 @@ class _Stepper extends StatelessWidget {
   }
 }
 
-class _WalletBalanceRow extends StatelessWidget {
-  const _WalletBalanceRow({
-    required this.balance,
-    required this.enabled,
-    required this.onToggle,
+class _CheckoutPaymentSection extends StatelessWidget {
+  const _CheckoutPaymentSection({
+    required this.review,
+    required this.paymentMethod,
+    required this.payableNow,
+    required this.walletBalanceAmount,
+    required this.canWalletPay,
+    required this.onSelectPaymentMethod,
+    required this.onTopUpWallet,
   });
 
-  final String balance;
-  final bool enabled;
-  final ValueChanged<bool> onToggle;
+  final CheckoutReviewModel review;
+  final String paymentMethod;
+  final double payableNow;
+  final double walletBalanceAmount;
+  final bool canWalletPay;
+  final ValueChanged<String> onSelectPaymentMethod;
+  final Future<void> Function(double shortage) onTopUpWallet;
 
   @override
   Widget build(BuildContext context) {
+    final mode = review.checkoutPaymentMode;
+    final showWallet = review.walletEnabledForCheckout;
+    final showGateway = review.gatewayEnabledForCheckout;
+    final shortage = (payableNow - walletBalanceAmount) > 0
+        ? (payableNow - walletBalanceAmount)
+        : 0.0;
+
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -915,31 +998,165 @@ class _WalletBalanceRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
         border: Border.all(color: AppConfig.borderColor),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(
-            Icons.account_balance_wallet_outlined,
-            color: AppConfig.primaryColor,
-            size: 24,
+          Text(
+            'Payment',
+            style: AppTextStyles.titleMedium(AppConfig.textColor),
           ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Wallet balance',
-                  style: AppTextStyles.label(AppConfig.subtitleColor),
+          const SizedBox(height: AppSpacing.sm),
+          if (showWallet) ...[
+            _paymentRow(
+              title: 'Wallet balance',
+              value: '\$${walletBalanceAmount.toStringAsFixed(2)}',
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            _paymentRow(
+              title: 'Total to pay now',
+              value: '\$${payableNow.toStringAsFixed(2)}',
+            ),
+            if (paymentMethod == 'wallet' && !canWalletPay) ...[
+              const SizedBox(height: AppSpacing.xs),
+              _paymentRow(
+                title: 'Need to top up',
+                value: '\$${shortage.toStringAsFixed(2)}',
+                emphasize: true,
+              ),
+            ],
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          if (showWallet && showGateway) ...[
+            Text(
+              'Choose how to pay',
+              style: AppTextStyles.label(AppConfig.subtitleColor),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            _methodTile(
+              context,
+              selected: paymentMethod == 'wallet',
+              title: 'Wallet',
+              subtitle: canWalletPay
+                  ? 'Pay using your balance'
+                  : 'Insufficient balance',
+              enabled: true,
+              onTap: () => onSelectPaymentMethod('wallet'),
+            ),
+            _methodTile(
+              context,
+              selected: paymentMethod == 'gateway',
+              title: 'Card / payment gateway',
+              subtitle: 'Secure checkout',
+              enabled: true,
+              onTap: () => onSelectPaymentMethod('gateway'),
+            ),
+          ] else if (showWallet && !showGateway) ...[
+            Text(
+              'This checkout is configured for wallet payment only.',
+              style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+            ),
+          ] else if (!showWallet && showGateway) ...[
+            Text(
+              'Pay securely with your card on the next step.',
+              style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+            ),
+          ],
+          if (showWallet &&
+              paymentMethod == 'wallet' &&
+              !canWalletPay &&
+              mode != 'gateway_only') ...[
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: shortage > 0 ? () => onTopUpWallet(shortage) : null,
+                icon: const Icon(Icons.add_card_outlined, size: 20),
+                label: const Text('Top Up Wallet'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppConfig.primaryColor,
+                  side: BorderSide(color: AppConfig.primaryColor.withValues(alpha: 0.5)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
-                Text(
-                  balance,
-                  style: AppTextStyles.titleMedium(AppConfig.textColor),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _paymentRow({
+    required String title,
+    required String value,
+    bool emphasize = false,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title,
+          style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+        ),
+        Text(
+          value,
+          style: emphasize
+              ? AppTextStyles.titleMedium(AppConfig.errorRed)
+              : AppTextStyles.bodyMedium(AppConfig.textColor),
+        ),
+      ],
+    );
+  }
+
+  Widget _methodTile(
+    BuildContext context, {
+    required bool selected,
+    required String title,
+    required String subtitle,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: Material(
+        color: selected
+            ? AppConfig.primaryColor.withValues(alpha: 0.12)
+            : AppConfig.borderColor.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  selected ? Icons.radio_button_checked : Icons.radio_button_off,
+                  color: selected ? AppConfig.primaryColor : AppConfig.subtitleColor,
+                  size: 22,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: AppTextStyles.bodyMedium(AppConfig.textColor),
+                      ),
+                      Text(
+                        subtitle,
+                        style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-          Switch(value: enabled, onChanged: onToggle),
-        ],
+        ),
       ),
     );
   }
@@ -948,20 +1165,18 @@ class _WalletBalanceRow extends StatelessWidget {
 class _PriceDetailsSection extends StatelessWidget {
   const _PriceDetailsSection({
     required this.review,
-    required this.walletEnabled,
     required this.walletAppliedNow,
     required this.amountDueNow,
   });
 
   final CheckoutReviewModel review;
-  final bool walletEnabled;
   final double walletAppliedNow;
   final double amountDueNow;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final walletRowVisible = walletEnabled && walletAppliedNow > 0.0001;
+    final walletRowVisible = walletAppliedNow > 0.0001;
     final promoVisible =
         (review.promoDiscountAmount ?? 0) > 0.0001 ||
         review.promoCode.trim().isNotEmpty;

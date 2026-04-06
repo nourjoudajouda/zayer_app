@@ -25,7 +25,7 @@ Future<String> _getPrimaryAddressShort(Ref ref) async {
 }
 
 /// Checkout review from API: GET /api/checkout/review.
-/// Backend is the source of truth for pricing/shipping/wallet application; do not fabricate totals locally.
+/// Backend is the source of truth for pricing/shipping; payment method is chosen explicitly at confirm.
 final checkoutPromoCodeProvider = StateProvider<String>((ref) => '');
 
 final checkoutReviewProvider = FutureProvider<CheckoutReviewModel>((ref) async {
@@ -45,29 +45,72 @@ final checkoutReviewProvider = FutureProvider<CheckoutReviewModel>((ref) async {
   return CheckoutReviewModel.fromJson(data);
 });
 
-/// Toggle wallet balance usage. Include in POST /api/checkout/confirm.
-final checkoutWalletEnabledProvider = StateProvider<bool>((ref) => true);
+/// User override for payment method (`wallet` | `gateway`). Null = use default from [CheckoutReviewModel.checkoutPaymentMode].
+final checkoutPaymentMethodSelectionProvider = StateProvider<String?>((ref) => null);
 
-/// Confirm checkout: POST /api/checkout/confirm
-Future<({bool ok, String? orderId, String? orderNumber})> confirmCheckout(WidgetRef ref, {bool useWallet = true}) async {
+/// Confirm checkout: POST /api/checkout/confirm with `payment_method` + legacy `use_wallet_balance` when applicable.
+Future<CheckoutConfirmResult> confirmCheckout(
+  WidgetRef ref, {
+  required String paymentMethod,
+}) async {
+  final promoCode = ref.read(checkoutPromoCodeProvider).trim();
   try {
-    final promoCode = ref.read(checkoutPromoCodeProvider).trim();
     final res = await ApiClient.instance.post<Map<String, dynamic>>(
       '/api/checkout/confirm',
       data: {
-        'use_wallet_balance': useWallet,
+        'payment_method': paymentMethod,
+        'use_wallet_balance': paymentMethod == 'wallet',
         if (promoCode.isNotEmpty) 'promo_code': promoCode,
       },
+      options: Options(validateStatus: (s) => s != null && s < 500),
     );
-    if (res.statusCode == 201 && res.data != null) {
-      return (
+    final code = res.statusCode ?? 0;
+    final data = res.data;
+    if (code == 201 && data != null) {
+      return CheckoutConfirmResult(
         ok: true,
-        orderId: res.data!['order_id']?.toString(),
-        orderNumber: res.data!['order_number']?.toString(),
+        orderId: data['order_id']?.toString(),
+        orderNumber: data['order_number']?.toString(),
+      );
+    }
+    if (data is Map<String, dynamic>) {
+      return CheckoutConfirmResult(
+        ok: false,
+        errorCode: data['error_code']?.toString(),
+        message: data['message']?.toString(),
+        errorBody: Map<String, dynamic>.from(data),
+      );
+    }
+  } on DioException catch (e) {
+    final data = e.response?.data;
+    if (data is Map<String, dynamic>) {
+      return CheckoutConfirmResult(
+        ok: false,
+        errorCode: data['error_code']?.toString(),
+        message: data['message']?.toString(),
+        errorBody: Map<String, dynamic>.from(data),
       );
     }
   } catch (_) {}
-  return (ok: false, orderId: null, orderNumber: null);
+  return const CheckoutConfirmResult(ok: false);
+}
+
+class CheckoutConfirmResult {
+  const CheckoutConfirmResult({
+    required this.ok,
+    this.orderId,
+    this.orderNumber,
+    this.errorCode,
+    this.message,
+    this.errorBody,
+  });
+
+  final bool ok;
+  final String? orderId;
+  final String? orderNumber;
+  final String? errorCode;
+  final String? message;
+  final Map<String, dynamic>? errorBody;
 }
 
 /// Result of starting payment: either success with [checkoutUrl] or failure with [error].

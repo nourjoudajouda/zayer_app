@@ -96,7 +96,7 @@ class WalletScreen extends ConsumerWidget {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        'Automatically applied at checkout',
+                        'Use at checkout when enabled',
                         style: Theme.of(context).textTheme.labelMedium
                             ?.copyWith(
                               color: AppConfig.primaryColor,
@@ -330,7 +330,7 @@ class WalletScreen extends ConsumerWidget {
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
-                'Your wallet balance is automatically applied at checkout before other payment methods. Add funds anytime with "Add Funds". Currency is converted to USD at real-time rates.',
+                'Whether you can pay with your wallet at checkout depends on your store’s settings. When wallet checkout is enabled, you can choose it on Review & Pay if your balance covers the order, or top up first. Currency is converted to USD at real-time rates.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppConfig.subtitleColor,
                 ),

@@ -50,6 +50,10 @@ class CheckoutReviewModel {
     this.shippingAddressShort = '',
     this.consolidationSavings = '',
     this.walletBalanceEnabled = true,
+    this.checkoutPaymentMode = 'gateway_only',
+    this.walletEnabledForCheckout = true,
+    this.gatewayEnabledForCheckout = true,
+    this.allowedPaymentMethods = const ['wallet', 'gateway'],
     this.walletBalance = '',
     this.subtotal = '',
     this.serviceFee = '',
@@ -62,6 +66,11 @@ class CheckoutReviewModel {
     this.payableNowTotal,
     this.shippingEstimateAmount,
     this.shippingPayableNow = 0,
+    this.walletShortfall,
+    this.walletCanPayNow = false,
+    this.topUpRequired = false,
+    this.requiredTopUpAmount,
+    this.suggestedTopUpAmount,
     this.promoCode = '',
     this.promoValid = false,
     this.promoMessage = '',
@@ -73,6 +82,11 @@ class CheckoutReviewModel {
   final String shippingAddressShort;
   final String consolidationSavings;
   final bool walletBalanceEnabled;
+  /// Admin setting: `wallet_only` | `gateway_only` | `wallet_and_gateway`.
+  final String checkoutPaymentMode;
+  final bool walletEnabledForCheckout;
+  final bool gatewayEnabledForCheckout;
+  final List<String> allowedPaymentMethods;
   final String walletBalance;
   final String subtotal;
   /// Formatted service fee (product + fee flow).
@@ -88,6 +102,11 @@ class CheckoutReviewModel {
   final double? payableNowTotal;
   final double? shippingEstimateAmount;
   final int shippingPayableNow;
+  final double? walletShortfall;
+  final bool walletCanPayNow;
+  final bool topUpRequired;
+  final double? requiredTopUpAmount;
+  final double? suggestedTopUpAmount;
   final String promoCode;
   final bool promoValid;
   final String promoMessage;
@@ -124,10 +143,28 @@ class CheckoutReviewModel {
     final pricing = j['pricing'] is Map<String, dynamic>
         ? Map<String, dynamic>.from(j['pricing'] as Map)
         : null;
+    final mode =
+        (j['checkout_payment_mode'] ?? pricing?['checkout_payment_mode'] ?? 'gateway_only')
+            .toString();
+    final allowedRaw = j['allowed_payment_methods'] ?? pricing?['allowed_payment_methods'];
+    final allowed = allowedRaw is List
+        ? allowedRaw.map((e) => e.toString()).toList()
+        : const <String>[];
     return CheckoutReviewModel(
       shippingAddressShort: (j['shipping_address_short'] ?? '').toString(),
       consolidationSavings: (j['consolidation_savings'] ?? '\$0.00').toString(),
-      walletBalanceEnabled: j['wallet_balance_enabled'] != false,
+      walletBalanceEnabled: j['wallet_enabled_for_checkout'] == true ||
+          j['wallet_balance_enabled'] == true ||
+          (j['wallet_enabled_for_checkout'] == null &&
+              j['wallet_balance_enabled'] != false),
+      checkoutPaymentMode: mode,
+      walletEnabledForCheckout: j['wallet_enabled_for_checkout'] == true ||
+          (j['wallet_enabled_for_checkout'] == null &&
+              j['wallet_balance_enabled'] != false),
+      gatewayEnabledForCheckout: j['gateway_enabled_for_checkout'] != false,
+      allowedPaymentMethods: allowed.isNotEmpty
+          ? allowed
+          : _defaultAllowedMethods(mode),
       walletBalance: (j['wallet_balance'] ?? '\$0.00').toString(),
       subtotal: (j['subtotal'] ?? '\$0.00').toString(),
       serviceFee: (j['service_fee'] ?? '\$0.00').toString(),
@@ -140,6 +177,15 @@ class CheckoutReviewModel {
       payableNowTotal: _parseMoney(pricing?['payable_now_total']),
       shippingEstimateAmount: _parseMoney(pricing?['shipping_estimate_amount'] ?? pricing?['shipping']),
       shippingPayableNow: (pricing?['shipping_payable_now'] as num?)?.toInt() ?? 0,
+      walletShortfall: _parseMoney(j['wallet_shortfall'] ?? pricing?['wallet_shortfall']),
+      walletCanPayNow: j['wallet_can_pay_now'] == true ||
+          pricing?['wallet_can_pay_now'] == true,
+      topUpRequired:
+          j['top_up_required'] == true || pricing?['top_up_required'] == true,
+      requiredTopUpAmount:
+          _parseMoney(j['required_top_up_amount'] ?? pricing?['required_top_up_amount']),
+      suggestedTopUpAmount:
+          _parseMoney(j['suggested_top_up_amount'] ?? pricing?['suggested_top_up_amount']),
       promoCode: (j['promo_code'] ?? '').toString(),
       promoValid: j['promo_valid'] == true || j['promo_valid'] == 1,
       promoMessage: (j['promo_message'] ?? '').toString(),
@@ -151,6 +197,19 @@ class CheckoutReviewModel {
           const [],
       shipments: shipments,
     );
+  }
+}
+
+List<String> _defaultAllowedMethods(String mode) {
+  switch (mode) {
+    case 'wallet_only':
+      return const ['wallet'];
+    case 'gateway_only':
+      return const ['gateway'];
+    case 'wallet_and_gateway':
+      return const ['wallet', 'gateway'];
+    default:
+      return const ['gateway'];
   }
 }
 

@@ -460,7 +460,13 @@ GoRouter _createAppRouter() {
       ),
       GoRoute(
         path: AppRoutes.topUpWallet,
-        builder: (context, state) => const TopUpWalletScreen(),
+        builder: (context, state) {
+          final extra = state.extra;
+          final initial = extra is double
+              ? extra
+              : (extra is num ? extra.toDouble() : null);
+          return TopUpWalletScreen(initialAmount: initial);
+        },
       ),
       GoRoute(
         path: AppRoutes.defaultWarehouse,

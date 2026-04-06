@@ -14,7 +14,10 @@ import 'providers/wallet_providers.dart';
 
 /// Top Up Wallet: available balance, amount presets + custom, payment method, order summary, confirm.
 class TopUpWalletScreen extends ConsumerStatefulWidget {
-  const TopUpWalletScreen({super.key});
+  const TopUpWalletScreen({super.key, this.initialAmount});
+
+  /// When opened from checkout, prefilled shortage (user can still edit).
+  final double? initialAmount;
 
   @override
   ConsumerState<TopUpWalletScreen> createState() => _TopUpWalletScreenState();
@@ -31,6 +34,12 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
   @override
   void initState() {
     super.initState();
+    final pre = widget.initialAmount;
+    if (pre != null && pre > 0) {
+      _useCustom = true;
+      _selectedPresetIndex = -1;
+      _customAmountController.text = pre.toStringAsFixed(2);
+    }
     _customAmountController.addListener(() => setState(() {}));
   }
 
