@@ -7,14 +7,32 @@ class CheckoutShipmentItem {
     required this.eta,
     this.imageUrl,
     this.shippingCost,
+    this.id = '',
+    this.lineSubtotal,
+    this.shippingAmount,
+    this.appFeeAmount,
+    this.appFeePercent,
   });
 
   final String name;
+  /// Formatted unit price from API (`price`).
   final String price;
   final int quantity;
   final String eta;
   final String? imageUrl;
+  /// Formatted shipping for the line (`shipping_cost`), when present.
   final String? shippingCost;
+
+  /// Cart line id (for allocating summary-level fees per item).
+  final String id;
+  /// Numeric line subtotal from API (`subtotal`).
+  final double? lineSubtotal;
+  /// Numeric shipping estimate for the line (`shipping_amount`).
+  final double? shippingAmount;
+  /// When API sends per-line fee (`app_fee_amount`).
+  final double? appFeeAmount;
+  /// When API sends per-line percent (`app_fee_percent`).
+  final double? appFeePercent;
 }
 
 class CheckoutShipment {
@@ -91,6 +109,11 @@ class CheckoutReviewModel {
           eta: (im['eta'] ?? '').toString(),
           imageUrl: im['image_url'] as String?,
           shippingCost: im['shipping_cost'] as String?,
+          id: (im['id'] ?? '').toString(),
+          lineSubtotal: (im['subtotal'] as num?)?.toDouble(),
+          shippingAmount: (im['shipping_amount'] as num?)?.toDouble(),
+          appFeeAmount: (im['app_fee_amount'] as num?)?.toDouble(),
+          appFeePercent: (im['app_fee_percent'] as num?)?.toDouble(),
         );
       }).toList() ?? [];
       return CheckoutShipment(

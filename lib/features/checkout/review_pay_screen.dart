@@ -429,6 +429,78 @@ String _checkoutFeePercentLabel(CheckoutReviewModel review) {
   return pct == pct.roundToDouble() ? '${pct.round()}%' : '${pct.toStringAsFixed(2)}%';
 }
 
+/// Split order-level app fee across lines by [CheckoutShipmentItem.lineSubtotal] when API omits per-line fee.
+Map<String, double> _perItemAppFeeAllocated(CheckoutReviewModel review) {
+  final total = review.appFeeAmount ?? 0;
+  if (total <= 0) return {};
+  var sum = 0.0;
+  for (final s in review.shipments) {
+    for (final it in s.items) {
+      sum += it.lineSubtotal ?? 0;
+    }
+  }
+  if (sum <= 0) return {};
+  final map = <String, double>{};
+  for (final s in review.shipments) {
+    for (final it in s.items) {
+      final id = it.id;
+      if (id.isEmpty) continue;
+      final sub = it.lineSubtotal ?? 0;
+      map[id] = double.parse((total * sub / sum).toStringAsFixed(2));
+    }
+  }
+  return map;
+}
+
+double? _globalAppFeePercentForShipmentItems(CheckoutReviewModel review) {
+  final sub = _tryParseMoney(review.subtotal);
+  final fee = review.appFeeAmount;
+  if (sub == null || sub <= 0 || fee == null || fee <= 0) return null;
+  final pct = (fee / sub) * 100.0;
+  return pct;
+}
+
+String _shipmentItemShippingValueText(CheckoutShipmentItem item) {
+  if (item.shippingAmount != null) {
+    return '≈ \$${item.shippingAmount!.toStringAsFixed(2)}';
+  }
+  final c = item.shippingCost?.trim();
+  if (c != null && c.isNotEmpty) return c;
+  return '—';
+}
+
+String _shipmentItemServiceFeeLabel(
+  AppLocalizations? l10n,
+  CheckoutShipmentItem item,
+  double? orderLevelPercent,
+) {
+  final p = item.appFeePercent ?? orderLevelPercent;
+  if (p != null && p > 0) {
+    final s = p == p.roundToDouble() ? '${p.round()}%' : '${p.toStringAsFixed(2)}%';
+    return l10n?.serviceFeePercentLine(s) ?? 'Service Fee ($s)';
+  }
+  return 'Service fee';
+}
+
+double? _resolvedLineAppFee(
+  CheckoutShipmentItem item,
+  Map<String, double> allocated,
+  CheckoutReviewModel review,
+) {
+  if (item.appFeeAmount != null) return item.appFeeAmount;
+  if (item.id.isNotEmpty && allocated.containsKey(item.id)) {
+    return allocated[item.id];
+  }
+  var count = 0;
+  for (final s in review.shipments) {
+    count += s.items.length;
+  }
+  if (count == 1) return review.appFeeAmount;
+  return null;
+}
+
+String _formatUsd(double v) => '\$${v.toStringAsFixed(2)}';
+
 class _ReviewPayContent extends StatelessWidget {
   const _ReviewPayContent({
     required this.review,
@@ -456,6 +528,8 @@ class _ReviewPayContent extends StatelessWidget {
         ? (review.walletApplied ??
               (walletBalance > total ? total : walletBalance))
         : 0.0;
+    final allocated = _perItemAppFeeAllocated(review);
+    final orderPct = _globalAppFeePercentForShipmentItems(review);
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
       appBar: AppBar(
@@ -492,7 +566,12 @@ class _ReviewPayContent extends StatelessWidget {
                       ...review.shipments.map(
                         (s) => Padding(
                           padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-                          child: _ShipmentSection(shipment: s),
+                          child: _ShipmentSection(
+                            shipment: s,
+                            review: review,
+                            allocated: allocated,
+                            orderPct: orderPct,
+                          ),
                         ),
                       ),
                       _WalletBalanceRow(
@@ -599,9 +678,17 @@ class _ConsolidationBenefitCard extends StatelessWidget {
 }
 
 class _ShipmentSection extends StatelessWidget {
-  const _ShipmentSection({required this.shipment});
+  const _ShipmentSection({
+    required this.shipment,
+    required this.review,
+    required this.allocated,
+    required this.orderPct,
+  });
 
   final CheckoutShipment shipment;
+  final CheckoutReviewModel review;
+  final Map<String, double> allocated;
+  final double? orderPct;
 
   @override
   Widget build(BuildContext context) {
@@ -635,7 +722,12 @@ class _ShipmentSection extends StatelessWidget {
           ),
           children: [
             for (final item in shipment.items) ...[
-              _ShipmentItemRow(item: item),
+              _ShipmentItemRow(
+                item: item,
+                review: review,
+                allocated: allocated,
+                orderPct: orderPct,
+              ),
               const SizedBox(height: AppSpacing.sm),
             ],
           ],
@@ -646,12 +738,23 @@ class _ShipmentSection extends StatelessWidget {
 }
 
 class _ShipmentItemRow extends StatelessWidget {
-  const _ShipmentItemRow({required this.item});
+  const _ShipmentItemRow({
+    required this.item,
+    required this.review,
+    required this.allocated,
+    required this.orderPct,
+  });
 
   final CheckoutShipmentItem item;
+  final CheckoutReviewModel review;
+  final Map<String, double> allocated;
+  final double? orderPct;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final lineFee = _resolvedLineAppFee(item, allocated, review);
+    final feeLabel = _shipmentItemServiceFeeLabel(l10n, item, orderPct);
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(
@@ -718,11 +821,29 @@ class _ShipmentItemRow extends StatelessWidget {
                   'ETA: ${item.eta}',
                   style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
                 ),
-                if (item.shippingCost != null && item.shippingCost!.isNotEmpty)
-                  Text(
-                    'Shipping: ${item.shippingCost}',
-                    style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+                const SizedBox(height: AppSpacing.xs),
+                ShippingEstimateReferenceRow(
+                  dense: true,
+                  valueText: _shipmentItemShippingValueText(item),
+                ),
+                if (lineFee != null && lineFee > 0.0001) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          feeLabel,
+                          style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+                        ),
+                      ),
+                      Text(
+                        _formatUsd(lineFee),
+                        style: AppTextStyles.bodySmall(AppConfig.textColor),
+                      ),
+                    ],
                   ),
+                ],
               ],
             ),
           ),
