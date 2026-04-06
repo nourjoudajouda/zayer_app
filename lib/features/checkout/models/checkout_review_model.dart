@@ -34,11 +34,16 @@ class CheckoutReviewModel {
     this.walletBalanceEnabled = true,
     this.walletBalance = '',
     this.subtotal = '',
+    this.serviceFee = '',
     this.shipping = '',
     this.insurance = '',
     this.total = '',
     this.amountDueNow,
     this.walletApplied,
+    this.appFeeAmount,
+    this.payableNowTotal,
+    this.shippingEstimateAmount,
+    this.shippingPayableNow = 0,
     this.promoCode = '',
     this.promoValid = false,
     this.promoMessage = '',
@@ -52,6 +57,8 @@ class CheckoutReviewModel {
   final bool walletBalanceEnabled;
   final String walletBalance;
   final String subtotal;
+  /// Formatted service fee (product + fee flow).
+  final String serviceFee;
   final String shipping;
   final String insurance;
   final String total;
@@ -59,6 +66,10 @@ class CheckoutReviewModel {
   final double? amountDueNow;
   /// Wallet amount applied (if provided by backend).
   final double? walletApplied;
+  final double? appFeeAmount;
+  final double? payableNowTotal;
+  final double? shippingEstimateAmount;
+  final int shippingPayableNow;
   final String promoCode;
   final bool promoValid;
   final String promoMessage;
@@ -87,17 +98,25 @@ class CheckoutReviewModel {
         items: items,
       );
     }).toList() ?? [];
+    final pricing = j['pricing'] is Map<String, dynamic>
+        ? Map<String, dynamic>.from(j['pricing'] as Map)
+        : null;
     return CheckoutReviewModel(
       shippingAddressShort: (j['shipping_address_short'] ?? '').toString(),
       consolidationSavings: (j['consolidation_savings'] ?? '\$0.00').toString(),
       walletBalanceEnabled: j['wallet_balance_enabled'] != false,
       walletBalance: (j['wallet_balance'] ?? '\$0.00').toString(),
       subtotal: (j['subtotal'] ?? '\$0.00').toString(),
+      serviceFee: (j['service_fee'] ?? '\$0.00').toString(),
       shipping: (j['shipping'] ?? '\$0.00').toString(),
       insurance: (j['insurance'] ?? '\$0.00').toString(),
       total: (j['total'] ?? '\$0.00').toString(),
-      amountDueNow: _parseMoney(j['amount_due_now'] ?? j['due_now'] ?? j['amount_due'] ?? (j['pricing'] as Map?)?['amount_due_now']),
-      walletApplied: _parseMoney(j['wallet_applied'] ?? j['wallet_applied_amount'] ?? (j['pricing'] as Map?)?['wallet_applied_amount']),
+      amountDueNow: _parseMoney(j['amount_due_now'] ?? j['due_now'] ?? j['amount_due'] ?? pricing?['amount_due_now']),
+      walletApplied: _parseMoney(j['wallet_applied'] ?? j['wallet_applied_amount'] ?? pricing?['wallet_applied_amount']),
+      appFeeAmount: _parseMoney(pricing?['app_fee_amount'] ?? pricing?['app_fee_total']),
+      payableNowTotal: _parseMoney(pricing?['payable_now_total']),
+      shippingEstimateAmount: _parseMoney(pricing?['shipping_estimate_amount'] ?? pricing?['shipping']),
+      shippingPayableNow: (pricing?['shipping_payable_now'] as num?)?.toInt() ?? 0,
       promoCode: (j['promo_code'] ?? '').toString(),
       promoValid: j['promo_valid'] == true || j['promo_valid'] == 1,
       promoMessage: (j['promo_message'] ?? '').toString(),

@@ -7,6 +7,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/config/app_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/widgets/shipping_estimate_disclosure.dart';
+import '../../generated/l10n/app_localizations.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_config.dart';
@@ -416,6 +418,15 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
 double? _tryParseMoney(String v) {
   final cleaned = v.replaceAll(RegExp(r'[^0-9\.\-]'), '');
   return double.tryParse(cleaned);
+}
+
+/// Derive "5%" style label for service fee line when API does not send percent.
+String _checkoutFeePercentLabel(CheckoutReviewModel review) {
+  final sub = _tryParseMoney(review.subtotal) ?? 0;
+  final fee = review.appFeeAmount ?? 0;
+  if (sub <= 0 || fee <= 0) return '0%';
+  final pct = (fee / sub) * 100.0;
+  return pct == pct.roundToDouble() ? '${pct.round()}%' : '${pct.toStringAsFixed(2)}%';
 }
 
 class _ReviewPayContent extends StatelessWidget {
@@ -828,10 +839,13 @@ class _PriceDetailsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final walletRowVisible = walletEnabled && walletAppliedNow > 0.0001;
     final promoVisible =
         (review.promoDiscountAmount ?? 0) > 0.0001 ||
         review.promoCode.trim().isNotEmpty;
+    final feeAmt = review.appFeeAmount ?? 0.0;
+    final showServiceFee = feeAmt > 0.0001;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -848,7 +862,30 @@ class _PriceDetailsSection extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           _PriceRow(label: 'Subtotal', value: review.subtotal),
-          _PriceRow(label: 'Shipping', value: review.shipping),
+          if (showServiceFee)
+            _PriceRow(
+              label: l10n?.serviceFeePercentLine(
+                    _checkoutFeePercentLabel(review),
+                  ) ??
+                  'Service fee',
+              value: review.serviceFee.trim().isNotEmpty
+                  ? review.serviceFee
+                  : '\$${feeAmt.toStringAsFixed(2)}',
+            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ShippingEstimateReferenceRow(
+                dense: true,
+                valueText: review.shipping.trim().isNotEmpty
+                    ? review.shipping
+                    : (review.shippingEstimateAmount != null
+                        ? '\$${review.shippingEstimateAmount!.toStringAsFixed(2)}'
+                        : '—'),
+              ),
+              ShippingEstimateFootnote(dense: true),
+            ],
+          ),
           _PriceRow(label: 'Insurance', value: review.insurance),
           if (promoVisible)
             _PriceRow(
@@ -864,6 +901,11 @@ class _PriceDetailsSection extends StatelessWidget {
               value: '-\$${walletAppliedNow.toStringAsFixed(2)}',
             ),
           const SizedBox(height: AppSpacing.sm),
+          _PriceRow(
+            label: l10n?.totalToPayNowLabel ?? 'Order total',
+            value: review.total,
+          ),
+          const SizedBox(height: AppSpacing.xs),
           _PriceRow(
             label: 'Due now',
             value: '\$${amountDueNow.toStringAsFixed(2)}',

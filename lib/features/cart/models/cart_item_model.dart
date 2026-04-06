@@ -33,6 +33,11 @@ class CartItem {
     this.shippingEstimated = false,
     this.variationText,
     this.destinationAddressId,
+    this.appFeePercent,
+    this.appFeeAmount,
+    this.shippingEstimateAmount,
+    this.payableNowTotal,
+    this.shippingPayableNow,
   });
 
   /// e.g. "Size: M, Color: Red" for display when product has variations.
@@ -71,7 +76,37 @@ class CartItem {
   /// Saved address id used for shipping quote (POST `destination_address_id`). From API `shipping_destination.address_id`.
   final String? destinationAddressId;
 
+  /// From GET /api/cart/items — admin app fee % snapshot / resolved.
+  final double? appFeePercent;
+
+  /// Service fee amount for this line (product subtotal × fee %).
+  final double? appFeeAmount;
+
+  /// Display-only shipping estimate for the line (API may mirror `shipping_cost` × qty).
+  final double? shippingEstimateAmount;
+
+  /// Product + app fee for this line (not including shipping).
+  final double? payableNowTotal;
+
+  /// Always 0 at this stage when provided by API.
+  final int? shippingPayableNow;
+
+  double get lineSubtotal => unitPrice * quantity;
+
   double get totalPrice => unitPrice * quantity;
+
+  double get resolvedAppFeeAmount =>
+      appFeeAmount ??
+      (appFeePercent != null && appFeePercent! > 0
+          ? double.parse((lineSubtotal * appFeePercent! / 100.0).toStringAsFixed(2))
+          : 0.0);
+
+  double get displayShippingEstimate =>
+      shippingEstimateAmount ?? (shippingCost ?? 0) * quantity;
+
+  double get displayPayableNow =>
+      payableNowTotal ?? (lineSubtotal + resolvedAppFeeAmount);
+
   double get totalShipping => (shippingCost ?? 0) * quantity;
   bool get isReviewed => reviewStatus == CartItemReviewStatus.reviewed;
 
@@ -100,6 +135,11 @@ class CartItem {
     bool? shippingEstimated,
     String? variationText,
     String? destinationAddressId,
+    double? appFeePercent,
+    double? appFeeAmount,
+    double? shippingEstimateAmount,
+    double? payableNowTotal,
+    int? shippingPayableNow,
   }) {
     return CartItem(
       id: id ?? this.id,
@@ -126,6 +166,11 @@ class CartItem {
       shippingEstimated: shippingEstimated ?? this.shippingEstimated,
       variationText: variationText ?? this.variationText,
       destinationAddressId: destinationAddressId ?? this.destinationAddressId,
+      appFeePercent: appFeePercent ?? this.appFeePercent,
+      appFeeAmount: appFeeAmount ?? this.appFeeAmount,
+      shippingEstimateAmount: shippingEstimateAmount ?? this.shippingEstimateAmount,
+      payableNowTotal: payableNowTotal ?? this.payableNowTotal,
+      shippingPayableNow: shippingPayableNow ?? this.shippingPayableNow,
     );
   }
 
@@ -155,6 +200,11 @@ class CartItem {
       'estimated': shippingEstimated,
       'variation_text': variationText,
       if (destinationAddressId != null) 'destination_address_id': destinationAddressId,
+      if (appFeePercent != null) 'app_fee_percent': appFeePercent,
+      if (appFeeAmount != null) 'app_fee_amount': appFeeAmount,
+      if (shippingEstimateAmount != null) 'shipping_estimate_amount': shippingEstimateAmount,
+      if (payableNowTotal != null) 'payable_now_total': payableNowTotal,
+      if (shippingPayableNow != null) 'shipping_payable_now': shippingPayableNow,
     };
   }
 
@@ -196,6 +246,11 @@ class CartItem {
       shippingEstimated: json['estimated'] == true,
       variationText: json['variation_text'] as String? ?? json['variationText'] as String?,
       destinationAddressId: destAddrId,
+      appFeePercent: (json['app_fee_percent'] as num?)?.toDouble(),
+      appFeeAmount: (json['app_fee_amount'] as num?)?.toDouble(),
+      shippingEstimateAmount: (json['shipping_estimate_amount'] as num?)?.toDouble(),
+      payableNowTotal: (json['payable_now_total'] as num?)?.toDouble(),
+      shippingPayableNow: (json['shipping_payable_now'] as num?)?.toInt(),
     );
   }
 }

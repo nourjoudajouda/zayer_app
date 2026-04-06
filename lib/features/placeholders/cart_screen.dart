@@ -8,10 +8,22 @@ import '../../core/network/api_client.dart';
 import '../../core/network/api_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/widgets/shipping_estimate_disclosure.dart';
+import '../../generated/l10n/app_localizations.dart';
 import '../cart/cart_empty_screen.dart';
 import '../cart/models/cart_item_model.dart';
 import '../cart/providers/cart_providers.dart';
 import '../profile/providers/profile_providers.dart';
+
+String _cartServiceFeeLabel(AppLocalizations? l10n, List<CartItem> items) {
+  final percents = items.map((e) => e.appFeePercent).whereType<double>().where((x) => x > 0).toSet();
+  if (percents.length == 1) {
+    final p = percents.first;
+    final pctStr = p == p.roundToDouble() ? '${p.round()}%' : '${p.toStringAsFixed(2)}%';
+    return l10n?.serviceFeePercentLine(pctStr) ?? 'Service fee ($pctStr)';
+  }
+  return 'Service fee';
+}
 
 class CartScreen extends ConsumerWidget {
   const CartScreen({super.key});
@@ -553,13 +565,23 @@ class _CartItemCard extends StatelessWidget {
                           ),
                         ],
                       ),
+                      if (item.resolvedAppFeeAmount > 0.0001)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Service fee: \$${item.resolvedAppFeeAmount.toStringAsFixed(2)}',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: AppConfig.subtitleColor,
+                                ),
+                          ),
+                        ),
                       if (hasShipping)
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
                             shippingLineEstimated
-                                ? 'Estimated shipping: \$${(item.shippingCost! * item.quantity).toStringAsFixed(2)}'
-                                : 'Shipping: \$${(item.shippingCost! * item.quantity).toStringAsFixed(2)}',
+                                ? 'Shipping estimate (ref.): ≈ \$${item.displayShippingEstimate.toStringAsFixed(2)}'
+                                : 'Shipping estimate (ref.): \$${item.displayShippingEstimate.toStringAsFixed(2)}',
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                   color: AppConfig.subtitleColor,
                                 ),
@@ -667,11 +689,20 @@ class _CartSummary extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final reviewedItems = cartItems.where((i) => i.isReviewed).toList();
     final pendingItemsCount = cartItems.length - reviewedItems.length;
     final subtotalReviewed = reviewedItems.fold<double>(
       0,
-      (sum, item) => sum + (item.unitPrice * item.quantity),
+      (sum, item) => sum + item.lineSubtotal,
+    );
+    final appFeeReviewed = reviewedItems.fold<double>(
+      0,
+      (sum, item) => sum + item.resolvedAppFeeAmount,
+    );
+    final totalPayNowReviewed = reviewedItems.fold<double>(
+      0,
+      (sum, item) => sum + item.displayPayableNow,
     );
     final itemCountReviewed =
         reviewedItems.fold<int>(0, (sum, item) => sum + item.quantity);
@@ -683,13 +714,9 @@ class _CartSummary extends ConsumerWidget {
     final totalShipping = canShowShipping
         ? reviewedItems.fold<double>(
             0,
-            (sum, item) => sum + ((item.shippingCost ?? 0) * item.quantity),
+            (sum, item) => sum + item.displayShippingEstimate,
           )
         : null;
-    final grandTotal =
-        totalShipping != null ? subtotalReviewed + totalShipping : null;
-    final summaryShippingEstimated =
-        reviewedItems.any((i) => i.shippingEstimated || !i.isReviewed);
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -727,6 +754,26 @@ class _CartSummary extends ConsumerWidget {
                 ),
               ],
             ),
+            if (appFeeReviewed > 0.0001) ...[
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _cartServiceFeeLabel(l10n, reviewedItems),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppConfig.subtitleColor,
+                        ),
+                  ),
+                  Text(
+                    '\$${appFeeReviewed.toStringAsFixed(2)}',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ],
+              ),
+            ],
             if (pendingItemsCount > 0) ...[
               const SizedBox(height: 6),
               Align(
@@ -739,44 +786,25 @@ class _CartSummary extends ConsumerWidget {
                 ),
               ),
             ],
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Shipping',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppConfig.subtitleColor,
-                      ),
-                ),
-                Text(
-                  totalShipping != null
-                      ? (summaryShippingEstimated
-                          ? 'Est. \$${totalShipping.toStringAsFixed(2)}'
-                          : '\$${totalShipping.toStringAsFixed(2)}')
-                      : '—',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-              ],
+            const SizedBox(height: 8),
+            ShippingEstimateReferenceRow(
+              valueText: totalShipping != null
+                  ? '≈ \$${totalShipping.toStringAsFixed(2)}'
+                  : '—',
             ),
+            const ShippingEstimateFootnote(dense: true),
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Total',
+                  l10n?.totalToPayNowLabel ?? 'Total to Pay Now',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                 ),
                 Text(
-                  grandTotal != null
-                      ? (summaryShippingEstimated
-                          ? 'Est. \$${grandTotal.toStringAsFixed(2)}'
-                          : '\$${grandTotal.toStringAsFixed(2)}')
-                      : '—',
+                  '\$${totalPayNowReviewed.toStringAsFixed(2)}',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                         color: AppConfig.primaryColor,
