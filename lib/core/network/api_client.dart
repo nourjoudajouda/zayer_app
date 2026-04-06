@@ -48,9 +48,10 @@ class ApiClient {
     return Dio(
       BaseOptions(
         baseUrl: normalized,
+        // Connect quickly; product import (e.g. Walmart structured) can take ~75s server-side.
         connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 30),
-        sendTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 90),
+        sendTimeout: const Duration(seconds: 90),
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',

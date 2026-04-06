@@ -25,6 +25,10 @@ class ProductLinkImportRepositoryApi implements ProductLinkImportRepository {
     final res = await _dio.post<Map<String, dynamic>>(
       '/api/products/import-from-url',
       data: {'url': normalized.canonicalUrl},
+      options: Options(
+        receiveTimeout: const Duration(seconds: 90),
+        sendTimeout: const Duration(seconds: 90),
+      ),
     );
 
     final d = res.data;
