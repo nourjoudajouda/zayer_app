@@ -40,6 +40,11 @@ import '../../features/support/support_inbox_screen.dart';
 import '../../features/support/support_request_submitted_screen.dart';
 import '../../features/support/support_ticket_chat_screen.dart';
 import '../../features/wallet/top_up_wallet_screen.dart';
+import '../../features/warehouse/my_warehouse_screen.dart';
+import '../../features/warehouse/shipment_create_screen.dart';
+import '../../features/warehouse/shipment_shipping_payment_screen.dart';
+import '../../features/warehouse/models/warehouse_models.dart';
+import '../../features/warehouse/shipments_tracking_screen.dart';
 import '../../features/wallet/wallet_screen.dart';
 import '../../features/settings/default_warehouse_screen.dart';
 import '../../features/settings/privacy_policy_screen.dart';
@@ -97,6 +102,10 @@ class AppRoutes {
   static const String supportTicket = '/support/ticket';
   static const String wallet = '/wallet';
   static const String topUpWallet = '/wallet/top-up';
+  static const String myWarehouse = '/my-warehouse';
+  static const String shipmentCreate = '/shipment-create';
+  static const String shipmentShippingPay = '/shipment-shipping-pay';
+  static const String shipmentsTracking = '/shipments-tracking';
   static const String defaultWarehouse = '/settings/default-warehouse';
   static const String privacyPolicy = '/privacy-policy';
   static const String devMode = '/dev';
@@ -467,6 +476,56 @@ GoRouter _createAppRouter() {
               : (extra is num ? extra.toDouble() : null);
           return TopUpWalletScreen(initialAmount: initial);
         },
+      ),
+      GoRoute(
+        path: AppRoutes.myWarehouse,
+        builder: (context, state) => const MyWarehouseScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.shipmentCreate,
+        builder: (context, state) {
+          final extra = state.extra;
+          final ids = extra is List
+              ? extra.map((e) => e.toString()).toList()
+              : <String>[];
+          return ShipmentCreateScreen(selectedLineItemIds: ids);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.shipmentShippingPay,
+        builder: (context, state) {
+          final m = state.extra;
+          if (m is! Map) {
+            return const Scaffold(body: Center(child: Text('Missing shipment data')));
+          }
+          final map = Map<String, dynamic>.from(m);
+          final sid = map['shipmentId']?.toString() ?? '';
+          final total = (map['total'] as num?)?.toDouble() ?? 0;
+          final breakdown = map['breakdown'] is Map
+              ? Map<String, dynamic>.from(map['breakdown'] as Map)
+              : <String, dynamic>{};
+          final ship = map['shipment'];
+          final s = ship is Map<String, dynamic>
+              ? OutboundShipmentApi.fromJson(ship)
+              : OutboundShipmentApi(
+                  id: sid,
+                  status: 'awaiting_payment',
+                  shippingCost: 0,
+                  additionalFeesTotal: 0,
+                  totalShippingPayment: total,
+                  currency: 'USD',
+                );
+          return ShipmentShippingPaymentScreen(
+            shipmentId: sid,
+            total: total,
+            breakdown: breakdown,
+            shipment: s,
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.shipmentsTracking,
+        builder: (context, state) => const ShipmentsTrackingScreen(),
       ),
       GoRoute(
         path: AppRoutes.defaultWarehouse,

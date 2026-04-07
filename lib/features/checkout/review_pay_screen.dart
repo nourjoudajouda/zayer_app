@@ -1196,6 +1196,11 @@ class _PriceDetailsSection extends StatelessWidget {
             'Price Details',
             style: AppTextStyles.titleMedium(AppConfig.textColor),
           ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Shipping will be calculated after items arrive at the warehouse (separate payment).',
+            style: AppTextStyles.bodySmall(AppConfig.subtitleColor),
+          ),
           const SizedBox(height: AppSpacing.sm),
           _PriceRow(label: 'Subtotal', value: review.subtotal),
           if (showServiceFee)

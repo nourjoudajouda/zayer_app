@@ -339,6 +339,20 @@ class _ProfileContent extends ConsumerWidget {
             subtitle: 'Top up balance',
             onTap: () => context.push(AppRoutes.wallet),
           ),
+          const SizedBox(height: AppSpacing.sm),
+          ZayerTile(
+            icon: Icons.warehouse_outlined,
+            title: 'My Warehouse',
+            subtitle: 'Items ready to ship',
+            onTap: () => context.push(AppRoutes.myWarehouse),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ZayerTile(
+            icon: Icons.local_shipping_outlined,
+            title: 'My shipments',
+            subtitle: 'Tracking & shipping payment',
+            onTap: () => context.push(AppRoutes.shipmentsTracking),
+          ),
           const SizedBox(height: AppSpacing.xl),
           Consumer(
             builder: (context, ref, _) {
