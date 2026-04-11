@@ -128,11 +128,14 @@ class OrderModel {
     this.paymentMethodLastFour,
     this.invoiceIssueDate,
     this.transactionId,
+    this.executionStatusKey,
   });
 
   final String id;
   final OrderOrigin origin;
   final OrderStatus status;
+  /// Backend execution status (`execution_status` / `status_key`), when present.
+  final String? executionStatusKey;
   final String orderNumber;
   final String placedDate;
   final String? deliveredOn;
@@ -166,6 +169,11 @@ class OrderModel {
   }
 
   String get statusLabel {
+    final k = executionStatusKey;
+    if (k != null && k.isNotEmpty) {
+      final l = _executionStatusLabelForKey(k);
+      if (l != null) return l;
+    }
     switch (status) {
       case OrderStatus.pendingReview:
         return 'Pending review';
@@ -207,6 +215,14 @@ class OrderModel {
 
   /// Uppercase chip text for list, invoice, and detail app bar (aligned with orders cards).
   String get statusChipUpper {
+    final k = executionStatusKey?.toLowerCase().replaceAll('-', '_');
+    if (k == 'in_transit_to_warehouse' ||
+        k == 'partially_shipped' ||
+        k == 'fully_shipped') {
+      return 'IN TRANSIT';
+    }
+    if (k == 'delivered') return 'DELIVERED';
+    if (k == 'cancelled') return 'CANCELLED';
     switch (status) {
       case OrderStatus.inTransit:
       case OrderStatus.shipped:
@@ -221,30 +237,85 @@ class OrderModel {
   }
 
   bool get canTrack =>
-      status == OrderStatus.shipped || status == OrderStatus.inTransit;
+      status == OrderStatus.shipped ||
+      status == OrderStatus.inTransit ||
+      _isExecutionTrackingKey(executionStatusKey);
   bool get canBuyAgain => status == OrderStatus.delivered;
 
-  static OrderStatus _statusFrom(String? s) {
+  static bool _isExecutionTrackingKey(String? k) {
+    if (k == null || k.isEmpty) return false;
+    final lower = k.toLowerCase().replaceAll('-', '_');
+    return lower == 'in_transit_to_warehouse' ||
+        lower == 'partially_shipped' ||
+        lower == 'fully_shipped';
+  }
+
+  /// User-facing label aligned with Laravel `OrderExecutionStatus` keys.
+  static String? _executionStatusLabelForKey(String raw) {
+    final lower = raw.toLowerCase().replaceAll('-', '_');
+    switch (lower) {
+      case 'awaiting_payment':
+        return 'Awaiting payment';
+      case 'awaiting_review':
+        return 'Awaiting review';
+      case 'reviewed':
+        return 'Reviewed';
+      case 'awaiting_purchase':
+        return 'Awaiting purchase';
+      case 'partially_purchased':
+      case 'fully_purchased':
+        return 'Purchased';
+      case 'in_transit_to_warehouse':
+        return 'In transit';
+      case 'partially_at_warehouse':
+      case 'fully_at_warehouse':
+        return 'At warehouse';
+      case 'partially_shipped':
+      case 'fully_shipped':
+        return 'Shipped';
+      case 'delivered':
+        return 'Delivered';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return null;
+    }
+  }
+
+  /// Maps API `execution_status` / `status_key` (new or legacy) to coarse [OrderStatus].
+  static OrderStatus _statusFromUnified(String? s) {
     if (s == null || s.isEmpty) return OrderStatus.pendingPayment;
     final lower = s.toString().toLowerCase().replaceAll('-', '_');
     switch (lower) {
+      case 'awaiting_payment':
+      case 'pending_payment':
+        return OrderStatus.pendingPayment;
+      case 'awaiting_review':
       case 'pending_review':
       case 'under_review':
         return OrderStatus.pendingReview;
-      case 'pending_payment':
-        return OrderStatus.pendingPayment;
-      case 'paid':
-        return OrderStatus.paid;
-      case 'processing':
+      case 'reviewed':
+      case 'awaiting_purchase':
+      case 'partially_purchased':
+      case 'fully_purchased':
+      case 'partially_at_warehouse':
+      case 'fully_at_warehouse':
         return OrderStatus.processing;
-      case 'shipped':
-        return OrderStatus.shipped;
+      case 'in_transit_to_warehouse':
       case 'in_transit':
         return OrderStatus.inTransit;
+      case 'partially_shipped':
+      case 'fully_shipped':
+      case 'shipped':
+        return OrderStatus.shipped;
       case 'delivered':
         return OrderStatus.delivered;
       case 'cancelled':
         return OrderStatus.cancelled;
+      case 'paid':
+        return OrderStatus.paid;
+      case 'processing':
+        return OrderStatus.processing;
       default:
         return OrderStatus.pendingPayment;
     }
@@ -278,7 +349,16 @@ class OrderModel {
             .whereType<OrderPriceLine>()
             .toList() ??
         [];
-    final statusRaw = (j['status_key'] ?? j['status']) as String?;
+    final executionStatusKey = (j['execution_status'] ?? j['status_key'])
+        ?.toString()
+        .trim();
+    final hasExplicitExecution = j['execution_status'] != null &&
+        j['execution_status'].toString().trim().isNotEmpty;
+    final statusRaw =
+        (executionStatusKey != null && executionStatusKey.isNotEmpty
+                ? executionStatusKey
+                : null) ??
+            (j['status_key'] ?? j['status'])?.toString();
     final rawDbStatus = (j['status'] ?? '').toString().toLowerCase().replaceAll(
       '-',
       '_',
@@ -288,43 +368,44 @@ class OrderModel {
         .toLowerCase()
         .trim();
     final needsReview = j['needs_review'] == true;
-    final parsedStatus = _statusFrom(statusRaw);
+    var resolvedStatus = _statusFromUnified(statusRaw);
 
     final paymentIndicatesPaid =
         paymentStatusRaw == 'paid' ||
         paymentStatusRaw == 'completed' ||
         paymentStatusRaw == 'succeeded';
 
-    // UI should reflect operational stage after successful payment:
-    // pending_payment/paid => pending_review or processing.
-    var resolvedStatus = switch (parsedStatus) {
-      OrderStatus.pendingPayment || OrderStatus.paid
-          when paymentIndicatesPaid =>
-        needsReview ? OrderStatus.pendingReview : OrderStatus.processing,
-      _ => parsedStatus,
-    };
+    if (!hasExplicitExecution) {
+      resolvedStatus = switch (resolvedStatus) {
+        OrderStatus.pendingPayment || OrderStatus.paid
+            when paymentIndicatesPaid =>
+          needsReview ? OrderStatus.pendingReview : OrderStatus.processing,
+        _ => resolvedStatus,
+      };
 
-    // Admin/order row may still be under_review while status_key lags (e.g. paid + review).
-    if (rawDbStatus == 'under_review') {
-      resolvedStatus = OrderStatus.pendingReview;
-    }
+      if (rawDbStatus == 'under_review') {
+        resolvedStatus = OrderStatus.pendingReview;
+      }
 
-    // Paid with amount due cleared — never show as pending payment.
-    final due = j['amount_due_now'];
-    final dueNum = due is num ? due.toDouble() : double.tryParse('$due');
-    if (paymentIndicatesPaid &&
-        dueNum != null &&
-        dueNum <= 0 &&
-        resolvedStatus == OrderStatus.pendingPayment) {
-      resolvedStatus = needsReview
-          ? OrderStatus.pendingReview
-          : OrderStatus.processing;
+      final due = j['amount_due_now'];
+      final dueNum = due is num ? due.toDouble() : double.tryParse('$due');
+      if (paymentIndicatesPaid &&
+          dueNum != null &&
+          dueNum <= 0 &&
+          resolvedStatus == OrderStatus.pendingPayment) {
+        resolvedStatus = needsReview
+            ? OrderStatus.pendingReview
+            : OrderStatus.processing;
+      }
     }
 
     return OrderModel(
       id: (j['id'] ?? '').toString(),
       origin: _originFrom(j['origin'] as String?),
       status: resolvedStatus,
+      executionStatusKey: executionStatusKey?.isNotEmpty == true
+          ? executionStatusKey
+          : null,
       orderNumber: (j['order_number'] ?? '').toString(),
       placedDate: (j['placed_date'] ?? '').toString(),
       deliveredOn: j['delivered_on'] as String?,
