@@ -14,7 +14,11 @@ Future<List<WarehouseItemApi>> fetchWarehouseItems() async {
       .toList();
 }
 
-Future<({OutboundShipmentApi shipment, Map<String, dynamic> breakdown})> createShipment({
+Future<({
+  OutboundShipmentApi shipment,
+  Map<String, dynamic> breakdown,
+  String? checkoutPaymentMode,
+})> createShipment({
   required List<String> selectedOrderLineItemIds,
   required int destinationAddressId,
 }) async {
@@ -31,12 +35,19 @@ Future<({OutboundShipmentApi shipment, Map<String, dynamic> breakdown})> createS
   if (ship is! Map<String, dynamic>) {
     throw StateError('Invalid shipment response');
   }
+  final modeRaw = data['checkout_payment_mode']?.toString().trim();
   return (
     shipment: OutboundShipmentApi.fromJson(ship),
     breakdown: breakdown is Map<String, dynamic>
         ? Map<String, dynamic>.from(breakdown)
         : <String, dynamic>{},
+    checkoutPaymentMode: modeRaw != null && modeRaw.isNotEmpty ? modeRaw : null,
   );
+}
+
+/// Abandon a draft shipment (no line locks until paid). DELETE /api/shipments/{id}
+Future<void> deleteShipmentDraft(String shipmentId) async {
+  await ApiClient.instance.delete<void>('/api/shipments/$shipmentId');
 }
 
 Future<List<OutboundShipmentApi>> fetchShipments() async {

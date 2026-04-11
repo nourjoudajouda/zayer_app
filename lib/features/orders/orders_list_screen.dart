@@ -53,10 +53,18 @@ void _showFilterSheet(
               },
             ),
             _SheetOption(
-              label: 'In Progress',
-              isSelected: statusFilter == OrdersFilter.inProgress,
+              label: 'Awaiting review',
+              isSelected: statusFilter == OrdersFilter.awaitingReview,
               onTap: () {
-                onStatusChanged(OrdersFilter.inProgress);
+                onStatusChanged(OrdersFilter.awaitingReview);
+                Navigator.of(ctx).pop();
+              },
+            ),
+            _SheetOption(
+              label: 'In execution',
+              isSelected: statusFilter == OrdersFilter.inExecution,
+              onTap: () {
+                onStatusChanged(OrdersFilter.inExecution);
                 Navigator.of(ctx).pop();
               },
             ),
@@ -198,10 +206,13 @@ class _SheetOption extends StatelessWidget {
   }
 }
 
-/// Orders list screen. Route: /orders (tab in shell).
-/// Design: back, title, filter icon; pills All | In Progress | Delivered | Cancelled; cards with origin flags, status, map (in transit), actions.
+/// Orders list screen. Route: /orders (tab in shell) or embedded in [PostOrderHubScreen].
+/// Design: back, title, filter icon; execution-aligned pills; cards with origin flags, status, map (in transit), actions.
 class OrdersListScreen extends ConsumerWidget {
-  const OrdersListScreen({super.key});
+  const OrdersListScreen({super.key, this.hubEmbedded = false});
+
+  /// When true, omits app bar back/home; hub provides outer navigation.
+  final bool hubEmbedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -220,10 +231,28 @@ class OrdersListScreen extends ConsumerWidget {
       ),
       data: (allOrders) {
         if (allOrders.isEmpty) {
+          if (hubEmbedded) {
+            return Scaffold(
+              backgroundColor: AppConfig.backgroundColor,
+              body: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Text(
+                    'No orders yet.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: AppConfig.subtitleColor,
+                        ),
+                  ),
+                ),
+              ),
+            );
+          }
           return const OrdersEmptyScreen();
         }
         return filterAsync.when(
           data: (filteredOrders) => _OrdersListContent(
+            hubEmbedded: hubEmbedded,
             orders: filteredOrders,
             activeFilter: statusFilter,
             originFilter: originFilter,
@@ -253,6 +282,7 @@ class OrdersListScreen extends ConsumerWidget {
 
 class _OrdersListContent extends StatelessWidget {
   const _OrdersListContent({
+    required this.hubEmbedded,
     required this.orders,
     required this.activeFilter,
     required this.originFilter,
@@ -263,6 +293,7 @@ class _OrdersListContent extends StatelessWidget {
     required this.onSortChanged,
   });
 
+  final bool hubEmbedded;
   final List<OrderModel> orders;
   final OrdersFilter activeFilter;
   final OrdersOriginFilter originFilter;
@@ -276,37 +307,55 @@ class _OrdersListContent extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go(AppRoutes.home),
-        ),
-        title: const Text('Orders'),
-        centerTitle: true,
-        backgroundColor: AppConfig.backgroundColor,
-        foregroundColor: AppConfig.textColor,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: Icon(
-              Icons.help_outline_rounded,
-              color: AppConfig.primaryColor,
+      appBar: hubEmbedded
+          ? null
+          : AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => context.go(AppRoutes.home),
+              ),
+              title: const Text('Orders'),
+              centerTitle: true,
+              backgroundColor: AppConfig.backgroundColor,
+              foregroundColor: AppConfig.textColor,
+              elevation: 0,
+              actions: [
+                IconButton(
+                  icon: Icon(
+                    Icons.tune_rounded,
+                    color: AppConfig.primaryColor,
+                  ),
+                  onPressed: () => _showFilterSheet(
+                    context,
+                    statusFilter: activeFilter,
+                    originFilter: originFilter,
+                    sortOption: sortOption,
+                    onStatusChanged: onFilterChanged,
+                    onOriginChanged: onOriginChanged,
+                    onSortChanged: onSortChanged,
+                  ),
+                ),
+              ],
             ),
-            onPressed: () => _showFilterSheet(
-              context,
-              statusFilter: activeFilter,
-              originFilter: originFilter,
-              sortOption: sortOption,
-              onStatusChanged: onFilterChanged,
-              onOriginChanged: onOriginChanged,
-              onSortChanged: onSortChanged,
-            ),
-          ),
-        ],
-      ),
       body: SafeArea(
         child: Column(
           children: [
+            if (hubEmbedded)
+              Align(
+                alignment: Alignment.centerRight,
+                child: IconButton(
+                  icon: Icon(Icons.tune_rounded, color: AppConfig.primaryColor),
+                  onPressed: () => _showFilterSheet(
+                    context,
+                    statusFilter: activeFilter,
+                    originFilter: originFilter,
+                    sortOption: sortOption,
+                    onStatusChanged: onFilterChanged,
+                    onOriginChanged: onOriginChanged,
+                    onSortChanged: onSortChanged,
+                  ),
+                ),
+              ),
             _OrdersFilterPills(
               selected: activeFilter,
               onSelected: onFilterChanged,
@@ -344,8 +393,10 @@ class _FilterEmptyState extends StatelessWidget {
 
   String get _message {
     switch (activeFilter) {
-      case OrdersFilter.inProgress:
-        return 'No orders in progress';
+      case OrdersFilter.awaitingReview:
+        return 'No orders awaiting review';
+      case OrdersFilter.inExecution:
+        return 'No orders in execution';
       case OrdersFilter.delivered:
         return 'No delivered orders';
       case OrdersFilter.cancelled:
@@ -406,9 +457,15 @@ class _OrdersFilterPills extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.sm),
           _Pill(
-            label: 'In Progress',
-            isSelected: selected == OrdersFilter.inProgress,
-            onTap: () => onSelected(OrdersFilter.inProgress),
+            label: 'Review',
+            isSelected: selected == OrdersFilter.awaitingReview,
+            onTap: () => onSelected(OrdersFilter.awaitingReview),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          _Pill(
+            label: 'Active',
+            isSelected: selected == OrdersFilter.inExecution,
+            onTap: () => onSelected(OrdersFilter.inExecution),
           ),
           const SizedBox(width: AppSpacing.sm),
           _Pill(

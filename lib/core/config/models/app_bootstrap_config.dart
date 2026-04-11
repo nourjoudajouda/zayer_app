@@ -422,6 +422,7 @@ class AppBootstrapConfig {
     this.appName,
     this.appIconUrl,
     this.paymentGateways,
+    this.checkoutPaymentMode,
   });
 
   final ThemeConfig theme;
@@ -438,6 +439,8 @@ class AppBootstrapConfig {
   /// App icon/logo URL from admin. Used inside the app (e.g. AppBar).
   final String? appIconUrl;
   final PaymentGatewaysConfig? paymentGateways;
+  /// Same source as checkout: `wallet_only` | `gateway_only` | `wallet_and_gateway`.
+  final String? checkoutPaymentMode;
 
   factory AppBootstrapConfig.fromJson(Map<String, dynamic> json) {
     final themeJson = json['theme'] as Map<String, dynamic>?;
@@ -453,6 +456,7 @@ class AppBootstrapConfig {
     final paymentGateways = paymentGatewaysJson != null
         ? PaymentGatewaysConfig.fromJson(paymentGatewaysJson)
         : null;
+    final checkoutMode = (json['checkout_payment_mode'] as String?)?.trim();
     return AppBootstrapConfig(
       theme: ThemeConfig.fromJson(themeJson),
       splash: SplashConfig.fromJson(splashJson),
@@ -472,6 +476,9 @@ class AppBootstrapConfig {
       appName: appName != null && appName.trim().isNotEmpty ? appName.trim() : null,
       appIconUrl: appIconUrl != null && appIconUrl.trim().isNotEmpty ? appIconUrl.trim() : null,
       paymentGateways: paymentGateways,
+      checkoutPaymentMode: checkoutMode != null && checkoutMode.isNotEmpty
+          ? checkoutMode
+          : null,
     );
   }
 
@@ -511,6 +518,7 @@ class AppBootstrapConfig {
         onboarding: fallbackOnboarding,
         markets: MarketsConfig.fallback,
         promoBanners: const [],
+        checkoutPaymentMode: null,
       );
 }
 

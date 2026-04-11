@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -22,7 +21,7 @@ import '../../features/notifications/notifications_list_screen.dart';
 import '../../features/orders/order_detail_screen.dart';
 import '../../features/orders/order_invoice_screen.dart';
 import '../../features/orders/order_tracking_screen.dart';
-import '../../features/orders/orders_list_screen.dart';
+import '../../features/orders/post_order_hub_screen.dart';
 import '../../features/placeholders/coming_soon_screen.dart';
 import '../../features/profile/add_edit_address_screen.dart';
 import '../../features/security/active_sessions_screen.dart';
@@ -209,7 +208,7 @@ GoRouter _createAppRouter() {
               GoRoute(
                 path: AppRoutes.orders,
                 pageBuilder: (context, state) => const NoTransitionPage(
-                  child: OrdersListScreen(),
+                  child: PostOrderHubScreen(),
                 ),
               ),
             ],
@@ -510,17 +509,19 @@ GoRouter _createAppRouter() {
               ? OutboundShipmentApi.fromJson(ship)
               : OutboundShipmentApi(
                   id: sid,
-                  status: 'awaiting_payment',
+                  status: 'draft',
                   shippingCost: 0,
                   additionalFeesTotal: 0,
                   totalShippingPayment: total,
                   currency: 'USD',
                 );
+          final mode = map['checkout_payment_mode']?.toString();
           return ShipmentShippingPaymentScreen(
             shipmentId: sid,
             total: total,
             breakdown: breakdown,
             shipment: s,
+            checkoutPaymentMode: mode != null && mode.isNotEmpty ? mode : null,
           );
         },
       ),

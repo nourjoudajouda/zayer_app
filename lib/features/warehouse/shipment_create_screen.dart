@@ -129,6 +129,7 @@ class _ShipmentCreateScreenState extends ConsumerState<ShipmentCreateScreen> {
           'total': result.shipment.totalShippingPayment,
           'breakdown': result.breakdown,
           'shipment': result.shipment,
+          'checkout_payment_mode': result.checkoutPaymentMode,
         },
       );
     } catch (e) {

@@ -23,8 +23,14 @@ final ordersProvider = FutureProvider<List<OrderModel>>(
   (ref) => _fetchOrders(),
 );
 
-/// Filter by status: All | In Progress | Delivered | Cancelled.
-enum OrdersFilter { all, inProgress, delivered, cancelled }
+/// Filter aligned with execution status groups.
+enum OrdersFilter {
+  all,
+  awaitingReview,
+  inExecution,
+  delivered,
+  cancelled,
+}
 
 /// Filter by order origin (shipment source).
 enum OrdersOriginFilter { all, usa, turkey, multiOrigin }
@@ -116,17 +122,17 @@ final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
         switch (statusFilter) {
           case OrdersFilter.all:
             break;
-          case OrdersFilter.inProgress:
-            if (o.status == OrderStatus.delivered ||
-                o.status == OrderStatus.cancelled) {
-              return false;
-            }
+          case OrdersFilter.awaitingReview:
+            if (!_isAwaitingReview(o)) return false;
+            break;
+          case OrdersFilter.inExecution:
+            if (!_isInExecution(o)) return false;
             break;
           case OrdersFilter.delivered:
-            if (o.status != OrderStatus.delivered) return false;
+            if (!_isDelivered(o)) return false;
             break;
           case OrdersFilter.cancelled:
-            if (o.status != OrderStatus.cancelled) return false;
+            if (!_isCancelled(o)) return false;
             break;
         }
         switch (originFilter) {
@@ -179,6 +185,37 @@ final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
 double _parseAmount(String s) {
   final cleaned = s.replaceAll(RegExp(r'[^\d.]'), '');
   return double.tryParse(cleaned) ?? 0;
+}
+
+bool _isAwaitingReview(OrderModel o) {
+  final k = o.executionStatusKey?.toLowerCase();
+  if (k != null && k.isNotEmpty) return k == 'awaiting_review';
+  return o.status == OrderStatus.pendingReview;
+}
+
+bool _isCancelled(OrderModel o) {
+  final k = o.executionStatusKey?.toLowerCase();
+  if (k != null && k.isNotEmpty) return k == 'cancelled';
+  return o.status == OrderStatus.cancelled;
+}
+
+bool _isDelivered(OrderModel o) {
+  final k = o.executionStatusKey?.toLowerCase();
+  if (k != null && k.isNotEmpty) return k == 'delivered';
+  return o.status == OrderStatus.delivered;
+}
+
+/// Reviewed / purchase / warehouse / shipment pipeline (not awaiting review, not terminal).
+bool _isInExecution(OrderModel o) {
+  if (_isDelivered(o) || _isCancelled(o)) return false;
+  if (_isAwaitingReview(o)) return false;
+  final k = o.executionStatusKey?.toLowerCase();
+  if (k != null && k.isNotEmpty) {
+    const terminal = {'delivered', 'cancelled'};
+    if (terminal.contains(k)) return false;
+    return k != 'awaiting_review';
+  }
+  return o.status != OrderStatus.delivered && o.status != OrderStatus.cancelled;
 }
 
 /// Single order by id. Fetches from GET /api/orders/{id} for full detail.
