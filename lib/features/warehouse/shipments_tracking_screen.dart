@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import '../../core/config/app_config.dart';
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/widgets/network_image_preview.dart';
 import 'models/warehouse_models.dart';
 import 'warehouse_api.dart';
+import 'warehouse_display_units.dart';
 
 enum _ShipmentFilter {
   all,
@@ -140,6 +142,11 @@ class _ShipmentsTrackingScreenState extends State<ShipmentsTrackingScreen> {
                           itemCount: filtered.length,
                           itemBuilder: (context, i) {
                             final s = filtered[i];
+                            final boxUrl = s.finalBoxImage != null && s.finalBoxImage!.isNotEmpty
+                                ? (s.finalBoxImage!.startsWith('http')
+                                    ? s.finalBoxImage!
+                                    : '${ApiClient.safeBaseUrl ?? ''}${s.finalBoxImage}')
+                                : '';
                             return Card(
                               margin: const EdgeInsets.only(bottom: AppSpacing.md),
                               child: Padding(
@@ -179,28 +186,70 @@ class _ShipmentsTrackingScreenState extends State<ShipmentsTrackingScreen> {
                                     if (s.trackingNumber != null && s.trackingNumber!.isNotEmpty)
                                       Text('Tracking: ${s.trackingNumber}', style: TextStyle(color: AppConfig.subtitleColor)),
                                     const SizedBox(height: 6),
-                                    Text(
-                                      'Shipping: \$${s.shippingCost.toStringAsFixed(2)} · Fees: \$${s.additionalFeesTotal.toStringAsFixed(2)} · Total: \$${s.totalShippingPayment.toStringAsFixed(2)} ${s.currency}',
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            'Shipping: \$${s.shippingCost.toStringAsFixed(2)} · '
+                                            'Fees: \$${s.additionalFeesTotal.toStringAsFixed(2)} · '
+                                            'Total: \$${s.totalShippingPayment.toStringAsFixed(2)} ${s.currency}',
+                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+                                          ),
+                                        ),
+                                        if (s.additionalFeesTotal > 0.0001)
+                                          Tooltip(
+                                            message: kExtraFeeTooltipShort,
+                                            child: IconButton(
+                                              padding: EdgeInsets.zero,
+                                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                              icon: Icon(Icons.info_outline, size: 20, color: AppConfig.primaryColor),
+                                              onPressed: () => showWarehouseExtraFeeDialog(context),
+                                            ),
+                                          ),
+                                      ],
                                     ),
-                                    if (s.finalBoxImage != null && s.finalBoxImage!.isNotEmpty) ...[
+                                    if (boxUrl.isNotEmpty) ...[
                                       const SizedBox(height: AppSpacing.sm),
                                       ClipRRect(
                                         borderRadius: BorderRadius.circular(8),
-                                        child: CachedNetworkImage(
-                                          imageUrl: s.finalBoxImage!.startsWith('http')
-                                              ? s.finalBoxImage!
-                                              : '${ApiClient.safeBaseUrl ?? ''}${s.finalBoxImage}',
+                                        child: TappableNetworkImage(
+                                          imageUrl: boxUrl,
                                           height: 140,
                                           width: double.infinity,
                                           fit: BoxFit.cover,
-                                          errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                                          borderRadius: BorderRadius.circular(8),
+                                          errorWidget: (_, _, _) => const SizedBox.shrink(),
                                         ),
                                       ),
                                     ],
                                     const SizedBox(height: AppSpacing.sm),
-                                    Text('Items', style: Theme.of(context).textTheme.labelLarge),
-                                    ...s.items.map((it) => _ShipmentLineRow(it: it, resolveUrl: _resolveUrl)),
+                                    Theme(
+                                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                                      child: ExpansionTile(
+                                        tilePadding: EdgeInsets.zero,
+                                        initiallyExpanded: false,
+                                        title: Text(
+                                          'Items (${s.items.length})',
+                                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                        subtitle: Text(
+                                          'Expand for photos, weight, size, notes',
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                color: AppConfig.subtitleColor,
+                                              ),
+                                        ),
+                                        children: [
+                                          for (final it in s.items)
+                                            _ShipmentItemDetail(
+                                              it: it,
+                                              resolveUrl: _resolveUrl,
+                                            ),
+                                        ],
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -231,8 +280,11 @@ class _ShipmentsTrackingScreenState extends State<ShipmentsTrackingScreen> {
   }
 }
 
-class _ShipmentLineRow extends StatelessWidget {
-  const _ShipmentLineRow({required this.it, required this.resolveUrl});
+class _ShipmentItemDetail extends StatelessWidget {
+  const _ShipmentItemDetail({
+    required this.it,
+    required this.resolveUrl,
+  });
 
   final ShipmentLineApi it;
   final String Function(String?) resolveUrl;
@@ -242,80 +294,158 @@ class _ShipmentLineRow extends StatelessWidget {
     final u = resolveUrl(it.imageUrl);
     final r = it.receipt;
     final thumbs = r?.images.map(resolveUrl).where((x) => x.isNotEmpty).toList() ?? [];
+    final wLine = weightLineForItem(
+      receiptWeightLb: r?.receivedWeight,
+      catalogWeightKg: it.weightKg,
+    );
     return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.sm),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: SizedBox(
-              width: 48,
-              height: 48,
-              child: u.isNotEmpty
-                  ? CachedNetworkImage(
-                      imageUrl: u,
-                      fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => const Icon(Icons.image_outlined, size: 22),
-                    )
-                  : const Icon(Icons.image_outlined, size: 22),
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppConfig.borderColor),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${it.name} × ${it.quantity}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
+            const SizedBox(height: AppSpacing.sm),
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${it.name} × ${it.quantity}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                if (it.weightKg != null)
-                  Text('Weight: ${it.weightKg!.toStringAsFixed(2)} kg', style: TextStyle(fontSize: 12, color: AppConfig.subtitleColor)),
-                if (it.dimensions != null && it.dimensions!.trim().isNotEmpty)
-                  Text('Size: ${it.dimensions}', style: TextStyle(fontSize: 12, color: AppConfig.subtitleColor)),
-                if (r != null &&
-                    r.receivedLength != null &&
-                    r.receivedWidth != null &&
-                    r.receivedHeight != null)
-                  Text(
-                    'Received: ${r.receivedLength!.toStringAsFixed(0)}×${r.receivedWidth!.toStringAsFixed(0)}×${r.receivedHeight!.toStringAsFixed(0)} cm',
-                    style: TextStyle(fontSize: 12, color: AppConfig.subtitleColor),
-                  ),
-                if (r != null && r.additionalFeeAmount > 0.0001)
-                  Text(
-                    'Extra fee: \$${r.additionalFeeAmount.toStringAsFixed(2)}',
-                    style: TextStyle(fontSize: 12, color: AppConfig.warningOrange),
-                  ),
-                if (r != null &&
-                    r.conditionNotes != null &&
-                    r.conditionNotes!.trim().isNotEmpty)
-                  Text(
-                    'Notes: ${r.conditionNotes}',
-                    style: TextStyle(fontSize: 12, color: AppConfig.subtitleColor),
-                  ),
-                if (thumbs.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  SizedBox(
-                    height: 40,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: thumbs.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 4),
-                      itemBuilder: (ctx, j) => ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: CachedNetworkImage(
-                          imageUrl: thumbs[j],
-                          width: 40,
-                          height: 40,
-                          fit: BoxFit.cover,
-                          errorWidget: (_, __, ___) => const SizedBox.shrink(),
-                        ),
-                      ),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: TappableNetworkImage(
+                    imageUrl: u,
+                    width: 56,
+                    height: 56,
+                    fit: BoxFit.cover,
+                    borderRadius: BorderRadius.circular(6),
+                    errorWidget: (_, _, _) => const SizedBox(
+                      width: 56,
+                      height: 56,
+                      child: Icon(Icons.image_outlined, size: 22),
                     ),
                   ),
-                ],
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (wLine != null)
+                        Text(wLine, style: TextStyle(fontSize: 13, color: AppConfig.subtitleColor)),
+                      if (it.dimensions != null && it.dimensions!.trim().isNotEmpty)
+                        Text(
+                          'Listed size (catalog): ${it.dimensions}',
+                          style: TextStyle(fontSize: 12, color: AppConfig.subtitleColor),
+                        ),
+                      if (r != null &&
+                          r.receivedLength != null &&
+                          r.receivedWidth != null &&
+                          r.receivedHeight != null)
+                        Text(
+                          'Received: ${formatReceiptDimsIn(r.receivedLength!, r.receivedWidth!, r.receivedHeight!)}',
+                          style: TextStyle(fontSize: 12, color: AppConfig.subtitleColor),
+                        ),
+                      if (r != null && r.additionalFeeAmount > 0.0001)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Extra fee: \$${r.additionalFeeAmount.toStringAsFixed(2)}',
+                                  style: TextStyle(fontSize: 13, color: AppConfig.warningOrange, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              Tooltip(
+                                message: kExtraFeeTooltipShort,
+                                child: IconButton(
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                  icon: Icon(Icons.info_outline, size: 18, color: AppConfig.primaryColor),
+                                  onPressed: () => showWarehouseExtraFeeDialog(context),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (r != null &&
+                          r.conditionNotes != null &&
+                          r.conditionNotes!.trim().isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Notes: ${r.conditionNotes}',
+                                  style: TextStyle(fontSize: 12, color: AppConfig.subtitleColor),
+                                ),
+                              ),
+                              Tooltip(
+                                message: 'Condition / intake notes',
+                                child: Icon(Icons.notes_outlined, size: 16, color: AppConfig.subtitleColor),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (r != null &&
+                          r.specialHandlingType != null &&
+                          r.specialHandlingType!.trim().isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            'Handling: ${r.specialHandlingType}',
+                            style: TextStyle(fontSize: 12, color: AppConfig.subtitleColor),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ],
             ),
-          ),
-        ],
+            if (thumbs.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Received photos',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppConfig.subtitleColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              SizedBox(
+                height: 48,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: thumbs.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 6),
+                  itemBuilder: (ctx, j) => ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: TappableNetworkImage(
+                      imageUrl: thumbs[j],
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.cover,
+                      borderRadius: BorderRadius.circular(6),
+                      errorWidget: (_, _, _) => const SizedBox.shrink(),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
