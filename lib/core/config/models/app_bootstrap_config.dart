@@ -423,6 +423,7 @@ class AppBootstrapConfig {
     this.appIconUrl,
     this.paymentGateways,
     this.checkoutPaymentMode,
+    this.refundFeePercent = 0,
   });
 
   final ThemeConfig theme;
@@ -441,6 +442,8 @@ class AppBootstrapConfig {
   final PaymentGatewaysConfig? paymentGateways;
   /// Same source as checkout: `wallet_only` | `gateway_only` | `wallet_and_gateway`.
   final String? checkoutPaymentMode;
+  /// Percent fee on bank withdrawals only (from admin payment settings).
+  final double refundFeePercent;
 
   factory AppBootstrapConfig.fromJson(Map<String, dynamic> json) {
     final themeJson = json['theme'] as Map<String, dynamic>?;
@@ -457,6 +460,8 @@ class AppBootstrapConfig {
         ? PaymentGatewaysConfig.fromJson(paymentGatewaysJson)
         : null;
     final checkoutMode = (json['checkout_payment_mode'] as String?)?.trim();
+    final feeRaw = json['refund_fee_percent'];
+    final refundFee = feeRaw is num ? feeRaw.toDouble() : double.tryParse('$feeRaw') ?? 0.0;
     return AppBootstrapConfig(
       theme: ThemeConfig.fromJson(themeJson),
       splash: SplashConfig.fromJson(splashJson),
@@ -479,6 +484,7 @@ class AppBootstrapConfig {
       checkoutPaymentMode: checkoutMode != null && checkoutMode.isNotEmpty
           ? checkoutMode
           : null,
+      refundFeePercent: refundFee < 0 ? 0 : refundFee,
     );
   }
 
@@ -519,6 +525,7 @@ class AppBootstrapConfig {
         markets: MarketsConfig.fallback,
         promoBanners: const [],
         checkoutPaymentMode: null,
+        refundFeePercent: 0,
       );
 }
 

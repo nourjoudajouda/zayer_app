@@ -7,9 +7,10 @@ import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import 'models/wallet_model.dart';
 import 'providers/wallet_providers.dart';
-import 'wallet_refund_requests_panel.dart';
+import 'wallet_refunds_to_wallet_panel.dart';
+import 'wallet_withdrawals_panel.dart';
 
-/// Main Wallet screen: Overview (balance), Activity (transactions), Refunds (requests).
+/// Main Wallet screen: Overview, Transactions, Refunds to wallet, Withdrawals to bank.
 class WalletScreen extends ConsumerStatefulWidget {
   const WalletScreen({super.key});
 
@@ -24,7 +25,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -77,8 +78,9 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
           indicatorColor: AppConfig.primaryColor,
           tabs: const [
             Tab(text: 'Overview'),
-            Tab(text: 'Activity'),
+            Tab(text: 'Transactions'),
             Tab(text: 'Refunds'),
+            Tab(text: 'Withdraw'),
           ],
         ),
       ),
@@ -88,7 +90,8 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
           children: [
             _buildOverviewTab(),
             _buildActivityTab(),
-            const WalletRefundRequestsPanel(),
+            const WalletRefundsToWalletPanel(),
+            const WalletWithdrawalsPanel(),
           ],
         ),
       ),
@@ -257,7 +260,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Activity',
+                  'Transactions',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -288,12 +291,21 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
                   ),
                   const SizedBox(width: 8),
                   _ActivityChip(
-                    label: 'Refunds',
-                    isSelected:
-                        activityFilter == WalletActivityType.refunds,
+                    label: 'Refund→wallet',
+                    isSelected: activityFilter ==
+                        WalletActivityType.refundToWallet,
                     onTap: () =>
                         ref.read(walletActivityFilterProvider.notifier).state =
-                            WalletActivityType.refunds,
+                            WalletActivityType.refundToWallet,
+                  ),
+                  const SizedBox(width: 8),
+                  _ActivityChip(
+                    label: 'Withdraw',
+                    isSelected: activityFilter ==
+                        WalletActivityType.withdrawToBank,
+                    onTap: () =>
+                        ref.read(walletActivityFilterProvider.notifier).state =
+                            WalletActivityType.withdrawToBank,
                   ),
                   const SizedBox(width: 8),
                   _ActivityChip(
@@ -426,10 +438,18 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
                 },
               ),
               ListTile(
-                title: const Text('Refunds'),
+                title: const Text('Refund to wallet'),
                 onTap: () {
                   ref.read(walletActivityFilterProvider.notifier).state =
-                      WalletActivityType.refunds;
+                      WalletActivityType.refundToWallet;
+                  Navigator.pop(ctx);
+                },
+              ),
+              ListTile(
+                title: const Text('Withdraw to bank'),
+                onTap: () {
+                  ref.read(walletActivityFilterProvider.notifier).state =
+                      WalletActivityType.withdrawToBank;
                   Navigator.pop(ctx);
                 },
               ),
@@ -739,13 +759,17 @@ class _TransactionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final icon = transaction.type == WalletActivityType.refunds
-        ? Icons.reply
-        : transaction.type == WalletActivityType.adminCredits
-        ? Icons.admin_panel_settings_outlined
-        : transaction.type == WalletActivityType.topUps
-        ? Icons.add_circle_outline
-        : Icons.shopping_bag_outlined;
+    final icon = transaction.type == WalletActivityType.refundToWallet
+        ? Icons.savings_outlined
+        : transaction.type == WalletActivityType.withdrawToBank
+            ? Icons.outbound_outlined
+            : transaction.type == WalletActivityType.refunds
+                ? Icons.reply
+                : transaction.type == WalletActivityType.adminCredits
+                    ? Icons.admin_panel_settings_outlined
+                    : transaction.type == WalletActivityType.topUps
+                        ? Icons.add_circle_outline
+                        : Icons.shopping_bag_outlined;
     final iconBg = transaction.isCredit
         ? AppConfig.successGreen.withValues(alpha: 0.15)
         : AppConfig.borderColor.withValues(alpha: 0.5);

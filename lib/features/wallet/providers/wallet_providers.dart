@@ -45,11 +45,18 @@ final walletTransactionsProvider = FutureProvider<List<WalletTransaction>>((
         if (typeStr == 'payment' || typeStr == 'payments') {
           type = WalletActivityType.payments;
         }
-        if (typeStr == 'refund' || typeStr == 'refunds') {
+        if (typeStr == 'refund_in') {
+          type = WalletActivityType.refundToWallet;
+        } else if (typeStr == 'withdraw_out') {
+          type = WalletActivityType.withdrawToBank;
+        } else if (typeStr == 'refund' || typeStr == 'refunds') {
           type = WalletActivityType.refunds;
         }
         if (typeStr == 'admin_credit' || typeStr == 'admin-credits') {
           type = WalletActivityType.adminCredits;
+        }
+        if (typeStr == 'top_up') {
+          type = WalletActivityType.topUps;
         }
         return WalletTransaction(
           id: (t['id'] ?? '').toString(),
@@ -74,6 +81,17 @@ final walletFilteredTransactionsProvider =
       return async.when(
         data: (list) {
           if (filter == WalletActivityType.all) return AsyncValue.data(list);
+          if (filter == WalletActivityType.refundToWallet) {
+            return AsyncValue.data(
+              list
+                  .where(
+                    (t) =>
+                        t.type == WalletActivityType.refundToWallet ||
+                        t.type == WalletActivityType.refunds,
+                  )
+                  .toList(),
+            );
+          }
           return AsyncValue.data(list.where((t) => t.type == filter).toList());
         },
         loading: () => const AsyncValue.loading(),
