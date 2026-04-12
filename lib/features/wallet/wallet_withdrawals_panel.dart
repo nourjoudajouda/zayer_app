@@ -6,6 +6,7 @@ import '../../core/config/app_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import 'providers/wallet_withdrawal_providers.dart';
+import 'widgets/transfer_proof_download.dart';
 import 'widgets/transfer_proof_viewer.dart';
 import 'widgets/wallet_financial_detail_rows.dart';
 import 'widgets/wallet_financial_status.dart';
@@ -101,13 +102,21 @@ class WalletWithdrawalsPanel extends ConsumerWidget {
   }
 }
 
-class _WithdrawalTile extends StatelessWidget {
+class _WithdrawalTile extends StatefulWidget {
   const _WithdrawalTile({required this.withdrawal});
 
   final WalletWithdrawalModel withdrawal;
 
   @override
+  State<_WithdrawalTile> createState() => _WithdrawalTileState();
+}
+
+class _WithdrawalTileState extends State<_WithdrawalTile> {
+  bool _downloadingProof = false;
+
+  @override
   Widget build(BuildContext context) {
+    final withdrawal = widget.withdrawal;
     final p = WalletWithdrawalStatusPresentation.forStatus(withdrawal.status);
     final created = formatWalletDateLine(withdrawal.createdAt);
     final proofUrl = withdrawal.transferProofUrl?.trim();
@@ -257,17 +266,59 @@ class _WithdrawalTile extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   FilledButton.icon(
-                    onPressed: () => viewTransferProof(context, proofUrl!),
+                    onPressed: _downloadingProof
+                        ? null
+                        : () => viewTransferProof(context, proofUrl!),
                     icon: const Icon(Icons.visibility_outlined, size: 20),
                     label: const Text('View proof'),
                   ),
                   OutlinedButton.icon(
-                    onPressed: () => openTransferProofExternally(proofUrl!),
+                    onPressed: _downloadingProof
+                        ? null
+                        : () async {
+                            setState(() => _downloadingProof = true);
+                            try {
+                              await downloadAndOpenTransferProof(
+                                context,
+                                proofUrl!,
+                                withdrawalId: withdrawal.id,
+                              );
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Download failed: ${e.toString()}',
+                                    ),
+                                  ),
+                                );
+                              }
+                            } finally {
+                              if (mounted) {
+                                setState(() => _downloadingProof = false);
+                              }
+                            }
+                          },
+                    icon: _downloadingProof
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.download, size: 20),
+                    label: Text(_downloadingProof ? 'Downloading…' : 'Download proof'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _downloadingProof
+                        ? null
+                        : () => openTransferProofExternally(proofUrl!),
                     icon: const Icon(Icons.open_in_new, size: 20),
                     label: const Text('Open externally'),
                   ),
                   OutlinedButton.icon(
-                    onPressed: () => copyTransferProofLink(context, proofUrl!),
+                    onPressed: _downloadingProof
+                        ? null
+                        : () => copyTransferProofLink(context, proofUrl!),
                     icon: const Icon(Icons.link, size: 20),
                     label: const Text('Copy link'),
                   ),
