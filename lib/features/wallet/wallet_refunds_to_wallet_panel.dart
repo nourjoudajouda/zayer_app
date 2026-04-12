@@ -5,7 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../core/config/app_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
+import 'models/wallet_refund_to_wallet_model.dart';
 import 'providers/wallet_refund_to_wallet_providers.dart';
+import 'widgets/wallet_financial_detail_rows.dart';
+import 'widgets/wallet_financial_status.dart';
 
 /// Refunds from orders/shipments → wallet (operational).
 class WalletRefundsToWalletPanel extends ConsumerWidget {
@@ -77,60 +80,116 @@ class WalletRefundsToWalletPanel extends ConsumerWidget {
                 }
                 return Column(
                   children: [
-                    for (final r in list)
-                      Card(
-                        margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: ListTile(
-                          title: Text(
-                            '\$${r.amount.toStringAsFixed(2)} ${r.currency}',
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          subtitle: Text(
-                            '${r.statusLabel} · ${r.sourceLabel}',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () {
-                            showDialog<void>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: Text('Request #${r.id}'),
-                                content: SingleChildScrollView(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text('Status: ${r.statusLabel}'),
-                                      const SizedBox(height: 8),
-                                      Text('Source: ${r.sourceLabel}'),
-                                      const SizedBox(height: 8),
-                                      Text('Amount: \$${r.amount.toStringAsFixed(2)}'),
-                                      const SizedBox(height: 8),
-                                      Text('Reason:\n${r.reason}'),
-                                      if (r.adminNotes != null &&
-                                          r.adminNotes!.trim().isNotEmpty) ...[
-                                        const SizedBox(height: 8),
-                                        Text('Admin: ${r.adminNotes}'),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx),
-                                    child: const Text('Close'),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      ),
+                    for (final r in list) _RefundToWalletTile(refund: r),
                   ],
                 );
               },
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RefundToWalletTile extends StatelessWidget {
+  const _RefundToWalletTile({required this.refund});
+
+  final WalletRefundToWalletModel refund;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = WalletRefundStatusPresentation.forStatus(refund.status);
+    final created = formatWalletDateLine(refund.createdAt);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      clipBehavior: Clip.antiAlias,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: 4,
+          ),
+          childrenPadding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            0,
+            AppSpacing.md,
+            AppSpacing.md,
+          ),
+          leading: CircleAvatar(
+            backgroundColor: p.color.withValues(alpha: 0.18),
+            child: Icon(p.icon, color: p.color, size: 22),
+          ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '\$${refund.amount.toStringAsFixed(2)} ${refund.currency}',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ),
+              WalletRefundStatusChip(status: refund.status),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  refund.sourceLabel,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppConfig.textColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                if (created != null)
+                  Text(
+                    created,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AppConfig.subtitleColor,
+                        ),
+                  ),
+                if (p.subtitle != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    p.subtitle!,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: p.color,
+                        ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          children: [
+            WalletDetailRow(
+              label: 'Source',
+              value:
+                  '${refund.sourceType == 'shipment' ? 'Shipment' : 'Order'} #${refund.sourceId}',
+            ),
+            WalletDetailRow(
+              label: 'Amount',
+              value: '\$${refund.amount.toStringAsFixed(2)} ${refund.currency}',
+            ),
+            WalletDetailRow(label: 'Reason', value: refund.reason),
+            WalletDetailRow(
+              label: 'Submitted',
+              value: formatWalletDateLine(refund.createdAt) ?? '—',
+            ),
+            WalletDetailRow(
+              label: 'Reviewed',
+              value: formatWalletDateLine(refund.reviewedAt) ?? '—',
+            ),
+            if (refund.adminNotes != null && refund.adminNotes!.trim().isNotEmpty)
+              WalletDetailRow(
+                label: 'Admin note',
+                value: refund.adminNotes!.trim(),
+              ),
           ],
         ),
       ),
