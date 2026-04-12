@@ -234,15 +234,27 @@ class OrdersListScreen extends ConsumerWidget {
           if (hubEmbedded) {
             return Scaffold(
               backgroundColor: AppConfig.backgroundColor,
-              body: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  child: Text(
-                    'No orders yet.',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: AppConfig.subtitleColor,
+              body: RefreshIndicator(
+                onRefresh: () async {
+                  ref.invalidate(ordersProvider);
+                  await ref.read(ordersProvider.future);
+                },
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: SizedBox(
+                    height: MediaQuery.sizeOf(context).height * 0.65,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        child: Text(
+                          'No orders yet.',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: AppConfig.subtitleColor,
+                              ),
                         ),
+                      ),
+                    ),
                   ),
                 ),
               ),

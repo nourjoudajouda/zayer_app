@@ -1,5 +1,5 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
@@ -8,34 +8,29 @@ import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/network_image_preview.dart';
 import 'models/warehouse_models.dart';
-import 'warehouse_api.dart';
 import 'warehouse_display_units.dart';
+import 'warehouse_providers.dart';
 
 /// Items that arrived at the warehouse (ready to combine into a shipment).
-class MyWarehouseScreen extends StatefulWidget {
+class MyWarehouseScreen extends ConsumerStatefulWidget {
   const MyWarehouseScreen({super.key, this.hubEmbedded = false});
 
   final bool hubEmbedded;
 
   @override
-  State<MyWarehouseScreen> createState() => _MyWarehouseScreenState();
+  ConsumerState<MyWarehouseScreen> createState() => _MyWarehouseScreenState();
 }
 
-class _MyWarehouseScreenState extends State<MyWarehouseScreen> {
-  late Future<List<WarehouseItemApi>> _future;
+class _MyWarehouseScreenState extends ConsumerState<MyWarehouseScreen> {
   final Set<String> _selected = {};
 
-  @override
-  void initState() {
-    super.initState();
-    _future = fetchWarehouseItems();
+  Future<void> _onPullRefresh() async {
+    ref.invalidate(warehouseItemsProvider);
+    await ref.read(warehouseItemsProvider.future);
   }
 
-  void _refresh() {
-    setState(() {
-      _future = fetchWarehouseItems();
-      _selected.clear();
-    });
+  void _retry() {
+    ref.invalidate(warehouseItemsProvider);
   }
 
   String _resolveUrl(String? path) {
@@ -127,33 +122,38 @@ class _MyWarehouseScreenState extends State<MyWarehouseScreen> {
           ),
           const SizedBox(height: AppSpacing.sm),
           Expanded(
-            child: FutureBuilder<List<WarehouseItemApi>>(
-              future: _future,
-              builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snap.hasError) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('Could not load items', style: TextStyle(color: AppConfig.subtitleColor)),
-                        TextButton(onPressed: _refresh, child: const Text('Retry')),
-                      ],
-                    ),
-                  );
-                }
-                final items = snap.data ?? [];
+            child: ref.watch(warehouseItemsProvider).when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (_, __) => Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Could not load items', style: TextStyle(color: AppConfig.subtitleColor)),
+                    TextButton(onPressed: _retry, child: const Text('Retry')),
+                  ],
+                ),
+              ),
+              data: (items) {
                 if (items.isEmpty) {
-                  return Center(
-                    child: Text(
-                      'No items at the warehouse yet.',
-                      style: TextStyle(color: AppConfig.subtitleColor),
+                  return RefreshIndicator(
+                    onRefresh: _onPullRefresh,
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: SizedBox(
+                        height: MediaQuery.sizeOf(context).height * 0.35,
+                        child: Center(
+                          child: Text(
+                            'No items at the warehouse yet.',
+                            style: TextStyle(color: AppConfig.subtitleColor),
+                          ),
+                        ),
+                      ),
                     ),
                   );
                 }
-                return ListView.builder(
+                return RefreshIndicator(
+                  onRefresh: _onPullRefresh,
+                  child: ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
                   itemCount: items.length,
                   itemBuilder: (context, i) {
@@ -326,6 +326,7 @@ class _MyWarehouseScreenState extends State<MyWarehouseScreen> {
                       ),
                     );
                   },
+                ),
                 );
               },
             ),
@@ -336,10 +337,9 @@ class _MyWarehouseScreenState extends State<MyWarehouseScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  FutureBuilder<List<WarehouseItemApi>>(
-                    future: _future,
-                    builder: (context, snap) {
-                      final items = snap.data ?? [];
+                  Builder(
+                    builder: (context) {
+                      final items = ref.watch(warehouseItemsProvider).valueOrNull ?? [];
                       final t = _selectionTotals(items);
                       if (t.selectedCount == 0) {
                         return const SizedBox.shrink();

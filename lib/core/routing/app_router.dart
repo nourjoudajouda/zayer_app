@@ -45,6 +45,7 @@ import '../../features/warehouse/shipment_create_screen.dart';
 import '../../features/warehouse/shipment_shipping_payment_screen.dart';
 import '../../features/warehouse/models/warehouse_models.dart';
 import '../../features/warehouse/shipments_tracking_screen.dart';
+import '../../features/wallet/wallet_request_refund_screen.dart';
 import '../../features/wallet/wallet_screen.dart';
 import '../../features/settings/default_warehouse_screen.dart';
 import '../../features/settings/privacy_policy_screen.dart';
@@ -102,6 +103,7 @@ class AppRoutes {
   static const String supportTicket = '/support/ticket';
   static const String wallet = '/wallet';
   static const String topUpWallet = '/wallet/top-up';
+  static const String walletRequestRefund = '/wallet/request-refund';
   static const String myWarehouse = '/my-warehouse';
   static const String shipmentCreate = '/shipment-create';
   static const String shipmentShippingPay = '/shipment-shipping-pay';
@@ -476,6 +478,10 @@ GoRouter _createAppRouter() {
               : (extra is num ? extra.toDouble() : null);
           return TopUpWalletScreen(initialAmount: initial);
         },
+      ),
+      GoRoute(
+        path: AppRoutes.walletRequestRefund,
+        builder: (context, state) => const WalletRequestRefundScreen(),
       ),
       GoRoute(
         path: AppRoutes.myWarehouse,

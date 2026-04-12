@@ -1,13 +1,13 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/network_image_preview.dart';
 import 'models/warehouse_models.dart';
-import 'warehouse_api.dart';
 import 'warehouse_display_units.dart';
+import 'warehouse_providers.dart';
 
 enum _ShipmentFilter {
   all,
@@ -19,23 +19,21 @@ enum _ShipmentFilter {
 }
 
 /// Lists outbound shipments (status, tracking, box photo).
-class ShipmentsTrackingScreen extends StatefulWidget {
+class ShipmentsTrackingScreen extends ConsumerStatefulWidget {
   const ShipmentsTrackingScreen({super.key, this.hubEmbedded = false});
 
   final bool hubEmbedded;
 
   @override
-  State<ShipmentsTrackingScreen> createState() => _ShipmentsTrackingScreenState();
+  ConsumerState<ShipmentsTrackingScreen> createState() => _ShipmentsTrackingScreenState();
 }
 
-class _ShipmentsTrackingScreenState extends State<ShipmentsTrackingScreen> {
-  late Future<List<OutboundShipmentApi>> _future;
+class _ShipmentsTrackingScreenState extends ConsumerState<ShipmentsTrackingScreen> {
   _ShipmentFilter _filter = _ShipmentFilter.all;
 
-  @override
-  void initState() {
-    super.initState();
-    _future = fetchShipments();
+  Future<void> _onPullRefresh() async {
+    ref.invalidate(outboundShipmentsProvider);
+    await ref.read(outboundShipmentsProvider.future);
   }
 
   bool _matchesFilter(OutboundShipmentApi s) {
@@ -75,26 +73,17 @@ class _ShipmentsTrackingScreenState extends State<ShipmentsTrackingScreen> {
               elevation: 0,
             ),
       body: RefreshIndicator(
-        onRefresh: () async {
-          setState(() => _future = fetchShipments());
-          await _future;
-        },
-        child: FutureBuilder<List<OutboundShipmentApi>>(
-          future: _future,
-          builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snap.hasError) {
-              return ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  const SizedBox(height: 80),
-                  Center(child: Text('Error: ${snap.error}')),
-                ],
-              );
-            }
-            final list = snap.data ?? [];
+        onRefresh: _onPullRefresh,
+        child: ref.watch(outboundShipmentsProvider).when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              const SizedBox(height: 80),
+              Center(child: Text('Error: $e')),
+            ],
+          ),
+          data: (list) {
             final filtered = list.where(_matchesFilter).toList();
             if (list.isEmpty) {
               return ListView(

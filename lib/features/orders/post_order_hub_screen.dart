@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,11 +8,12 @@ import '../../core/config/app_config.dart';
 import '../../core/routing/app_router.dart';
 import '../warehouse/my_warehouse_screen.dart';
 import '../warehouse/shipments_tracking_screen.dart';
-import '../warehouse/warehouse_api.dart';
+import '../warehouse/warehouse_providers.dart';
 import 'orders_list_screen.dart';
 import 'providers/orders_providers.dart';
 
 /// Post-checkout hub: Orders · Warehouse · Shipments (single entry from shell).
+/// Refreshes the active tab when focused (debounced) and when the app resumes.
 class PostOrderHubScreen extends ConsumerStatefulWidget {
   const PostOrderHubScreen({super.key});
 
@@ -19,17 +22,64 @@ class PostOrderHubScreen extends ConsumerStatefulWidget {
 }
 
 class _PostOrderHubScreenState extends ConsumerState<PostOrderHubScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
+  Timer? _tabRefreshDebounce;
+  int _lastRefreshedTab = -1;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(_onTabControllerTick);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _refreshTabIndex(_tabController.index, force: true);
+    });
+  }
+
+  void _onTabControllerTick() {
+    if (_tabController.indexIsChanging) return;
+    _scheduleRefreshForTab(_tabController.index);
+  }
+
+  void _scheduleRefreshForTab(int index) {
+    _tabRefreshDebounce?.cancel();
+    _tabRefreshDebounce = Timer(const Duration(milliseconds: 420), () {
+      if (!mounted) return;
+      _refreshTabIndex(index, force: false);
+    });
+  }
+
+  void _refreshTabIndex(int index, {required bool force}) {
+    if (!force && index == _lastRefreshedTab) return;
+    _lastRefreshedTab = index;
+    switch (index) {
+      case 0:
+        ref.invalidate(ordersProvider);
+        break;
+      case 1:
+        ref.invalidate(warehouseItemsProvider);
+        break;
+      case 2:
+        ref.invalidate(outboundShipmentsProvider);
+        break;
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshTabIndex(_tabController.index, force: true);
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _tabRefreshDebounce?.cancel();
+    _tabController.removeListener(_onTabControllerTick);
     _tabController.dispose();
     super.dispose();
   }
@@ -37,7 +87,12 @@ class _PostOrderHubScreenState extends ConsumerState<PostOrderHubScreen>
   @override
   Widget build(BuildContext context) {
     final ordersAsync = ref.watch(ordersProvider);
+    final warehouseAsync = ref.watch(warehouseItemsProvider);
+    final shipmentsAsync = ref.watch(outboundShipmentsProvider);
+
     final ordersCount = ordersAsync.valueOrNull?.length;
+    final warehouseCount = warehouseAsync.valueOrNull?.length;
+    final shipmentsCount = shipmentsAsync.valueOrNull?.length;
 
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
@@ -65,27 +120,17 @@ class _PostOrderHubScreenState extends ConsumerState<PostOrderHubScreen>
               ),
             ),
             Tab(
-              child: FutureBuilder<int>(
-                future: _warehouseCount(),
-                builder: (context, snap) {
-                  return _TabLabel(
-                    icon: Icons.warehouse_outlined,
-                    label: 'Warehouse',
-                    count: snap.data,
-                  );
-                },
+              child: _TabLabel(
+                icon: Icons.warehouse_outlined,
+                label: 'Warehouse',
+                count: warehouseCount,
               ),
             ),
             Tab(
-              child: FutureBuilder<int>(
-                future: _shipmentsCount(),
-                builder: (context, snap) {
-                  return _TabLabel(
-                    icon: Icons.local_shipping_outlined,
-                    label: 'Shipments',
-                    count: snap.data,
-                  );
-                },
+              child: _TabLabel(
+                icon: Icons.local_shipping_outlined,
+                label: 'Shipments',
+                count: shipmentsCount,
               ),
             ),
           ],
@@ -100,24 +145,6 @@ class _PostOrderHubScreenState extends ConsumerState<PostOrderHubScreen>
         ],
       ),
     );
-  }
-
-  Future<int> _warehouseCount() async {
-    try {
-      final items = await fetchWarehouseItems();
-      return items.length;
-    } catch (_) {
-      return 0;
-    }
-  }
-
-  Future<int> _shipmentsCount() async {
-    try {
-      final list = await fetchShipments();
-      return list.length;
-    } catch (_) {
-      return 0;
-    }
   }
 }
 

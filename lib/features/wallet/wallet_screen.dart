@@ -7,23 +7,34 @@ import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import 'models/wallet_model.dart';
 import 'providers/wallet_providers.dart';
+import 'wallet_refund_requests_panel.dart';
 
-/// Main Wallet screen: balance, breakdown, usage, activity with filters.
-class WalletScreen extends ConsumerWidget {
+/// Main Wallet screen: Overview (balance), Activity (transactions), Refunds (requests).
+class WalletScreen extends ConsumerStatefulWidget {
   const WalletScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final balanceAsync = ref.watch(walletBalanceProvider);
-    final balance =
-        balanceAsync.valueOrNull ??
-        const WalletBalance(available: 0, pending: 0, promo: 0);
-    final balanceLoading = balanceAsync.isLoading;
-    final visible = ref.watch(walletBalanceVisibleProvider);
-    final transactionsAsync = ref.watch(walletFilteredTransactionsProvider);
-    final transactions = transactionsAsync.valueOrNull ?? [];
-    final activityFilter = ref.watch(walletActivityFilterProvider);
+  ConsumerState<WalletScreen> createState() => _WalletScreenState();
+}
 
+class _WalletScreenState extends ConsumerState<WalletScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
       appBar: AppBar(
@@ -59,238 +70,278 @@ class WalletScreen extends ConsumerWidget {
             ),
           ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: AppConfig.primaryColor,
+          unselectedLabelColor: AppConfig.subtitleColor,
+          indicatorColor: AppConfig.primaryColor,
+          tabs: const [
+            Tab(text: 'Overview'),
+            Tab(text: 'Activity'),
+            Tab(text: 'Refunds'),
+          ],
+        ),
       ),
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async {
-            ref.invalidate(walletBalanceProvider);
-            ref.invalidate(walletTransactionsProvider);
-            await ref.read(walletBalanceProvider.future);
-          },
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: AppSpacing.sm),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppConfig.primaryColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: AppConfig.primaryColor.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.check_circle_outlined,
-                        size: 18,
-                        color: AppConfig.primaryColor,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Use at checkout when enabled',
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(
-                              color: AppConfig.primaryColor,
-                              fontWeight: FontWeight.w500,
-                            ),
-                      ),
-                    ],
-                  ),
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            _buildOverviewTab(),
+            _buildActivityTab(),
+            const WalletRefundRequestsPanel(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOverviewTab() {
+    final balanceAsync = ref.watch(walletBalanceProvider);
+    final balance =
+        balanceAsync.valueOrNull ??
+        const WalletBalance(available: 0, pending: 0, promo: 0);
+    final balanceLoading = balanceAsync.isLoading;
+    final visible = ref.watch(walletBalanceVisibleProvider);
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(walletBalanceProvider);
+        ref.invalidate(walletTransactionsProvider);
+        await ref.read(walletBalanceProvider.future);
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                color: AppConfig.primaryColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: AppConfig.primaryColor.withValues(alpha: 0.3),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  'Currency converted to USD based on real-time rates',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppConfig.subtitleColor,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.check_circle_outlined,
+                    size: 18,
+                    color: AppConfig.primaryColor,
                   ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (balanceLoading)
-                          SizedBox(
-                            width: 120,
-                            height: 32,
-                            child: Center(
-                              child: SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppConfig.primaryColor,
-                                ),
-                              ),
-                            ),
-                          )
-                        else
-                          Text(
-                            visible ? balance.availableFormatted : '••••••••',
-                            style: Theme.of(context).textTheme.headlineMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: AppConfig.textColor,
-                                ),
-                          ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'AVAILABLE BALANCE',
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(color: AppConfig.subtitleColor),
-                        ),
-                      ],
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        visible
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                        color: AppConfig.subtitleColor,
-                      ),
-                      onPressed: () =>
-                          ref
-                                  .read(walletBalanceVisibleProvider.notifier)
-                                  .state =
-                              !visible,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                SizedBox(
-                  height: 48,
-                  child: FilledButton.icon(
-                    onPressed: () => context.push(AppRoutes.topUpWallet),
-                    icon: const Icon(Icons.add, size: 22),
-                    label: const Text('Add Funds'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppConfig.primaryColor,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                          AppConfig.radiusSmall,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                _BalanceBreakdownCard(balance: balance),
-                const SizedBox(height: AppSpacing.md),
-                _WalletUsageCard(),
-                const SizedBox(height: AppSpacing.lg),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Activity',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () => _showActivityFilterSheet(context, ref),
-                      child: Text(
-                        'Filters',
-                        style: TextStyle(
+                  const SizedBox(width: 6),
+                  Text(
+                    'Use at checkout when enabled',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
                           color: AppConfig.primaryColor,
                           fontWeight: FontWeight.w500,
                         ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Currency converted to USD based on real-time rates',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppConfig.subtitleColor,
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (balanceLoading)
+                      SizedBox(
+                        width: 120,
+                        height: 32,
+                        child: Center(
+                          child: SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppConfig.primaryColor,
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      Text(
+                        visible ? balance.availableFormatted : '••••••••',
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: AppConfig.textColor,
+                            ),
                       ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'AVAILABLE BALANCE',
+                      style: Theme.of(context).textTheme.labelSmall
+                          ?.copyWith(color: AppConfig.subtitleColor),
                     ),
                   ],
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _ActivityChip(
-                        label: 'All',
-                        isSelected: activityFilter == WalletActivityType.all,
-                        onTap: () =>
-                            ref
-                                    .read(walletActivityFilterProvider.notifier)
-                                    .state =
-                                WalletActivityType.all,
-                      ),
-                      const SizedBox(width: 8),
-                      _ActivityChip(
-                        label: 'Refunds',
-                        isSelected:
-                            activityFilter == WalletActivityType.refunds,
-                        onTap: () =>
-                            ref
-                                    .read(walletActivityFilterProvider.notifier)
-                                    .state =
-                                WalletActivityType.refunds,
-                      ),
-                      const SizedBox(width: 8),
-                      _ActivityChip(
-                        label: 'Payments',
-                        isSelected:
-                            activityFilter == WalletActivityType.payments,
-                        onTap: () =>
-                            ref
-                                    .read(walletActivityFilterProvider.notifier)
-                                    .state =
-                                WalletActivityType.payments,
-                      ),
-                      const SizedBox(width: 8),
-                      _ActivityChip(
-                        label: 'Top-ups',
-                        isSelected: activityFilter == WalletActivityType.topUps,
-                        onTap: () =>
-                            ref
-                                    .read(walletActivityFilterProvider.notifier)
-                                    .state =
-                                WalletActivityType.topUps,
-                      ),
-                      const SizedBox(width: 8),
-                      _ActivityChip(
-                        label: 'Admin Credits',
-                        isSelected:
-                            activityFilter == WalletActivityType.adminCredits,
-                        onTap: () =>
-                            ref
-                                    .read(walletActivityFilterProvider.notifier)
-                                    .state =
-                                WalletActivityType.adminCredits,
-                      ),
-                    ],
+                IconButton(
+                  icon: Icon(
+                    visible
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                    color: AppConfig.subtitleColor,
                   ),
+                  onPressed: () =>
+                      ref.read(walletBalanceVisibleProvider.notifier).state =
+                          !visible,
                 ),
-                const SizedBox(height: AppSpacing.md),
-                if (transactions.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: AppSpacing.lg,
-                    ),
-                    child: Text(
-                      'No activity in this category',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppConfig.subtitleColor,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  )
-                else
-                  ...transactions.map((t) => _TransactionTile(transaction: t)),
-                const SizedBox(height: AppSpacing.xxl),
               ],
             ),
-          ),
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              height: 48,
+              child: FilledButton.icon(
+                onPressed: () => context.push(AppRoutes.topUpWallet),
+                icon: const Icon(Icons.add, size: 22),
+                label: const Text('Add Funds'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppConfig.primaryColor,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(
+                      AppConfig.radiusSmall,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            _BalanceBreakdownCard(balance: balance),
+            const SizedBox(height: AppSpacing.md),
+            _WalletUsageCard(),
+            const SizedBox(height: AppSpacing.xxl),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActivityTab() {
+    final transactionsAsync = ref.watch(walletFilteredTransactionsProvider);
+    final transactions = transactionsAsync.valueOrNull ?? [];
+    final activityFilter = ref.watch(walletActivityFilterProvider);
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(walletBalanceProvider);
+        ref.invalidate(walletTransactionsProvider);
+        await ref.read(walletTransactionsProvider.future);
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Activity',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                TextButton(
+                  onPressed: () => _showActivityFilterSheet(context),
+                  child: Text(
+                    'Filters',
+                    style: TextStyle(
+                      color: AppConfig.primaryColor,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _ActivityChip(
+                    label: 'All',
+                    isSelected: activityFilter == WalletActivityType.all,
+                    onTap: () =>
+                        ref.read(walletActivityFilterProvider.notifier).state =
+                            WalletActivityType.all,
+                  ),
+                  const SizedBox(width: 8),
+                  _ActivityChip(
+                    label: 'Refunds',
+                    isSelected:
+                        activityFilter == WalletActivityType.refunds,
+                    onTap: () =>
+                        ref.read(walletActivityFilterProvider.notifier).state =
+                            WalletActivityType.refunds,
+                  ),
+                  const SizedBox(width: 8),
+                  _ActivityChip(
+                    label: 'Payments',
+                    isSelected:
+                        activityFilter == WalletActivityType.payments,
+                    onTap: () =>
+                        ref.read(walletActivityFilterProvider.notifier).state =
+                            WalletActivityType.payments,
+                  ),
+                  const SizedBox(width: 8),
+                  _ActivityChip(
+                    label: 'Top-ups',
+                    isSelected: activityFilter == WalletActivityType.topUps,
+                    onTap: () =>
+                        ref.read(walletActivityFilterProvider.notifier).state =
+                            WalletActivityType.topUps,
+                  ),
+                  const SizedBox(width: 8),
+                  _ActivityChip(
+                    label: 'Admin Credits',
+                    isSelected:
+                        activityFilter == WalletActivityType.adminCredits,
+                    onTap: () =>
+                        ref.read(walletActivityFilterProvider.notifier).state =
+                            WalletActivityType.adminCredits,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            if (transactions.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: AppSpacing.lg,
+                ),
+                child: Text(
+                  'No activity in this category',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppConfig.subtitleColor,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+              )
+            else
+              ...transactions.map((t) => _TransactionTile(transaction: t)),
+            const SizedBox(height: AppSpacing.xxl),
+          ],
         ),
       ),
     );
@@ -343,7 +394,7 @@ class WalletScreen extends ConsumerWidget {
     );
   }
 
-  void _showActivityFilterSheet(BuildContext context, WidgetRef ref) {
+  void _showActivityFilterSheet(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppConfig.cardColor,
