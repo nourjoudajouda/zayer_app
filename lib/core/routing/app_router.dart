@@ -41,6 +41,7 @@ import '../../features/support/support_request_submitted_screen.dart';
 import '../../features/support/support_ticket_chat_screen.dart';
 import '../../features/wallet/add_funds_hub_screen.dart';
 import '../../features/wallet/funding_requests_history_screen.dart';
+import '../../features/wallet/add_saved_card_screen.dart';
 import '../../features/wallet/saved_cards_wallet_screen.dart';
 import '../../features/wallet/wire_funding_screen.dart';
 import '../../features/wallet/zelle_instruction_screen.dart';
@@ -110,6 +111,7 @@ class AppRoutes {
   static const String wallet = '/wallet';
   static const String topUpWallet = '/wallet/top-up';
   static const String walletSavedCards = '/wallet/saved-cards';
+  static const String walletAddSavedCard = '/wallet/saved-cards/add';
   static const String walletFundingWire = '/wallet/add-funds/wire';
   static const String walletFundingZelle = '/wallet/add-funds/zelle';
   static const String walletFundingZelleSubmit = '/wallet/add-funds/zelle/submit';
@@ -489,6 +491,18 @@ GoRouter _createAppRouter() {
               ? extra
               : (extra is num ? extra.toDouble() : null);
           return AddFundsHubScreen(initialAmount: initial);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.walletAddSavedCard,
+        builder: (context, state) {
+          final extra = state.extra;
+          if (extra is! AddSavedCardRouteArgs) {
+            return const Scaffold(
+              body: Center(child: Text('Missing card setup. Go back and try again.')),
+            );
+          }
+          return AddSavedCardScreen(args: extra);
         },
       ),
       GoRoute(

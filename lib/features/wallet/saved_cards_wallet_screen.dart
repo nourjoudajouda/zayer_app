@@ -1,28 +1,18 @@
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
+import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/config/app_config_provider.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_error_message.dart'
     show userFacingApiMessage, validationErrorsFromDio;
+import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
+import 'add_saved_card_screen.dart';
 import 'providers/wallet_providers.dart';
 import 'stripe_wallet_helpers.dart';
-
-void _savedCardFlowLog(String step, [String? detail]) {
-  if (kDebugMode) {
-    debugPrint('[saved_card_flow] $step${detail != null ? ': $detail' : ''}');
-  }
-}
-
-bool _setupIntentStatusSucceeded(String status) =>
-    status.toLowerCase() == 'succeeded';
-
-bool _setupIntentStatusRequiresAction(String status) =>
-    status.toLowerCase() == 'requires_action';
 
 /// Saved cards: add via Stripe SetupIntent, verify micro-charge, top up with PaymentIntent.
 class SavedCardsWalletScreen extends ConsumerStatefulWidget {
@@ -86,7 +76,7 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
     String? secret;
     String? intentId;
     try {
-      _savedCardFlowLog('create_setup_intent', 'request');
+      savedCardFlowLog('create_setup_intent', 'request');
       final setup = await ApiClient.instance.post<Map<String, dynamic>>(
         '/api/wallet/saved-cards/setup-intent',
       );
@@ -105,9 +95,9 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         return;
       }
 
-      _savedCardFlowLog('create_setup_intent', 'ok id=${intentId ?? "?"}');
+      savedCardFlowLog('create_setup_intent', 'ok id=${intentId ?? "?"}');
     } catch (e) {
-      _savedCardFlowLog('create_setup_intent', 'error: $e');
+      savedCardFlowLog('create_setup_intent', 'error: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userFacingApiMessage(e))),
@@ -119,16 +109,10 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
 
     if (!mounted) return;
 
-    final confirmed = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: AppConfig.cardColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => _AddStripeCardSheet(
-        clientSecret: secret!,
+    final confirmed = await context.push<bool>(
+      AppRoutes.walletAddSavedCard,
+      extra: AddSavedCardRouteArgs(
+        clientSecret: secret,
         setupIntentId: intentId,
       ),
     );
@@ -222,12 +206,12 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                             fieldError = null;
                           });
                           try {
-                            _savedCardFlowLog('verify_card_charge', 'POST amount=$amt id=$id');
+                            savedCardFlowLog('verify_card_charge', 'POST amount=$amt id=$id');
                             await ApiClient.instance.post<Map<String, dynamic>>(
                               '/api/wallet/saved-cards/$id/verify',
                               data: {'amount': amt},
                             );
-                            _savedCardFlowLog('verify_card_charge', 'ok');
+                            savedCardFlowLog('verify_card_charge', 'ok');
                             if (!ctx.mounted) return;
                             Navigator.pop(ctx);
                             if (!mounted) return;
@@ -242,7 +226,7 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                             ref.invalidate(walletTransactionsProvider);
                             await _reload();
                           } catch (e) {
-                            _savedCardFlowLog('verify_card_charge', 'error: $e');
+                            savedCardFlowLog('verify_card_charge', 'error: $e');
                             final errs = validationErrorsFromDio(e);
                             setDialogState(() {
                               submitting = false;
@@ -499,255 +483,6 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                     },
                   ),
                 ),
-    );
-  }
-}
-
-class _AddStripeCardSheet extends StatefulWidget {
-  const _AddStripeCardSheet({
-    required this.clientSecret,
-    this.setupIntentId,
-  });
-
-  final String clientSecret;
-  final String? setupIntentId;
-
-  @override
-  State<_AddStripeCardSheet> createState() => _AddStripeCardSheetState();
-}
-
-class _AddStripeCardSheetState extends State<_AddStripeCardSheet> {
-  bool _cardComplete = false;
-  bool _submitting = false;
-  String? _sheetError;
-
-  Future<void> _submit() async {
-    setState(() {
-      _submitting = true;
-      _sheetError = null;
-    });
-    try {
-      _savedCardFlowLog(
-        'confirm_setup_intent',
-        'start setupIntentId=${widget.setupIntentId ?? "?"}',
-      );
-
-      var si = await Stripe.instance.confirmSetupIntent(
-        paymentIntentClientSecret: widget.clientSecret,
-        params: const PaymentMethodParams.card(
-          paymentMethodData: PaymentMethodData(),
-        ),
-      );
-      _savedCardFlowLog('confirm_setup_intent', 'status=${si.status}');
-
-      var actionAttempts = 0;
-      while (_setupIntentStatusRequiresAction(si.status) && actionAttempts < 5) {
-        actionAttempts++;
-        _savedCardFlowLog(
-          'confirm_setup_intent',
-          'handleNextActionForSetupIntent attempt $actionAttempts',
-        );
-        si = await Stripe.instance.handleNextActionForSetupIntent(
-          widget.clientSecret,
-        );
-        _savedCardFlowLog('confirm_setup_intent', 'status=${si.status}');
-      }
-
-      if (!_setupIntentStatusSucceeded(si.status)) {
-        _savedCardFlowLog(
-          'confirm_setup_intent',
-          'aborted: not succeeded (${si.status})',
-        );
-        if (!mounted) return;
-        setState(() {
-          _submitting = false;
-          _sheetError =
-              'Card setup did not finish. Complete any bank prompts, or try another card.';
-        });
-        return;
-      }
-
-      _savedCardFlowLog('save_card_backend', 'POST setup_intent_id=${si.id}');
-      final complete = await ApiClient.instance.post<Map<String, dynamic>>(
-        '/api/wallet/saved-cards',
-        data: {'setup_intent_id': si.id},
-      );
-
-      final ver = complete.data?['verification'] as Map<String, dynamic>?;
-      final cs = ver?['client_secret'] as String?;
-      final needsAction = ver?['requires_action'] == true;
-      if (needsAction && cs != null && cs.isNotEmpty) {
-        _savedCardFlowLog('verify_card_charge', 'handleNextAction (PI)');
-        final pi = await Stripe.instance.handleNextAction(cs);
-        if (pi.status != PaymentIntentsStatus.Succeeded) {
-          _savedCardFlowLog(
-            'verify_card_charge',
-            'PI not succeeded: ${pi.status}',
-          );
-          if (!mounted) return;
-          setState(() {
-            _submitting = false;
-            _sheetError =
-                'The verification charge could not be completed. Try again or use another card.';
-          });
-          return;
-        }
-      }
-
-      _savedCardFlowLog('save_card_backend', 'complete');
-      if (!mounted) return;
-      Navigator.pop(context, true);
-    } on StripeException catch (e) {
-      _savedCardFlowLog('confirm_setup_intent', 'StripeException: ${e.error.message}');
-      if (!mounted) return;
-      setState(() {
-        _submitting = false;
-        _sheetError =
-            e.error.message ?? 'Card could not be saved. Please try again.';
-      });
-    } catch (e) {
-      _savedCardFlowLog('save_card_backend', 'error: $e');
-      if (!mounted) return;
-      setState(() {
-        _submitting = false;
-        _sheetError = userFacingApiMessage(e);
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-    final bottomPad = MediaQuery.paddingOf(context).bottom;
-
-    InputDecoration cardDecoration(BuildContext ctx) {
-      final radius = BorderRadius.circular(AppConfig.radiusSmall);
-      return InputDecoration(
-        isDense: true,
-        filled: true,
-        fillColor: AppConfig.lightBlueBg,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        border: OutlineInputBorder(borderRadius: radius),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: radius,
-          borderSide: BorderSide(color: AppConfig.borderColor, width: 1.5),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: radius,
-          borderSide: const BorderSide(color: AppConfig.primaryColor, width: 2),
-        ),
-        hintStyle: TextStyle(
-          color: AppConfig.subtitleColor.withValues(alpha: 0.85),
-          fontSize: 15,
-          fontWeight: FontWeight.w400,
-        ),
-      );
-    }
-
-    return AnimatedPadding(
-      duration: const Duration(milliseconds: 120),
-      curve: Curves.easeOut,
-      padding: EdgeInsets.only(bottom: bottomInset),
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.md,
-            AppSpacing.sm,
-            AppSpacing.md,
-            bottomPad + AppSpacing.lg,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppConfig.borderColor,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'Add a card',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppConfig.textColor,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Enter your card below. After you save, we\'ll charge a small '
-                r'amount ($1.00–$5.00) so you can verify it from your bank statement.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppConfig.subtitleColor,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'Card details',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppConfig.textColor,
-                ),
-              ),
-              const SizedBox(height: 8),
-              CardField(
-                autofocus: true,
-                style: const TextStyle(
-                  color: AppConfig.textColor,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-                cursorColor: AppConfig.primaryColor,
-                decoration: cardDecoration(context),
-                numberHintText: 'Card number',
-                expirationHintText: 'MM / YY',
-                cvcHintText: 'CVC',
-                onCardChanged: (card) {
-                  setState(() {
-                    _cardComplete = card?.complete == true;
-                    _sheetError = null;
-                  });
-                },
-              ),
-              if (_sheetError != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  _sheetError!,
-                  style: TextStyle(
-                    color: theme.colorScheme.error,
-                    fontSize: 13,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-              const SizedBox(height: AppSpacing.md),
-              FilledButton(
-                onPressed: (!_cardComplete || _submitting) ? null : _submit,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: _submitting
-                    ? SizedBox(
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: theme.colorScheme.onPrimary,
-                        ),
-                      )
-                    : const Text('Save card'),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
