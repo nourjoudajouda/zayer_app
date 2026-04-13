@@ -10,6 +10,11 @@ import '../../core/network/api_error_message.dart' show userFacingApiMessage;
 import '../../core/theme/app_spacing.dart';
 import 'stripe_wallet_helpers.dart';
 
+/// Android `CardFormField` uses a platform view that needs **bounded** height when
+/// placed inside a scrollable `Column`; otherwise the view can measure to zero and
+/// render blank. Matches flutter_stripe's default Android form height (~292).
+const double _kStripeCardFormAndroidHeight = 292;
+
 /// Arguments for [AddSavedCardScreen] (pass via `GoRouter` extra).
 class AddSavedCardRouteArgs {
   const AddSavedCardRouteArgs({
@@ -152,6 +157,7 @@ class _AddSavedCardScreenState extends ConsumerState<AddSavedCardScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // Inner style: border drawn by Stripe on Android; keep contrast with outer shell.
     final formStyle = CardFormStyle(
       backgroundColor: AppConfig.lightBlueBg,
       borderColor: AppConfig.borderColor,
@@ -207,16 +213,43 @@ class _AddSavedCardScreenState extends ConsumerState<AddSavedCardScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              CardFormField(
-                autofocus: true,
-                enablePostalCode: false,
-                style: formStyle,
-                onCardChanged: (card) {
-                  setState(() {
-                    _cardComplete = card?.complete == true;
-                    _pageError = null;
-                  });
-                },
+              // Critical on Android: fixed height + width so the platform view gets
+              // tight constraints inside the scroll view (avoids blank/invisible form).
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: AppConfig.lightBlueBg,
+                  borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                  border: Border.all(
+                    color: AppConfig.borderColor,
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppConfig.textColor.withValues(alpha: 0.06),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                  child: SizedBox(
+                    height: _kStripeCardFormAndroidHeight,
+                    width: double.infinity,
+                    child: CardFormField(
+                      autofocus: true,
+                      enablePostalCode: false,
+                      style: formStyle,
+                      onCardChanged: (card) {
+                        setState(() {
+                          _cardComplete = card?.complete == true;
+                          _pageError = null;
+                        });
+                      },
+                    ),
+                  ),
+                ),
               ),
               if (_pageError != null) ...[
                 const SizedBox(height: 14),
