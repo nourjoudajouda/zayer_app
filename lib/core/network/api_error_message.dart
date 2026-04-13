@@ -71,9 +71,11 @@ String _fromDio(DioException e) {
   }
   switch (e.type) {
     case DioExceptionType.connectionTimeout:
+      return 'Could not connect in time. Check your connection and try again.';
     case DioExceptionType.sendTimeout:
+      return 'Upload timed out. Try a smaller photo, use Wi‑Fi, or try again.';
     case DioExceptionType.receiveTimeout:
-      return 'Request timed out. Try again.';
+      return 'The server took too long to respond. Try again.';
     case DioExceptionType.connectionError:
       return 'Could not reach the server. Check your connection.';
     default:

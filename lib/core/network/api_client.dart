@@ -90,6 +90,21 @@ class ApiClient {
   /// Current base URL in use (for dev screen / debugging).
   static String? get currentBaseUrl => _instance?.options.baseUrl;
 
+  /// Manual funding (Wire/Zelle) uploads can include large photos; allow longer send/receive times.
+  static Future<Response<T>> postMultipartFunding<T>(
+    String path, {
+    required Object? data,
+  }) {
+    return instance.post<T>(
+      path,
+      data: data,
+      options: Options(
+        sendTimeout: const Duration(seconds: 180),
+        receiveTimeout: const Duration(seconds: 120),
+      ),
+    );
+  }
+
   /// Base URL that never throws. Use for resolving asset URLs before ApiClient init.
   static String? get safeBaseUrl {
     try {

@@ -12,6 +12,9 @@ import '../../core/network/api_error_message.dart'
     show userFacingApiMessage, validationErrorsFromDio;
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
+import 'providers/funding_requests_provider.dart';
+import 'providers/wallet_providers.dart';
+import 'widgets/manual_funding_input_theme.dart';
 import 'widgets/zelle_payment_instructions_view.dart';
 
 /// Zelle step 2: proof and details after user paid in their bank app.
@@ -69,13 +72,6 @@ class _ZelleSubmitScreenState extends ConsumerState<ZelleSubmitScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Payment instructions',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                  const SizedBox(height: 12),
                   ZellePaymentInstructionsView(config: wf),
                 ],
               ),
@@ -147,11 +143,13 @@ class _ZelleSubmitScreenState extends ConsumerState<ZelleSubmitScreen> {
         map['proof'] = await MultipartFile.fromFile(_proof!.path);
       }
       final fd = FormData.fromMap(map);
-      await ApiClient.instance.post<void>(
+      await ApiClient.postMultipartFunding<void>(
         '/api/wallet/funding-requests/zelle',
         data: fd,
       );
       if (!mounted) return;
+      ref.invalidate(fundingRequestsProvider);
+      ref.invalidate(walletBalanceProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -159,7 +157,7 @@ class _ZelleSubmitScreenState extends ConsumerState<ZelleSubmitScreen> {
           ),
         ),
       );
-      Navigator.of(context).pop();
+      context.go(AppRoutes.walletFundingHistory);
     } catch (e) {
       if (!mounted) return;
       final errs = validationErrorsFromDio(e);
@@ -196,14 +194,15 @@ class _ZelleSubmitScreenState extends ConsumerState<ZelleSubmitScreen> {
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
       appBar: AppBar(
-        title: const Text('Submit Zelle details'),
+        title: const Text('Zelle'),
         backgroundColor: AppConfig.backgroundColor,
         foregroundColor: AppConfig.textColor,
         elevation: 0,
         actions: [
-          TextButton(
+          IconButton(
+            tooltip: 'Recipient & QR',
             onPressed: () => _showInstructionsSheet(wf),
-            child: const Text('Payment instructions'),
+            icon: const Icon(Icons.qr_code_2_outlined),
           ),
           TextButton(
             onPressed: () => context.push(AppRoutes.walletFundingHistory),
@@ -211,111 +210,117 @@ class _ZelleSubmitScreenState extends ConsumerState<ZelleSubmitScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'After you have sent Zelle from your bank, enter the details below so we can match your payment.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppConfig.subtitleColor,
-                    height: 1.35,
-                  ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            OutlinedButton.icon(
-              onPressed: () => _showInstructionsSheet(wf),
-              icon: const Icon(Icons.qr_code_2),
-              label: const Text('View QR and recipient again'),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            TextField(
-              controller: _amount,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              onChanged: (_) => setState(() => _apiFieldErrors.remove('amount')),
-              decoration: InputDecoration(
-                labelText: 'Amount you sent (USD)',
-                helperText: 'Must match the Zelle amount',
-                errorText: _err('amount'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _senderEmail,
-              keyboardType: TextInputType.emailAddress,
-              onChanged: (_) =>
-                  setState(() => _apiFieldErrors.remove('sender_email')),
-              decoration: InputDecoration(
-                labelText: 'Your Zelle sender email',
-                helperText: 'Use the email tied to your Zelle account',
-                errorText: _err('sender_email'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _senderPhone,
-              keyboardType: TextInputType.phone,
-              onChanged: (_) =>
-                  setState(() => _apiFieldErrors.remove('sender_phone')),
-              decoration: InputDecoration(
-                labelText: 'Your Zelle sender phone',
-                helperText: 'Use the phone tied to your Zelle account',
-                errorText: _err('sender_phone'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _reference,
-              onChanged: (_) =>
-                  setState(() => _apiFieldErrors.remove('reference')),
-              decoration: InputDecoration(
-                labelText: 'Bank memo / reference (optional)',
-                errorText: _err('reference'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _notes,
-              maxLines: 3,
-              onChanged: (_) => setState(() => _apiFieldErrors.remove('notes')),
-              decoration: InputDecoration(
-                labelText: 'Notes for our team (optional)',
-                errorText: _err('notes'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: _pickProof,
-              icon: const Icon(Icons.upload_file),
-              label: Text(
-                _proof == null
-                    ? 'Upload screenshot or receipt (optional)'
-                    : 'Proof file selected',
-              ),
-            ),
-            if (_err('proof') != null) ...[
-              const SizedBox(height: 4),
+      body: Theme(
+        data: manualFundingInputTheme(context),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
               Text(
-                _err('proof')!,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.error,
-                  fontSize: 12,
+                'Enter your payment details so we can match your deposit.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppConfig.subtitleColor,
+                      height: 1.35,
+                    ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              OutlinedButton.icon(
+                onPressed: () => _showInstructionsSheet(wf),
+                icon: const Icon(Icons.qr_code_2),
+                label: const Text('View QR and recipient again'),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              TextField(
+                controller: _amount,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (_) =>
+                    setState(() => _apiFieldErrors.remove('amount')),
+                decoration: InputDecoration(
+                  labelText: 'Amount you sent (USD)',
+                  helperText: 'Must match the Zelle amount',
+                  errorText: _err('amount'),
                 ),
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _senderEmail,
+                keyboardType: TextInputType.emailAddress,
+                onChanged: (_) =>
+                    setState(() => _apiFieldErrors.remove('sender_email')),
+                decoration: InputDecoration(
+                  labelText: 'Your Zelle sender email',
+                  helperText: 'Use the email tied to your Zelle account',
+                  errorText: _err('sender_email'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _senderPhone,
+                keyboardType: TextInputType.phone,
+                onChanged: (_) =>
+                    setState(() => _apiFieldErrors.remove('sender_phone')),
+                decoration: InputDecoration(
+                  labelText: 'Your Zelle sender phone',
+                  helperText: 'Use the phone tied to your Zelle account',
+                  errorText: _err('sender_phone'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _reference,
+                onChanged: (_) =>
+                    setState(() => _apiFieldErrors.remove('reference')),
+                decoration: InputDecoration(
+                  labelText: 'Bank memo / reference (optional)',
+                  errorText: _err('reference'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _notes,
+                maxLines: 3,
+                onChanged: (_) =>
+                    setState(() => _apiFieldErrors.remove('notes')),
+                decoration: InputDecoration(
+                  labelText: 'Notes for our team (optional)',
+                  errorText: _err('notes'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _pickProof,
+                icon: const Icon(Icons.upload_file),
+                label: Text(
+                  _proof == null
+                      ? 'Upload screenshot or receipt (optional)'
+                      : 'Proof file selected',
+                ),
+              ),
+              if (_err('proof') != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  _err('proof')!,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: _submitting ? null : _submit,
+                child: _submitting
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Submit for review'),
+              ),
             ],
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: _submitting ? null : _submit,
-              child: _submitting
-                  ? const SizedBox(
-                      height: 22,
-                      width: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Submit for review'),
-            ),
-          ],
+          ),
         ),
       ),
     );

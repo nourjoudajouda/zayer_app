@@ -29,7 +29,7 @@ class ZelleInstructionScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
       appBar: AppBar(
-        title: const Text('Pay with Zelle'),
+        title: const Text('Zelle'),
         backgroundColor: AppConfig.backgroundColor,
         foregroundColor: AppConfig.textColor,
         elevation: 0,

@@ -12,6 +12,7 @@ import '../../core/network/api_error_message.dart'
     show userFacingApiMessage, validationErrorsFromDio;
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
+import 'widgets/manual_funding_input_theme.dart';
 
 /// Submit a wire-transfer funding request (multipart).
 class WireFundingScreen extends ConsumerStatefulWidget {
@@ -94,7 +95,7 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
         map['proof'] = await MultipartFile.fromFile(_proof!.path);
       }
       final fd = FormData.fromMap(map);
-      await ApiClient.instance.post<void>(
+      await ApiClient.postMultipartFunding<void>(
         '/api/wallet/funding-requests/wire',
         data: fd,
       );
@@ -169,6 +170,11 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
                   ),
             ),
             const SizedBox(height: AppSpacing.md),
+            Theme(
+              data: manualFundingInputTheme(context),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
             TextField(
               controller: _amount,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -259,6 +265,9 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Text('Submit for review'),
+            ),
+                ],
+              ),
             ),
           ],
         ),
