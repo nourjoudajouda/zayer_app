@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
@@ -10,10 +11,9 @@ import '../../core/network/api_error_message.dart' show userFacingApiMessage;
 import '../../core/theme/app_spacing.dart';
 import 'stripe_wallet_helpers.dart';
 
-/// Android `CardFormField` uses a platform view that needs **bounded** height when
-/// placed inside a scrollable `Column`; otherwise the view can measure to zero and
-/// render blank. Matches flutter_stripe's default Android form height (~292).
-const double _kStripeCardFormAndroidHeight = 292;
+/// Single-line [CardField] platform view needs a bounded height on Android inside
+/// scrollables; allow room for [InputDecorator] + Stripe’s ~48dp row.
+const double _kCardFieldShellHeight = 72;
 
 /// Arguments for [AddSavedCardScreen] (pass via `GoRouter` extra).
 class AddSavedCardRouteArgs {
@@ -26,8 +26,8 @@ class AddSavedCardRouteArgs {
   final String? setupIntentId;
 }
 
-/// Full-screen card entry: avoids Android touch/focus issues with Stripe
-/// platform views inside modal bottom sheets.
+/// Full-screen card entry using Stripe [CardField] (single secure platform view).
+/// [CardFormField] was removed due to persistent blank rendering on Android in this app.
 ///
 /// Flow: confirm SetupIntent → POST saved-cards → optional PI 3DS → pop(true).
 class AddSavedCardScreen extends ConsumerStatefulWidget {
@@ -153,21 +153,37 @@ class _AddSavedCardScreenState extends ConsumerState<AddSavedCardScreen> {
     }
   }
 
+  InputDecoration _cardFieldDecoration(ThemeData theme) {
+    final radius = BorderRadius.circular(AppConfig.radiusSmall);
+    return InputDecoration(
+      isDense: true,
+      filled: true,
+      fillColor: AppConfig.lightBlueBg,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(borderRadius: radius),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: BorderSide(color: AppConfig.borderColor, width: 1.5),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: const BorderSide(color: AppConfig.primaryColor, width: 2),
+      ),
+      hintStyle: TextStyle(
+        color: AppConfig.subtitleColor.withValues(alpha: 0.9),
+        fontSize: 15,
+        fontWeight: FontWeight.w400,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // Inner style: border drawn by Stripe on Android; keep contrast with outer shell.
-    final formStyle = CardFormStyle(
-      backgroundColor: AppConfig.lightBlueBg,
-      borderColor: AppConfig.borderColor,
-      borderWidth: 1,
-      borderRadius: AppConfig.radiusSmall.round(),
-      cursorColor: AppConfig.primaryColor,
-      textColor: AppConfig.textColor,
-      fontSize: 16,
-      placeholderColor: AppConfig.subtitleColor,
-    );
+    final androidRender = defaultTargetPlatform == TargetPlatform.android
+        ? AndroidPlatformViewRenderType.androidView
+        : AndroidPlatformViewRenderType.expensiveAndroidView;
 
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
@@ -213,13 +229,12 @@ class _AddSavedCardScreenState extends ConsumerState<AddSavedCardScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              // Critical on Android: fixed height + width so the platform view gets
-              // tight constraints inside the scroll view (avoids blank/invisible form).
               Container(
                 width: double.infinity,
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: AppConfig.lightBlueBg,
-                  borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
+                  borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
                   border: Border.all(
                     color: AppConfig.borderColor,
                     width: 1.5,
@@ -232,22 +247,28 @@ class _AddSavedCardScreenState extends ConsumerState<AddSavedCardScreen> {
                     ),
                   ],
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(AppConfig.radiusSmall),
-                  child: SizedBox(
-                    height: _kStripeCardFormAndroidHeight,
-                    width: double.infinity,
-                    child: CardFormField(
-                      autofocus: true,
-                      enablePostalCode: false,
-                      style: formStyle,
-                      onCardChanged: (card) {
-                        setState(() {
-                          _cardComplete = card?.complete == true;
-                          _pageError = null;
-                        });
-                      },
+                child: SizedBox(
+                  height: _kCardFieldShellHeight,
+                  width: double.infinity,
+                  child: CardField(
+                    autofocus: true,
+                    androidPlatformViewRenderType: androidRender,
+                    style: const TextStyle(
+                      color: AppConfig.textColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
                     ),
+                    cursorColor: AppConfig.primaryColor,
+                    decoration: _cardFieldDecoration(theme),
+                    numberHintText: 'Card number',
+                    expirationHintText: 'MM / YY',
+                    cvcHintText: 'CVC',
+                    onCardChanged: (card) {
+                      setState(() {
+                        _cardComplete = card?.complete == true;
+                        _pageError = null;
+                      });
+                    },
                   ),
                 ),
               ),
