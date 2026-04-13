@@ -99,8 +99,10 @@ class ApiClient {
       path,
       data: data,
       options: Options(
+        // Large uploads: send can take a long time; receiveTimeout applies while waiting
+        // for response headers after the request body is sent (Dio IO adapter).
         sendTimeout: const Duration(seconds: 180),
-        receiveTimeout: const Duration(seconds: 120),
+        receiveTimeout: const Duration(seconds: 180),
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as p;
 
 import '../../core/config/app_config.dart';
 import '../../core/config/app_config_provider.dart';
@@ -132,6 +133,19 @@ class _ZelleSubmitScreenState extends ConsumerState<ZelleSubmitScreen> {
       _apiFieldErrors = {};
     });
     try {
+      if (_proof != null) {
+        final len = await _proof!.length();
+        const maxBytes = 10 * 1024 * 1024;
+        if (len > maxBytes) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Proof file must be 10 MB or smaller.'),
+            ),
+          );
+          return;
+        }
+      }
       final map = <String, dynamic>{
         'amount': amt,
         if (_reference.text.trim().isNotEmpty) 'reference': _reference.text.trim(),
@@ -140,7 +154,10 @@ class _ZelleSubmitScreenState extends ConsumerState<ZelleSubmitScreen> {
         if (_notes.text.trim().isNotEmpty) 'notes': _notes.text.trim(),
       };
       if (_proof != null) {
-        map['proof'] = await MultipartFile.fromFile(_proof!.path);
+        map['proof'] = await MultipartFile.fromFile(
+          _proof!.path,
+          filename: p.basename(_proof!.path),
+        );
       }
       final fd = FormData.fromMap(map);
       await ApiClient.postMultipartFunding<void>(
@@ -150,6 +167,7 @@ class _ZelleSubmitScreenState extends ConsumerState<ZelleSubmitScreen> {
       if (!mounted) return;
       ref.invalidate(fundingRequestsProvider);
       ref.invalidate(walletBalanceProvider);
+      setState(() => _submitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(

@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -82,6 +83,19 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
       _apiFieldErrors = {};
     });
     try {
+      if (_proof != null) {
+        final len = await _proof!.length();
+        const maxBytes = 10 * 1024 * 1024;
+        if (len > maxBytes) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Proof file must be 10 MB or smaller.'),
+            ),
+          );
+          return;
+        }
+      }
       final map = <String, dynamic>{
         'amount': amt,
         if (_reference.text.trim().isNotEmpty) 'reference': _reference.text.trim(),
@@ -92,7 +106,10 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
         if (_notes.text.trim().isNotEmpty) 'notes': _notes.text.trim(),
       };
       if (_proof != null) {
-        map['proof'] = await MultipartFile.fromFile(_proof!.path);
+        map['proof'] = await MultipartFile.fromFile(
+          _proof!.path,
+          filename: p.basename(_proof!.path),
+        );
       }
       final fd = FormData.fromMap(map);
       await ApiClient.postMultipartFunding<void>(
@@ -100,6 +117,7 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
         data: fd,
       );
       if (!mounted) return;
+      setState(() => _submitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
