@@ -136,6 +136,7 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
           zelleReceiverEmail: '',
           zelleReceiverPhone: '',
           zelleReceiverQrUrl: '',
+          zelleInstructionText: '',
           wireInstructions: '',
         );
     final instructions = wf.wireInstructions.trim();

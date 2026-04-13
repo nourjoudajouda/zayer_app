@@ -98,7 +98,8 @@ class _AddFundsHubScreenState extends ConsumerState<AddFundsHubScreen> {
           _SectionCard(
             icon: Icons.phone_iphone_outlined,
             title: 'Zelle',
-            subtitle: 'Submit your Zelle sender info and amount; approval adds funds to your wallet.',
+            subtitle:
+                'See payment instructions and QR, then submit details for team review.',
             onTap: () => context.push(AppRoutes.walletFundingZelle),
           ),
         ],

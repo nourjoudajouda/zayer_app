@@ -568,9 +568,8 @@ class _BalanceBreakdownCard extends StatelessWidget {
         content: const SingleChildScrollView(
           child: Text(
             'Available — Money you can use for checkout and fees right now.\n\n'
-            'Pending — Money that is not spendable yet. This can include open orders, '
-            'processing card or bank activity, and Wire or Zelle funding requests while '
-            'our team reviews them. Once those clear or are approved, they typically move to Available.\n\n'
+            'Pending — Total amount of Wire and Zelle funding requests you have submitted that are still '
+            'waiting for admin approval. This is not spendable until the request is approved and credited.\n\n'
             'Promo — Promotional wallet credits. They may only apply to eligible purchases.',
           ),
         ),
@@ -652,8 +651,8 @@ class _BalanceBreakdownCard extends StatelessWidget {
           _BreakdownRow(
             label: 'Pending',
             tooltip:
-                'Not available to spend yet. Can include orders in progress, processing '
-                'transfers, and Wire or Zelle amounts while a funding request is awaiting admin review.',
+                'Sum of your Wire and Zelle funding requests that are still awaiting admin review. '
+                'Not usable for purchases until approved.',
             value: _money.format(balance.pending),
             valueColor: AppConfig.warningOrange,
             dottedUnderline: true,
@@ -671,7 +670,7 @@ class _BalanceBreakdownCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: AppSpacing.md),
             child: Text(
-              'Pending can include manual funding (Wire/Zelle) until those requests are approved.',
+              'Pending is only manual funding (Wire/Zelle) awaiting approval — not spendable yet.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppConfig.subtitleColor,
                     height: 1.35,

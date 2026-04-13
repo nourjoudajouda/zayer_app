@@ -416,6 +416,7 @@ class WalletFundingConfig {
     required this.zelleReceiverEmail,
     required this.zelleReceiverPhone,
     required this.zelleReceiverQrUrl,
+    required this.zelleInstructionText,
     required this.wireInstructions,
   });
 
@@ -423,6 +424,8 @@ class WalletFundingConfig {
   final String zelleReceiverEmail;
   final String zelleReceiverPhone;
   final String zelleReceiverQrUrl;
+  /// Optional admin copy for the Zelle instruction step.
+  final String zelleInstructionText;
   final String wireInstructions;
 
   bool get hasZelleDestination =>
@@ -438,6 +441,7 @@ class WalletFundingConfig {
         zelleReceiverEmail: '',
         zelleReceiverPhone: '',
         zelleReceiverQrUrl: '',
+        zelleInstructionText: '',
         wireInstructions: '',
       );
     }
@@ -452,6 +456,7 @@ class WalletFundingConfig {
       zelleReceiverEmail: (zMap['receiver_email'] as String?)?.trim() ?? '',
       zelleReceiverPhone: (zMap['receiver_phone'] as String?)?.trim() ?? '',
       zelleReceiverQrUrl: (zMap['receiver_qr_url'] as String?)?.trim() ?? '',
+      zelleInstructionText: (zMap['instruction_text'] as String?)?.trim() ?? '',
       wireInstructions: (wMap['instructions'] as String?)?.trim() ?? '',
     );
   }
@@ -583,6 +588,7 @@ class AppBootstrapConfig {
           zelleReceiverEmail: '',
           zelleReceiverPhone: '',
           zelleReceiverQrUrl: '',
+          zelleInstructionText: '',
           wireInstructions: '',
         ),
         checkoutPaymentMode: null,
