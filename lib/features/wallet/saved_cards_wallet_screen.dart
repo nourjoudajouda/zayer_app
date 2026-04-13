@@ -5,7 +5,8 @@ import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
 import '../../core/config/app_config.dart';
 import '../../core/config/app_config_provider.dart';
 import '../../core/network/api_client.dart';
-import '../../core/network/api_error_message.dart';
+import '../../core/network/api_error_message.dart'
+    show userFacingApiMessage, validationErrorsFromDio;
 import '../../core/theme/app_spacing.dart';
 import 'providers/wallet_providers.dart';
 import 'stripe_wallet_helpers.dart';
@@ -69,7 +70,15 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
       );
       final secret =
           setup.data?['setup_intent']?['client_secret'] as String?;
-      if (secret == null || secret.isEmpty) throw Exception('No setup intent');
+      if (secret == null || secret.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not start card setup. Please try again.'),
+          ),
+        );
+        return;
+      }
 
       if (!mounted) return;
 
@@ -104,69 +113,99 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
     final id = card['id']?.toString();
     if (id == null) return;
     final ctrl = TextEditingController();
-    final ok = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Verification amount'),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            labelText: 'Exact USD amount charged',
-            hintText: 'e.g. 3.47',
-            helperText: r'Must be between $1.00 and $5.00',
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Verify')),
-        ],
-      ),
-    );
-    if (ok != true) {
-      ctrl.dispose();
-      return;
-    }
-    final raw = ctrl.text.trim();
-    ctrl.dispose();
-    final amt = double.tryParse(raw);
-    if (amt == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter the exact verification amount from your bank.')),
-      );
-      return;
-    }
-    if (amt < 1 || amt > 5) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('The verification charge is between \$1.00 and \$5.00. Enter the exact amount.'),
-        ),
-      );
-      return;
-    }
-    setState(() => _busy = true);
-    try {
-      await ApiClient.instance.post<Map<String, dynamic>>(
-        '/api/wallet/saved-cards/$id/verify',
-        data: {'amount': amt},
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Card verified. Amount added to wallet.')),
-      );
-      ref.invalidate(walletBalanceProvider);
-      ref.invalidate(walletTransactionsProvider);
-      await _reload();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e))),
-      );
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+      builder: (ctx) {
+        String? fieldError;
+        var submitting = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Verification amount'),
+              content: TextField(
+                controller: ctrl,
+                autofocus: true,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (_) => setDialogState(() => fieldError = null),
+                decoration: InputDecoration(
+                  labelText: 'Exact USD amount charged',
+                  hintText: 'e.g. 3.47',
+                  helperText: r'Must be between $1.00 and $5.00',
+                  errorText: fieldError,
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed:
+                      submitting ? null : () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          final raw = ctrl.text.trim();
+                          final amt = double.tryParse(raw);
+                          if (amt == null) {
+                            setDialogState(
+                              () => fieldError =
+                                  'Enter the exact amount from your bank.',
+                            );
+                            return;
+                          }
+                          if (amt < 1 || amt > 5) {
+                            setDialogState(
+                              () => fieldError =
+                                  r'Enter an amount between $1.00 and $5.00.',
+                            );
+                            return;
+                          }
+                          setDialogState(() {
+                            submitting = true;
+                            fieldError = null;
+                          });
+                          try {
+                            await ApiClient.instance.post<Map<String, dynamic>>(
+                              '/api/wallet/saved-cards/$id/verify',
+                              data: {'amount': amt},
+                            );
+                            if (!ctx.mounted) return;
+                            Navigator.pop(ctx);
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Card verified. Amount added to wallet.',
+                                ),
+                              ),
+                            );
+                            ref.invalidate(walletBalanceProvider);
+                            ref.invalidate(walletTransactionsProvider);
+                            await _reload();
+                          } catch (e) {
+                            final errs = validationErrorsFromDio(e);
+                            setDialogState(() {
+                              submitting = false;
+                              fieldError = errs['amount'] ??
+                                  userFacingApiMessage(e);
+                            });
+                          }
+                        },
+                  child: submitting
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Verify'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).whenComplete(ctrl.dispose);
   }
 
   Future<void> _topUp(Map<String, dynamic> card) async {
@@ -388,9 +427,13 @@ class _AddStripeCardSheet extends StatefulWidget {
 class _AddStripeCardSheetState extends State<_AddStripeCardSheet> {
   bool _cardComplete = false;
   bool _submitting = false;
+  String? _sheetError;
 
   Future<void> _submit() async {
-    setState(() => _submitting = true);
+    setState(() {
+      _submitting = true;
+      _sheetError = null;
+    });
     try {
       final si = await Stripe.instance.confirmSetupIntent(
         paymentIntentClientSecret: widget.clientSecret,
@@ -414,16 +457,20 @@ class _AddStripeCardSheetState extends State<_AddStripeCardSheet> {
       Navigator.pop(context, true);
     } on StripeException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.error.message ?? 'Stripe error')),
-      );
+      setState(() {
+        _submitting = false;
+        _sheetError = e.error.message ?? 'Card could not be saved. Try again.';
+      });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e))),
-      );
+      setState(() {
+        _submitting = false;
+        _sheetError = userFacingApiMessage(e);
+      });
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted && _submitting) {
+        setState(() => _submitting = false);
+      }
     }
   }
 
@@ -451,7 +498,10 @@ class _AddStripeCardSheetState extends State<_AddStripeCardSheet> {
           const SizedBox(height: 12),
           CardField(
             onCardChanged: (card) {
-              setState(() => _cardComplete = card?.complete == true);
+              setState(() {
+                _cardComplete = card?.complete == true;
+                _sheetError = null;
+              });
             },
           ),
           const SizedBox(height: 16),
@@ -465,6 +515,16 @@ class _AddStripeCardSheetState extends State<_AddStripeCardSheet> {
                   )
                 : const Text('Save & verify'),
           ),
+          if (_sheetError != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _sheetError!,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: 13,
+              ),
+            ),
+          ],
         ],
       ),
     );

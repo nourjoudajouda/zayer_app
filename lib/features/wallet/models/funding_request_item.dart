@@ -12,6 +12,11 @@ class FundingRequestItem {
     this.reference,
     this.userNotes,
     this.teamMessage,
+    this.rejectionReason,
+    this.senderName,
+    this.senderEmail,
+    this.senderPhone,
+    this.bankName,
     this.proofAttached = false,
     this.proofUrl,
   });
@@ -27,6 +32,11 @@ class FundingRequestItem {
   final String? reference;
   final String? userNotes;
   final String? teamMessage;
+  final String? rejectionReason;
+  final String? senderName;
+  final String? senderEmail;
+  final String? senderPhone;
+  final String? bankName;
   final bool proofAttached;
   final String? proofUrl;
 
@@ -53,6 +63,11 @@ class FundingRequestItem {
       reference: json['reference']?.toString(),
       userNotes: json['notes']?.toString(),
       teamMessage: (json['team_message'] ?? json['admin_notes'])?.toString(),
+      rejectionReason: json['rejection_reason']?.toString(),
+      senderName: json['sender_name']?.toString(),
+      senderEmail: json['sender_email']?.toString(),
+      senderPhone: json['sender_phone']?.toString(),
+      bankName: json['bank_name']?.toString(),
       proofAttached: json['proof_attached'] == true,
       proofUrl: json['proof_url']?.toString(),
     );

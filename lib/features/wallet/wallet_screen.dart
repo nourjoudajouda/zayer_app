@@ -567,10 +567,11 @@ class _BalanceBreakdownCard extends StatelessWidget {
         title: const Text('How your balance works'),
         content: const SingleChildScrollView(
           child: Text(
-            'Available — Money you can use for checkout right now.\n\n'
-            'Pending — Funds held for open orders, processing transfers, or other activity. '
-            'They are not spendable until they clear.\n\n'
-            'Promo — Promotional credits from Zayer. These may apply only to certain purchases.',
+            'Available — Money you can use for checkout and fees right now.\n\n'
+            'Pending — Money that is not spendable yet. This can include open orders, '
+            'processing card or bank activity, and Wire or Zelle funding requests while '
+            'our team reviews them. Once those clear or are approved, they typically move to Available.\n\n'
+            'Promo — Promotional wallet credits. They may only apply to eligible purchases.',
           ),
         ),
         actions: [
@@ -585,7 +586,6 @@ class _BalanceBreakdownCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final showPending = _meaningful(balance.pending);
     final showPromo = _meaningful(balance.promo);
 
     return Container(
@@ -642,33 +642,42 @@ class _BalanceBreakdownCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           _BreakdownRow(
-            label: 'Available to spend',
+            label: 'Available',
             tooltip:
-                'Money you can use for orders and fees right now. This is your primary spendable balance.',
+                'Money you can use for orders and fees right now.',
             value: _money.format(balance.available),
             valueColor: AppConfig.textColor,
           ),
-          if (showPending) ...[
-            const Divider(height: 24),
-            _BreakdownRow(
-              label: 'Pending',
-              tooltip:
-                  'Held for processing orders, incoming transfers, or other activity. Not available to spend until it clears.',
-              value: _money.format(balance.pending),
-              valueColor: AppConfig.warningOrange,
-              dottedUnderline: true,
-            ),
-          ],
+          const Divider(height: 24),
+          _BreakdownRow(
+            label: 'Pending',
+            tooltip:
+                'Not available to spend yet. Can include orders in progress, processing '
+                'transfers, and Wire or Zelle amounts while a funding request is awaiting admin review.',
+            value: _money.format(balance.pending),
+            valueColor: AppConfig.warningOrange,
+            dottedUnderline: true,
+          ),
           if (showPromo) ...[
             const Divider(height: 24),
             _BreakdownRow(
-              label: 'Promo credits',
+              label: 'Promo',
               tooltip:
                   'Promotional wallet credits from Zayer. Usage may be limited to eligible purchases.',
               value: _money.format(balance.promo),
               valueColor: AppConfig.primaryColor,
             ),
           ],
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.md),
+            child: Text(
+              'Pending can include manual funding (Wire/Zelle) until those requests are approved.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppConfig.subtitleColor,
+                    height: 1.35,
+                  ),
+            ),
+          ),
         ],
       ),
     );

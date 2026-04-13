@@ -8,7 +8,8 @@ import '../../core/config/app_config.dart';
 import '../../core/config/app_config_provider.dart';
 import '../../core/config/models/app_bootstrap_config.dart';
 import '../../core/network/api_client.dart';
-import '../../core/network/api_error_message.dart';
+import '../../core/network/api_error_message.dart'
+    show userFacingApiMessage, validationErrorsFromDio;
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 
@@ -30,6 +31,7 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
   final _notes = TextEditingController();
   XFile? _proof;
   bool _submitting = false;
+  Map<String, String> _apiFieldErrors = {};
 
   @override
   void dispose() {
@@ -74,7 +76,10 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
       return;
     }
     final amt = double.tryParse(_amount.text.trim().replaceAll(',', ''))!;
-    setState(() => _submitting = true);
+    setState(() {
+      _submitting = true;
+      _apiFieldErrors = {};
+    });
     try {
       final map = <String, dynamic>{
         'amount': amt,
@@ -104,12 +109,22 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e))),
-      );
+      final errs = validationErrorsFromDio(e);
+      if (errs.isNotEmpty) {
+        setState(() => _apiFieldErrors = errs);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userFacingApiMessage(e))),
+        );
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  String? _err(String key) {
+    final v = _apiFieldErrors[key];
+    return v != null && v.isNotEmpty ? v : null;
   }
 
   @override
@@ -156,54 +171,68 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
             TextField(
               controller: _amount,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
+              onChanged: (_) => setState(() => _apiFieldErrors.remove('amount')),
+              decoration: InputDecoration(
                 labelText: 'Amount (USD)',
                 helperText: 'Amount you wired',
+                errorText: _err('amount'),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _reference,
-              decoration: const InputDecoration(
+              onChanged: (_) => setState(() => _apiFieldErrors.remove('reference')),
+              decoration: InputDecoration(
                 labelText: 'Transfer reference / confirmation (optional)',
+                errorText: _err('reference'),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _senderName,
-              decoration: const InputDecoration(
+              onChanged: (_) => setState(() => _apiFieldErrors.remove('sender_name')),
+              decoration: InputDecoration(
                 labelText: 'Sender name on the wire (optional)',
+                errorText: _err('sender_name'),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _senderEmail,
               keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
+              onChanged: (_) => setState(() => _apiFieldErrors.remove('sender_email')),
+              decoration: InputDecoration(
                 labelText: 'Sender email (optional)',
+                errorText: _err('sender_email'),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _senderPhone,
               keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
+              onChanged: (_) => setState(() => _apiFieldErrors.remove('sender_phone')),
+              decoration: InputDecoration(
                 labelText: 'Sender phone (optional)',
+                errorText: _err('sender_phone'),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _bankName,
-              decoration: const InputDecoration(
+              onChanged: (_) => setState(() => _apiFieldErrors.remove('bank_name')),
+              decoration: InputDecoration(
                 labelText: 'Sending bank name (optional)',
+                errorText: _err('bank_name'),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _notes,
               maxLines: 3,
-              decoration: const InputDecoration(
+              onChanged: (_) => setState(() => _apiFieldErrors.remove('notes')),
+              decoration: InputDecoration(
                 labelText: 'Notes for our team (optional)',
+                errorText: _err('notes'),
               ),
             ),
             const SizedBox(height: 12),
@@ -212,6 +241,13 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
               icon: const Icon(Icons.upload_file),
               label: Text(_proof == null ? 'Upload proof (optional)' : 'Proof selected'),
             ),
+            if (_err('proof') != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                _err('proof')!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
+              ),
+            ],
             const SizedBox(height: 24),
             FilledButton(
               onPressed: _submitting ? null : _submit,

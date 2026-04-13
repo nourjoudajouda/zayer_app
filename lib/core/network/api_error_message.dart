@@ -12,13 +12,41 @@ String userFacingApiMessage(Object error) {
   return 'Something went wrong. Please try again.';
 }
 
+/// Laravel 422 `errors` map: first message per field key (snake_case).
+Map<String, String> validationErrorsFromDio(Object error) {
+  if (error is! DioException) return const {};
+  final data = error.response?.data;
+  if (data is! Map<String, dynamic>) return const {};
+  final errs = data['errors'];
+  if (errs is! Map) return const {};
+  final out = <String, String>{};
+  for (final entry in errs.entries) {
+    final key = entry.key.toString();
+    final v = entry.value;
+    String? first;
+    if (v is List && v.isNotEmpty) {
+      first = v.first?.toString().trim();
+    } else if (v != null) {
+      first = v.toString().trim();
+    }
+    if (first != null && first.isNotEmpty) {
+      out[key] = first;
+    }
+  }
+  return out;
+}
+
+bool _isGenericLaravelMessage(String? m) {
+  if (m == null || m.isEmpty) return true;
+  final t = m.toLowerCase();
+  return t.contains('given data was invalid') ||
+      t.contains('the given data was invalid') ||
+      t == 'validation error';
+}
+
 String _fromDio(DioException e) {
   final data = e.response?.data;
   if (data is Map<String, dynamic>) {
-    final msg = data['message'];
-    if (msg is String && msg.trim().isNotEmpty) {
-      return msg.trim();
-    }
     final errs = data['errors'];
     if (errs is Map) {
       final parts = <String>[];
@@ -36,6 +64,10 @@ String _fromDio(DioException e) {
         return parts.join('\n');
       }
     }
+    final msg = data['message'];
+    if (msg is String && msg.trim().isNotEmpty && !_isGenericLaravelMessage(msg)) {
+      return msg.trim();
+    }
   }
   switch (e.type) {
     case DioExceptionType.connectionTimeout:
@@ -52,7 +84,7 @@ String _fromDio(DioException e) {
     return 'Please sign in again.';
   }
   if (code == 422) {
-    return 'Please check the highlighted fields.';
+    return 'Please check your entries and try again.';
   }
   return 'Something went wrong. Please try again.';
 }

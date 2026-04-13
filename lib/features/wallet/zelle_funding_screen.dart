@@ -9,11 +9,12 @@ import '../../core/config/app_config.dart';
 import '../../core/config/app_config_provider.dart';
 import '../../core/config/models/app_bootstrap_config.dart';
 import '../../core/network/api_client.dart';
-import '../../core/network/api_error_message.dart';
+import '../../core/network/api_error_message.dart'
+    show userFacingApiMessage, validationErrorsFromDio;
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 
-/// Submit a Zelle funding request after sending payment to the configured recipient.
+/// Zelle: show destination first, user pays in bank app, then submits details here.
 class ZelleFundingScreen extends ConsumerStatefulWidget {
   const ZelleFundingScreen({super.key});
 
@@ -29,6 +30,7 @@ class _ZelleFundingScreenState extends ConsumerState<ZelleFundingScreen> {
   final _notes = TextEditingController();
   XFile? _proof;
   bool _submitting = false;
+  Map<String, String> _apiFieldErrors = {};
 
   @override
   void dispose() {
@@ -42,7 +44,12 @@ class _ZelleFundingScreenState extends ConsumerState<ZelleFundingScreen> {
 
   Future<void> _pickProof() async {
     final f = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (f != null) setState(() => _proof = f);
+    if (f != null) {
+      setState(() {
+        _proof = f;
+        _apiFieldErrors.remove('proof');
+      });
+    }
   }
 
   String? _validateBeforeSubmit() {
@@ -80,7 +87,10 @@ class _ZelleFundingScreenState extends ConsumerState<ZelleFundingScreen> {
     final em = _senderEmail.text.trim();
     final ph = _senderPhone.text.trim();
     final amt = double.tryParse(_amount.text.trim().replaceAll(',', ''))!;
-    setState(() => _submitting = true);
+    setState(() {
+      _submitting = true;
+      _apiFieldErrors = {};
+    });
     try {
       final map = <String, dynamic>{
         'amount': amt,
@@ -108,12 +118,22 @@ class _ZelleFundingScreenState extends ConsumerState<ZelleFundingScreen> {
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e))),
-      );
+      final errs = validationErrorsFromDio(e);
+      if (errs.isNotEmpty) {
+        setState(() => _apiFieldErrors = errs);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userFacingApiMessage(e))),
+        );
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  String? _err(String key) {
+    final v = _apiFieldErrors[key];
+    return v != null && v.isNotEmpty ? v : null;
   }
 
   @override
@@ -128,6 +148,7 @@ class _ZelleFundingScreenState extends ConsumerState<ZelleFundingScreen> {
           wireInstructions: '',
         );
     final hasDestination = wf.hasZelleDestination;
+    final qr = wf.zelleReceiverQrUrl.trim();
 
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
@@ -148,64 +169,141 @@ class _ZelleFundingScreenState extends ConsumerState<ZelleFundingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _InstructionPanel(hasDestination: hasDestination),
-            const SizedBox(height: AppSpacing.md),
-            if (hasDestination) _DestinationCard(config: wf) else _MissingDestinationBanner(),
-            const SizedBox(height: AppSpacing.lg),
             Text(
-              'After you have sent the payment, tell us the details below so we can match your deposit.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppConfig.subtitleColor,
+              'Where to send your payment',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            if (hasDestination)
+              _ZelleDestinationHero(config: wf, qrUrl: qr)
+            else
+              const _MissingDestinationBanner(),
+            const SizedBox(height: AppSpacing.lg),
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppConfig.cardColor,
+                borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
+                border: Border.all(color: AppConfig.borderColor),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'In your banking app',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '1. Send the payment with Zelle to the recipient above (scan QR or enter email/phone).\n'
+                    '2. Come back here and complete the form so we can match your deposit.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          height: 1.4,
+                          color: AppConfig.subtitleColor,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              children: [
+                Expanded(
+                  child: Divider(color: AppConfig.borderColor),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    'Confirm your payment',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ),
+                Expanded(
+                  child: Divider(color: AppConfig.borderColor),
+                ),
+              ],
             ),
             const SizedBox(height: AppSpacing.md),
             TextField(
               controller: _amount,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
+              onChanged: (_) => setState(() => _apiFieldErrors.remove('amount')),
+              decoration: InputDecoration(
                 labelText: 'Amount you sent (USD)',
                 helperText: 'Must match the Zelle amount',
+                errorText: _err('amount'),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _senderEmail,
               keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
+              onChanged: (_) =>
+                  setState(() => _apiFieldErrors.remove('sender_email')),
+              decoration: InputDecoration(
                 labelText: 'Your Zelle sender email',
-                helperText: 'Required if you sent from email',
+                helperText: 'Use the email tied to your Zelle account',
+                errorText: _err('sender_email'),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _senderPhone,
               keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
+              onChanged: (_) =>
+                  setState(() => _apiFieldErrors.remove('sender_phone')),
+              decoration: InputDecoration(
                 labelText: 'Your Zelle sender phone',
-                helperText: 'Required if you sent from phone',
+                helperText: 'Use the phone tied to your Zelle account',
+                errorText: _err('sender_phone'),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _reference,
-              decoration: const InputDecoration(
-                labelText: 'Bank reference / memo (optional)',
+              onChanged: (_) =>
+                  setState(() => _apiFieldErrors.remove('reference')),
+              decoration: InputDecoration(
+                labelText: 'Bank memo / reference (optional)',
+                errorText: _err('reference'),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _notes,
               maxLines: 3,
-              decoration: const InputDecoration(
+              onChanged: (_) => setState(() => _apiFieldErrors.remove('notes')),
+              decoration: InputDecoration(
                 labelText: 'Notes for our team (optional)',
+                errorText: _err('notes'),
               ),
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: _pickProof,
               icon: const Icon(Icons.upload_file),
-              label: Text(_proof == null ? 'Upload proof screenshot (optional)' : 'Proof file selected'),
+              label: Text(
+                _proof == null
+                    ? 'Upload screenshot or receipt (optional)'
+                    : 'Proof file selected',
+              ),
             ),
+            if (_err('proof') != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                _err('proof')!,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontSize: 12,
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             FilledButton(
               onPressed: _submitting ? null : _submit,
@@ -224,152 +322,96 @@ class _ZelleFundingScreenState extends ConsumerState<ZelleFundingScreen> {
   }
 }
 
-class _InstructionPanel extends StatelessWidget {
-  const _InstructionPanel({required this.hasDestination});
-
-  final bool hasDestination;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppConfig.primaryColor.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
-        border: Border.all(color: AppConfig.primaryColor.withValues(alpha: 0.25)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'How Zelle funding works',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-          const SizedBox(height: 8),
-          _StepLine(n: '1', text: hasDestination
-              ? 'Send your payment with Zelle to the recipient shown below (name, email or phone, and QR if provided).'
-              : 'Send your payment with Zelle to the account our team has given you (check email or support if you do not see details here).'),
-          const SizedBox(height: 6),
-          const _StepLine(
-            n: '2',
-            text: 'Send the payment first, then return here and submit the form.',
-          ),
-          const SizedBox(height: 6),
-          const _StepLine(
-            n: '3',
-            text: 'We review each request. Your wallet is credited only after approval.',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StepLine extends StatelessWidget {
-  const _StepLine({required this.n, required this.text});
-
-  final String n;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 22,
-          height: 22,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppConfig.primaryColor.withValues(alpha: 0.2),
-            shape: BoxShape.circle,
-          ),
-          child: Text(
-            n,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppConfig.primaryColor,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            text,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  height: 1.35,
-                ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DestinationCard extends StatelessWidget {
-  const _DestinationCard({required this.config});
+/// QR first (if configured), then recipient details — matches real banking-app flow.
+class _ZelleDestinationHero extends StatelessWidget {
+  const _ZelleDestinationHero({
+    required this.config,
+    required this.qrUrl,
+  });
 
   final WalletFundingConfig config;
+  final String qrUrl;
 
   @override
   Widget build(BuildContext context) {
-    final qr = config.zelleReceiverQrUrl.trim();
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppConfig.cardColor,
         borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
         border: Border.all(color: AppConfig.borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (qrUrl.isNotEmpty) ...[
+            Center(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: CachedNetworkImage(
+                  imageUrl: qrUrl,
+                  width: 260,
+                  height: 260,
+                  fit: BoxFit.contain,
+                  placeholder: (context, url) => const SizedBox(
+                    width: 260,
+                    height: 260,
+                    child: Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Icon(Icons.qr_code_2, size: 64),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Scan with your bank app Zelle screen',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppConfig.subtitleColor,
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           Text(
-            'Send Zelle to',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            qrUrl.isNotEmpty
+                ? 'Or send manually to:'
+                : 'Send Zelle to:',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: AppConfig.subtitleColor,
                   fontWeight: FontWeight.w600,
                 ),
           ),
           const SizedBox(height: 8),
           if (config.zelleReceiverName.trim().isNotEmpty)
-            _DestRow(icon: Icons.badge_outlined, label: 'Name', value: config.zelleReceiverName.trim()),
+            _DestRow(
+              icon: Icons.badge_outlined,
+              label: 'Recipient name',
+              value: config.zelleReceiverName.trim(),
+            ),
           if (config.zelleReceiverEmail.trim().isNotEmpty)
-            _DestRow(icon: Icons.email_outlined, label: 'Email', value: config.zelleReceiverEmail.trim()),
+            _DestRow(
+              icon: Icons.email_outlined,
+              label: 'Recipient email',
+              value: config.zelleReceiverEmail.trim(),
+            ),
           if (config.zelleReceiverPhone.trim().isNotEmpty)
-            _DestRow(icon: Icons.phone_outlined, label: 'Phone', value: config.zelleReceiverPhone.trim()),
-          if (qr.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Center(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: CachedNetworkImage(
-                  imageUrl: qr,
-                  width: 180,
-                  height: 180,
-                  fit: BoxFit.contain,
-                  placeholder: (context, url) => const SizedBox(
-                    width: 180,
-                    height: 180,
-                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                  ),
-                  errorWidget: (context, url, error) =>
-                      const Icon(Icons.qr_code_2, size: 48),
-                ),
-              ),
+            _DestRow(
+              icon: Icons.phone_outlined,
+              label: 'Recipient phone',
+              value: config.zelleReceiverPhone.trim(),
             ),
-            const SizedBox(height: 4),
-            Center(
-              child: Text(
-                'Scan with your banking app if supported',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppConfig.subtitleColor,
-                    ),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -390,12 +432,12 @@ class _DestRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: AppConfig.subtitleColor),
-          const SizedBox(width: 8),
+          Icon(icon, size: 20, color: AppConfig.primaryColor),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -408,7 +450,7 @@ class _DestRow extends StatelessWidget {
                 ),
                 SelectableText(
                   value,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                 ),
@@ -422,6 +464,8 @@ class _DestRow extends StatelessWidget {
 }
 
 class _MissingDestinationBanner extends StatelessWidget {
+  const _MissingDestinationBanner();
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -429,7 +473,9 @@ class _MissingDestinationBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppConfig.warningOrange.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
-        border: Border.all(color: AppConfig.warningOrange.withValues(alpha: 0.35)),
+        border: Border.all(
+          color: AppConfig.warningOrange.withValues(alpha: 0.35),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -438,9 +484,9 @@ class _MissingDestinationBanner extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Zelle recipient details are not configured in the app yet. '
-              'Use the account information provided by Zayer (email or support), '
-              'then submit this form so we can match your payment.',
+              'Recipient details are not loaded in the app yet. '
+              'Use the Zelle email or phone Zayer gave you, send the payment from your bank, '
+              'then complete the form below.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.35),
             ),
           ),
