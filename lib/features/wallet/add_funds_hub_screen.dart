@@ -52,7 +52,16 @@ class _AddFundsHubScreenState extends ConsumerState<AddFundsHubScreen> {
                   color: AppConfig.subtitleColor,
                 ),
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.sm),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => context.push(AppRoutes.walletFundingHistory),
+              icon: const Icon(Icons.history, size: 20),
+              label: const Text('Wire & Zelle request history'),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
           _SectionCard(
             icon: Icons.credit_card,
             title: 'Debit or credit card',

@@ -40,8 +40,8 @@ import '../../features/support/support_inbox_screen.dart';
 import '../../features/support/support_request_submitted_screen.dart';
 import '../../features/support/support_ticket_chat_screen.dart';
 import '../../features/wallet/add_funds_hub_screen.dart';
+import '../../features/wallet/funding_requests_history_screen.dart';
 import '../../features/wallet/saved_cards_wallet_screen.dart';
-import '../../features/wallet/top_up_wallet_screen.dart';
 import '../../features/wallet/wire_funding_screen.dart';
 import '../../features/wallet/zelle_funding_screen.dart';
 import '../../features/warehouse/my_warehouse_screen.dart';
@@ -111,6 +111,7 @@ class AppRoutes {
   static const String walletSavedCards = '/wallet/saved-cards';
   static const String walletFundingWire = '/wallet/add-funds/wire';
   static const String walletFundingZelle = '/wallet/add-funds/zelle';
+  static const String walletFundingHistory = '/wallet/funding-history';
   static const String walletRefundToWallet = '/wallet/refund-to-wallet';
   static const String walletWithdrawToBank = '/wallet/withdraw-to-bank';
   static const String myWarehouse = '/my-warehouse';
@@ -505,6 +506,10 @@ GoRouter _createAppRouter() {
       GoRoute(
         path: AppRoutes.walletFundingZelle,
         builder: (context, state) => const ZelleFundingScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.walletFundingHistory,
+        builder: (context, state) => const FundingRequestsHistoryScreen(),
       ),
       GoRoute(
         path: AppRoutes.walletRefundToWallet,

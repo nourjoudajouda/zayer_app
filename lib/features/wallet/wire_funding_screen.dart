@@ -1,10 +1,15 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/config/app_config_provider.dart';
+import '../../core/config/models/app_bootstrap_config.dart';
 import '../../core/network/api_client.dart';
+import '../../core/network/api_error_message.dart';
+import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 
 /// Submit a wire-transfer funding request (multipart).
@@ -43,9 +48,32 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
     if (f != null) setState(() => _proof = f);
   }
 
+  bool _looksLikeEmail(String s) {
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(s);
+  }
+
+  String? _validateBeforeSubmit() {
+    final amt = double.tryParse(_amount.text.trim().replaceAll(',', ''));
+    if (amt == null) {
+      return 'Enter a valid amount in USD.';
+    }
+    if (amt < 1) {
+      return 'Minimum amount is \$1.00.';
+    }
+    final em = _senderEmail.text.trim();
+    if (em.isNotEmpty && !_looksLikeEmail(em)) {
+      return 'Check the sender email format.';
+    }
+    return null;
+  }
+
   Future<void> _submit() async {
-    final amt = double.tryParse(_amount.text.trim());
-    if (amt == null || amt < 1) return;
+    final err = _validateBeforeSubmit();
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+      return;
+    }
+    final amt = double.tryParse(_amount.text.trim().replaceAll(',', ''))!;
     setState(() => _submitting = true);
     try {
       final map = <String, dynamic>{
@@ -67,13 +95,17 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Request submitted. We will review it shortly.')),
+        const SnackBar(
+          content: Text(
+            'Request submitted. Our team will review it before crediting your wallet.',
+          ),
+        ),
       );
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not submit: $e')),
+        SnackBar(content: Text(userFacingApiMessage(e))),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -82,6 +114,17 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bootstrap = ref.watch(bootstrapConfigProvider).valueOrNull;
+    final wf = bootstrap?.walletFunding ??
+        const WalletFundingConfig(
+          zelleReceiverName: '',
+          zelleReceiverEmail: '',
+          zelleReceiverPhone: '',
+          zelleReceiverQrUrl: '',
+          wireInstructions: '',
+        );
+    final instructions = wf.wireInstructions.trim();
+
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
       appBar: AppBar(
@@ -89,37 +132,79 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
         backgroundColor: AppConfig.backgroundColor,
         foregroundColor: AppConfig.textColor,
         elevation: 0,
+        actions: [
+          TextButton(
+            onPressed: () => context.push(AppRoutes.walletFundingHistory),
+            child: const Text('History'),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.md),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _WireInstructionPanel(instructions: instructions),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              'Send your bank transfer first using the details above, then submit this form so we can match your deposit.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppConfig.subtitleColor,
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.md),
             TextField(
               controller: _amount,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Amount (USD)'),
+              decoration: const InputDecoration(
+                labelText: 'Amount (USD)',
+                helperText: 'Amount you wired',
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _reference,
               decoration: const InputDecoration(
-                labelText: 'Transfer reference (optional)',
+                labelText: 'Transfer reference / confirmation (optional)',
               ),
             ),
             const SizedBox(height: 12),
-            TextField(controller: _senderName, decoration: const InputDecoration(labelText: 'Sender name (optional)')),
+            TextField(
+              controller: _senderName,
+              decoration: const InputDecoration(
+                labelText: 'Sender name on the wire (optional)',
+              ),
+            ),
             const SizedBox(height: 12),
-            TextField(controller: _senderEmail, decoration: const InputDecoration(labelText: 'Sender email (optional)')),
+            TextField(
+              controller: _senderEmail,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Sender email (optional)',
+              ),
+            ),
             const SizedBox(height: 12),
-            TextField(controller: _senderPhone, decoration: const InputDecoration(labelText: 'Sender phone (optional)')),
+            TextField(
+              controller: _senderPhone,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Sender phone (optional)',
+              ),
+            ),
             const SizedBox(height: 12),
-            TextField(controller: _bankName, decoration: const InputDecoration(labelText: 'Bank name (optional)')),
+            TextField(
+              controller: _bankName,
+              decoration: const InputDecoration(
+                labelText: 'Sending bank name (optional)',
+              ),
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: _notes,
               maxLines: 3,
-              decoration: const InputDecoration(labelText: 'Notes (optional)'),
+              decoration: const InputDecoration(
+                labelText: 'Notes for our team (optional)',
+              ),
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
@@ -136,10 +221,51 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
                       width: 22,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Submit request'),
+                  : const Text('Submit for review'),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _WireInstructionPanel extends StatelessWidget {
+  const _WireInstructionPanel({required this.instructions});
+
+  final String instructions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppConfig.primaryColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
+        border: Border.all(color: AppConfig.primaryColor.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Wire instructions',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 8),
+          if (instructions.isNotEmpty)
+            SelectableText(
+              instructions,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.4),
+            )
+          else
+            Text(
+              'Bank routing and account details are provided by Zayer (email or support). '
+              'Use those details in your bank app, then complete this form.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.4),
+            ),
+        ],
       ),
     );
   }

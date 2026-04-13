@@ -409,6 +409,54 @@ class PaymentGatewaysConfig {
   }
 }
 
+/// Shown on Zelle / wire funding screens (from admin payment settings).
+class WalletFundingConfig {
+  const WalletFundingConfig({
+    required this.zelleReceiverName,
+    required this.zelleReceiverEmail,
+    required this.zelleReceiverPhone,
+    required this.zelleReceiverQrUrl,
+    required this.wireInstructions,
+  });
+
+  final String zelleReceiverName;
+  final String zelleReceiverEmail;
+  final String zelleReceiverPhone;
+  final String zelleReceiverQrUrl;
+  final String wireInstructions;
+
+  bool get hasZelleDestination =>
+      zelleReceiverName.trim().isNotEmpty ||
+      zelleReceiverEmail.trim().isNotEmpty ||
+      zelleReceiverPhone.trim().isNotEmpty ||
+      zelleReceiverQrUrl.trim().isNotEmpty;
+
+  factory WalletFundingConfig.fromJson(Map<String, dynamic>? json) {
+    if (json == null) {
+      return const WalletFundingConfig(
+        zelleReceiverName: '',
+        zelleReceiverEmail: '',
+        zelleReceiverPhone: '',
+        zelleReceiverQrUrl: '',
+        wireInstructions: '',
+      );
+    }
+    final zelle = json['zelle'];
+    final wire = json['wire'];
+    Map<String, dynamic> zMap = {};
+    Map<String, dynamic> wMap = {};
+    if (zelle is Map<String, dynamic>) zMap = zelle;
+    if (wire is Map<String, dynamic>) wMap = wire;
+    return WalletFundingConfig(
+      zelleReceiverName: (zMap['receiver_name'] as String?)?.trim() ?? '',
+      zelleReceiverEmail: (zMap['receiver_email'] as String?)?.trim() ?? '',
+      zelleReceiverPhone: (zMap['receiver_phone'] as String?)?.trim() ?? '',
+      zelleReceiverQrUrl: (zMap['receiver_qr_url'] as String?)?.trim() ?? '',
+      wireInstructions: (wMap['instructions'] as String?)?.trim() ?? '',
+    );
+  }
+}
+
 /// Root bootstrap config: theme + splash + onboarding + markets + promo_banners + api_base_url + development_mode + app_name + app_icon_url.
 class AppBootstrapConfig {
   const AppBootstrapConfig({
@@ -422,6 +470,7 @@ class AppBootstrapConfig {
     this.appName,
     this.appIconUrl,
     this.paymentGateways,
+    this.walletFunding,
     this.checkoutPaymentMode,
     this.refundFeePercent = 0,
   });
@@ -440,6 +489,8 @@ class AppBootstrapConfig {
   /// App icon/logo URL from admin. Used inside the app (e.g. AppBar).
   final String? appIconUrl;
   final PaymentGatewaysConfig? paymentGateways;
+  /// Zelle destination + wire copy text for manual wallet top-ups.
+  final WalletFundingConfig? walletFunding;
   /// Same source as checkout: `wallet_only` | `gateway_only` | `wallet_and_gateway`.
   final String? checkoutPaymentMode;
   /// Percent fee on bank withdrawals only (from admin payment settings).
@@ -459,6 +510,8 @@ class AppBootstrapConfig {
     final paymentGateways = paymentGatewaysJson != null
         ? PaymentGatewaysConfig.fromJson(paymentGatewaysJson)
         : null;
+    final walletFundingJson = json['wallet_funding'] as Map<String, dynamic>?;
+    final walletFunding = WalletFundingConfig.fromJson(walletFundingJson);
     final checkoutMode = (json['checkout_payment_mode'] as String?)?.trim();
     final feeRaw = json['refund_fee_percent'];
     final refundFee = feeRaw is num ? feeRaw.toDouble() : double.tryParse('$feeRaw') ?? 0.0;
@@ -481,6 +534,7 @@ class AppBootstrapConfig {
       appName: appName != null && appName.trim().isNotEmpty ? appName.trim() : null,
       appIconUrl: appIconUrl != null && appIconUrl.trim().isNotEmpty ? appIconUrl.trim() : null,
       paymentGateways: paymentGateways,
+      walletFunding: walletFunding,
       checkoutPaymentMode: checkoutMode != null && checkoutMode.isNotEmpty
           ? checkoutMode
           : null,
@@ -524,6 +578,13 @@ class AppBootstrapConfig {
         onboarding: fallbackOnboarding,
         markets: MarketsConfig.fallback,
         promoBanners: const [],
+        walletFunding: const WalletFundingConfig(
+          zelleReceiverName: '',
+          zelleReceiverEmail: '',
+          zelleReceiverPhone: '',
+          zelleReceiverQrUrl: '',
+          wireInstructions: '',
+        ),
         checkoutPaymentMode: null,
         refundFeePercent: 0,
       );

@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
@@ -6,6 +5,7 @@ import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
 import '../../core/config/app_config.dart';
 import '../../core/config/app_config_provider.dart';
 import '../../core/network/api_client.dart';
+import '../../core/network/api_error_message.dart';
 import '../../core/theme/app_spacing.dart';
 import 'providers/wallet_providers.dart';
 import 'stripe_wallet_helpers.dart';
@@ -56,7 +56,7 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
           ? list.whereType<Map<String, dynamic>>().toList()
           : [];
     } catch (e) {
-      _error = e.toString();
+      _error = userFacingApiMessage(e);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -95,7 +95,7 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$e')),
+        SnackBar(content: Text(userFacingApiMessage(e))),
       );
     }
   }
@@ -114,6 +114,7 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
           decoration: const InputDecoration(
             labelText: 'Exact USD amount charged',
             hintText: 'e.g. 3.47',
+            helperText: r'Must be between $1.00 and $5.00',
           ),
         ),
         actions: [
@@ -122,10 +123,29 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         ],
       ),
     );
-    if (ok != true) return;
-    final amt = double.tryParse(ctrl.text.trim());
+    if (ok != true) {
+      ctrl.dispose();
+      return;
+    }
+    final raw = ctrl.text.trim();
     ctrl.dispose();
-    if (amt == null) return;
+    final amt = double.tryParse(raw);
+    if (amt == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter the exact verification amount from your bank.')),
+      );
+      return;
+    }
+    if (amt < 1 || amt > 5) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('The verification charge is between \$1.00 and \$5.00. Enter the exact amount.'),
+        ),
+      );
+      return;
+    }
     setState(() => _busy = true);
     try {
       await ApiClient.instance.post<Map<String, dynamic>>(
@@ -139,12 +159,11 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
       ref.invalidate(walletBalanceProvider);
       ref.invalidate(walletTransactionsProvider);
       await _reload();
-    } on DioException catch (e) {
-      final msg = e.response?.data is Map
-          ? (e.response!.data['message']?.toString() ?? 'Verify failed')
-          : 'Verify failed';
+    } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userFacingApiMessage(e))),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -171,10 +190,20 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         ],
       ),
     );
-    if (ok != true) return;
-    final amt = double.tryParse(ctrl.text.trim());
+    if (ok != true) {
+      ctrl.dispose();
+      return;
+    }
+    final raw = ctrl.text.trim();
     ctrl.dispose();
-    if (amt == null || amt < 1) return;
+    final amt = double.tryParse(raw);
+    if (amt == null || amt < 1) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter an amount of at least \$1.00.')),
+      );
+      return;
+    }
 
     setState(() => _busy = true);
     try {
@@ -203,9 +232,39 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userFacingApiMessage(e))),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  static String _cardStatusLabel(String status) {
+    switch (status) {
+      case 'pending_verification':
+        return 'Pending verification';
+      case 'verified':
+        return 'Verified';
+      case 'failed_verification':
+        return 'Verification failed';
+      case 'disabled':
+        return 'Disabled';
+      default:
+        return status;
+    }
+  }
+
+  static Color _cardStatusColor(String status) {
+    switch (status) {
+      case 'verified':
+        return AppConfig.successGreen;
+      case 'failed_verification':
+        return Colors.red.shade700;
+      case 'pending_verification':
+        return AppConfig.warningOrange;
+      default:
+        return AppConfig.subtitleColor;
     }
   }
 
@@ -251,21 +310,63 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                       final brand = c['brand']?.toString() ?? 'Card';
                       final def = c['is_default'] == true;
                       return Card(
-                        child: ListTile(
-                          title: Text('$brand •••• $last4${def ? ' (default)' : ''}'),
-                          subtitle: Text(status),
-                          isThreeLine: true,
-                          trailing: status == 'pending_verification'
-                              ? TextButton(
-                                  onPressed: _busy ? null : () => _verify(c),
-                                  child: const Text('Verify'),
-                                )
-                              : status == 'verified'
-                                  ? TextButton(
-                                      onPressed: _busy ? null : () => _topUp(c),
-                                      child: const Text('Top up'),
-                                    )
-                                  : null,
+                        color: AppConfig.cardColor,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 4,
+                            horizontal: 4,
+                          ),
+                          child: ListTile(
+                            title: Text(
+                              '$brand •••• $last4${def ? ' (default)' : ''}',
+                            ),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Chip(
+                                    label: Text(
+                                      _cardStatusLabel(status),
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                    backgroundColor: _cardStatusColor(status)
+                                        .withValues(alpha: 0.15),
+                                    side: BorderSide(
+                                      color: _cardStatusColor(status)
+                                          .withValues(alpha: 0.35),
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  if (status == 'failed_verification')
+                                    Text(
+                                      'Remove the card and add it again, or contact support.',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(color: AppConfig.subtitleColor),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            isThreeLine: status == 'failed_verification',
+                            trailing: status == 'pending_verification'
+                                ? TextButton(
+                                    onPressed: _busy ? null : () => _verify(c),
+                                    child: const Text('Verify'),
+                                  )
+                                : status == 'verified'
+                                    ? TextButton(
+                                        onPressed: _busy ? null : () => _topUp(c),
+                                        child: const Text('Top up'),
+                                      )
+                                    : null,
+                          ),
                         ),
                       );
                     },
@@ -319,7 +420,7 @@ class _AddStripeCardSheetState extends State<_AddStripeCardSheet> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$e')),
+        SnackBar(content: Text(userFacingApiMessage(e))),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);

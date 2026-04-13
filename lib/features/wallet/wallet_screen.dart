@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/routing/app_router.dart';
@@ -225,6 +226,13 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
                     ),
                   ),
                 ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.center,
+              child: TextButton(
+                onPressed: () => context.push(AppRoutes.walletFundingHistory),
+                child: const Text('Wire & Zelle request history'),
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
@@ -548,22 +556,38 @@ class _BalanceBreakdownCard extends StatelessWidget {
 
   final WalletBalance balance;
 
-  static String _formatAmount(double value) {
-    final s = value.toStringAsFixed(0);
-    if (s.length <= 3) return s;
-    final buf = StringBuffer();
-    var i = s.length % 3;
-    if (i == 0) i = 3;
-    buf.write(s.substring(0, i));
-    for (; i < s.length; i += 3) {
-      buf.write(',');
-      buf.write(s.substring(i, i + 3));
-    }
-    return buf.toString();
+  static final NumberFormat _money = NumberFormat.currency(symbol: r'$');
+
+  static bool _meaningful(double v) => v.abs() >= 0.005;
+
+  static void _showHelp(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('How your balance works'),
+        content: const SingleChildScrollView(
+          child: Text(
+            'Available — Money you can use for checkout right now.\n\n'
+            'Pending — Funds held for open orders, processing transfers, or other activity. '
+            'They are not spendable until they clear.\n\n'
+            'Promo — Promotional credits from Zayer. These may apply only to certain purchases.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final showPending = _meaningful(balance.pending);
+    final showPromo = _meaningful(balance.promo);
+
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -597,7 +621,7 @@ class _BalanceBreakdownCard extends StatelessWidget {
                 shape: const CircleBorder(),
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(
-                  onTap: () {},
+                  onTap: () => _showHelp(context),
                   child: const SizedBox(
                     width: 22,
                     height: 22,
@@ -618,23 +642,33 @@ class _BalanceBreakdownCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           _BreakdownRow(
-            label: 'Available',
-            value: '\$${_formatAmount(balance.available)}',
+            label: 'Available to spend',
+            tooltip:
+                'Money you can use for orders and fees right now. This is your primary spendable balance.',
+            value: _money.format(balance.available),
             valueColor: AppConfig.textColor,
           ),
-          const Divider(height: 24),
-          _BreakdownRow(
-            label: 'Pending',
-            value: '\$${_formatAmount(balance.pending)}',
-            valueColor: AppConfig.warningOrange,
-            dottedUnderline: true,
-          ),
-          const Divider(height: 24),
-          _BreakdownRow(
-            label: 'Promo',
-            value: '\$${_formatAmount(balance.promo)}',
-            valueColor: AppConfig.primaryColor,
-          ),
+          if (showPending) ...[
+            const Divider(height: 24),
+            _BreakdownRow(
+              label: 'Pending',
+              tooltip:
+                  'Held for processing orders, incoming transfers, or other activity. Not available to spend until it clears.',
+              value: _money.format(balance.pending),
+              valueColor: AppConfig.warningOrange,
+              dottedUnderline: true,
+            ),
+          ],
+          if (showPromo) ...[
+            const Divider(height: 24),
+            _BreakdownRow(
+              label: 'Promo credits',
+              tooltip:
+                  'Promotional wallet credits from Zayer. Usage may be limited to eligible purchases.',
+              value: _money.format(balance.promo),
+              valueColor: AppConfig.primaryColor,
+            ),
+          ],
         ],
       ),
     );
@@ -646,37 +680,65 @@ class _BreakdownRow extends StatelessWidget {
     required this.label,
     required this.value,
     required this.valueColor,
+    this.tooltip,
     this.dottedUnderline = false,
   });
 
   final String label;
   final String value;
   final Color valueColor;
+  final String? tooltip;
   final bool dottedUnderline;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: AppConfig.textColor),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppConfig.textColor,
+                      ),
+                ),
+              ),
+              if (tooltip != null && tooltip!.isNotEmpty) ...[
+                const SizedBox(width: 4),
+                Tooltip(
+                  message: tooltip!,
+                  triggerMode: TooltipTriggerMode.tap,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(
+                      Icons.info_outline,
+                      size: 17,
+                      color: AppConfig.subtitleColor,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
+        const SizedBox(width: 8),
         Text(
           value,
+          textAlign: TextAlign.right,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: valueColor,
-            fontWeight: FontWeight.w600,
-            decoration: dottedUnderline ? TextDecoration.underline : null,
-            decorationColor: dottedUnderline ? valueColor : null,
-            decorationStyle: dottedUnderline
-                ? TextDecorationStyle.dotted
-                : null,
-          ),
+                color: valueColor,
+                fontWeight: FontWeight.w600,
+                decoration: dottedUnderline ? TextDecoration.underline : null,
+                decorationColor: dottedUnderline ? valueColor : null,
+                decorationStyle: dottedUnderline
+                    ? TextDecorationStyle.dotted
+                    : null,
+              ),
         ),
       ],
     );
