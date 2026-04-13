@@ -333,6 +333,15 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
                         ref.read(walletActivityFilterProvider.notifier).state =
                             WalletActivityType.adminCredits,
                   ),
+                  const SizedBox(width: 8),
+                  _ActivityChip(
+                    label: 'Funding',
+                    isSelected:
+                        activityFilter == WalletActivityType.fundingCredits,
+                    onTap: () =>
+                        ref.read(walletActivityFilterProvider.notifier).state =
+                            WalletActivityType.fundingCredits,
+                  ),
                 ],
               ),
             ),
@@ -474,6 +483,14 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
                 onTap: () {
                   ref.read(walletActivityFilterProvider.notifier).state =
                       WalletActivityType.adminCredits;
+                  Navigator.pop(ctx);
+                },
+              ),
+              ListTile(
+                title: const Text('Funding (cards / wire / Zelle)'),
+                onTap: () {
+                  ref.read(walletActivityFilterProvider.notifier).state =
+                      WalletActivityType.fundingCredits;
                   Navigator.pop(ctx);
                 },
               ),
@@ -767,9 +784,11 @@ class _TransactionTile extends StatelessWidget {
                 ? Icons.reply
                 : transaction.type == WalletActivityType.adminCredits
                     ? Icons.admin_panel_settings_outlined
-                    : transaction.type == WalletActivityType.topUps
-                        ? Icons.add_circle_outline
-                        : Icons.shopping_bag_outlined;
+                    : transaction.type == WalletActivityType.fundingCredits
+                        ? Icons.payments_outlined
+                        : transaction.type == WalletActivityType.topUps
+                            ? Icons.add_circle_outline
+                            : Icons.shopping_bag_outlined;
     final iconBg = transaction.isCredit
         ? AppConfig.successGreen.withValues(alpha: 0.15)
         : AppConfig.borderColor.withValues(alpha: 0.5);

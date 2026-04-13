@@ -26,6 +26,8 @@ enum WalletActivityType {
   payments,
   topUps,
   adminCredits,
+  /// Card verification / saved-card / manual funding credits.
+  fundingCredits,
 }
 
 class WalletTransaction {

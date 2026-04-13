@@ -39,7 +39,11 @@ import '../../features/support/contact_support_screen.dart';
 import '../../features/support/support_inbox_screen.dart';
 import '../../features/support/support_request_submitted_screen.dart';
 import '../../features/support/support_ticket_chat_screen.dart';
+import '../../features/wallet/add_funds_hub_screen.dart';
+import '../../features/wallet/saved_cards_wallet_screen.dart';
 import '../../features/wallet/top_up_wallet_screen.dart';
+import '../../features/wallet/wire_funding_screen.dart';
+import '../../features/wallet/zelle_funding_screen.dart';
 import '../../features/warehouse/my_warehouse_screen.dart';
 import '../../features/warehouse/shipment_create_screen.dart';
 import '../../features/warehouse/shipment_shipping_payment_screen.dart';
@@ -104,6 +108,9 @@ class AppRoutes {
   static const String supportTicket = '/support/ticket';
   static const String wallet = '/wallet';
   static const String topUpWallet = '/wallet/top-up';
+  static const String walletSavedCards = '/wallet/saved-cards';
+  static const String walletFundingWire = '/wallet/add-funds/wire';
+  static const String walletFundingZelle = '/wallet/add-funds/zelle';
   static const String walletRefundToWallet = '/wallet/refund-to-wallet';
   static const String walletWithdrawToBank = '/wallet/withdraw-to-bank';
   static const String myWarehouse = '/my-warehouse';
@@ -478,8 +485,26 @@ GoRouter _createAppRouter() {
           final initial = extra is double
               ? extra
               : (extra is num ? extra.toDouble() : null);
-          return TopUpWalletScreen(initialAmount: initial);
+          return AddFundsHubScreen(initialAmount: initial);
         },
+      ),
+      GoRoute(
+        path: AppRoutes.walletSavedCards,
+        builder: (context, state) {
+          final extra = state.extra;
+          final d = extra is double
+              ? extra
+              : (extra is num ? extra.toDouble() : null);
+          return SavedCardsWalletScreen(initialTopUpAmount: d);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.walletFundingWire,
+        builder: (context, state) => const WireFundingScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.walletFundingZelle,
+        builder: (context, state) => const ZelleFundingScreen(),
       ),
       GoRoute(
         path: AppRoutes.walletRefundToWallet,

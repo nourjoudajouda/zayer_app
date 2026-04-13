@@ -58,6 +58,12 @@ final walletTransactionsProvider = FutureProvider<List<WalletTransaction>>((
         if (typeStr == 'top_up') {
           type = WalletActivityType.topUps;
         }
+        if (typeStr == 'card_verification_credit' ||
+            typeStr == 'card_topup_credit' ||
+            typeStr == 'wire_transfer_credit' ||
+            typeStr == 'zelle_credit') {
+          type = WalletActivityType.fundingCredits;
+        }
         return WalletTransaction(
           id: (t['id'] ?? '').toString(),
           type: type,
@@ -81,6 +87,13 @@ final walletFilteredTransactionsProvider =
       return async.when(
         data: (list) {
           if (filter == WalletActivityType.all) return AsyncValue.data(list);
+          if (filter == WalletActivityType.fundingCredits) {
+            return AsyncValue.data(
+              list
+                  .where((t) => t.type == WalletActivityType.fundingCredits)
+                  .toList(),
+            );
+          }
           if (filter == WalletActivityType.refundToWallet) {
             return AsyncValue.data(
               list
