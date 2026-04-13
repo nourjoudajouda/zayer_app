@@ -37,7 +37,10 @@ class SavedCardsWalletScreen extends ConsumerStatefulWidget {
 
 class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen> {
   bool _loading = true;
-  bool _busy = false;
+  /// POST /saved-cards/setup-intent only (brief). Never true while card sheet is open.
+  bool _setupIntentLoading = false;
+  /// Saved-card wallet top-up (Stripe PaymentIntent) only.
+  bool _topUpInProgress = false;
   String? _error;
   List<Map<String, dynamic>> _cards = [];
 
@@ -77,43 +80,61 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
   }
 
   Future<void> _addCard() async {
-    setState(() => _busy = true);
+    if (_loading || _setupIntentLoading || _topUpInProgress) return;
+
+    setState(() => _setupIntentLoading = true);
+    String? secret;
+    String? intentId;
     try {
       _savedCardFlowLog('create_setup_intent', 'request');
       final setup = await ApiClient.instance.post<Map<String, dynamic>>(
         '/api/wallet/saved-cards/setup-intent',
       );
       final siMap = setup.data?['setup_intent'] as Map<String, dynamic>?;
-      final secret = siMap?['client_secret'] as String?;
-      final intentId = siMap?['setup_intent_id'] as String?;
+      secret = siMap?['client_secret'] as String?;
+      intentId = siMap?['setup_intent_id'] as String?;
       if (secret == null || secret.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Could not start card setup. Please try again.'),
+            content: Text(
+              'Card setup could not be started. Check your connection and try again.',
+            ),
           ),
         );
         return;
       }
 
       _savedCardFlowLog('create_setup_intent', 'ok id=${intentId ?? "?"}');
-
+    } catch (e) {
+      _savedCardFlowLog('create_setup_intent', 'error: $e');
       if (!mounted) return;
-
-      final confirmed = await showModalBottomSheet<bool>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: AppConfig.cardColor,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        builder: (ctx) => _AddStripeCardSheet(
-          clientSecret: secret,
-          setupIntentId: intentId,
-        ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userFacingApiMessage(e))),
       );
-      if (confirmed != true || !mounted) return;
+      return;
+    } finally {
+      if (mounted) setState(() => _setupIntentLoading = false);
+    }
 
+    if (!mounted) return;
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: AppConfig.cardColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => _AddStripeCardSheet(
+        clientSecret: secret!,
+        setupIntentId: intentId,
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
       await _reload();
       if (!mounted) return;
 
@@ -137,13 +158,10 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         ),
       );
     } catch (e) {
-      _savedCardFlowLog('create_setup_intent', 'error: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userFacingApiMessage(e))),
       );
-    } finally {
-      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -285,7 +303,7 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
       return;
     }
 
-    setState(() => _busy = true);
+    setState(() => _topUpInProgress = true);
     try {
       final res = await ApiClient.instance.post<Map<String, dynamic>>(
         '/api/wallet/top-up-saved-card',
@@ -316,7 +334,7 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         SnackBar(content: Text(userFacingApiMessage(e))),
       );
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _topUpInProgress = false);
     }
   }
 
@@ -358,7 +376,7 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         foregroundColor: AppConfig.textColor,
         elevation: 0,
         actions: [
-          if (_busy)
+          if (_setupIntentLoading || _topUpInProgress)
             const Padding(
               padding: EdgeInsets.all(16),
               child: SizedBox(
@@ -370,7 +388,9 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: (_busy || _loading) ? null : _addCard,
+        onPressed: (_loading || _setupIntentLoading || _topUpInProgress)
+            ? null
+            : _addCard,
         icon: const Icon(Icons.add),
         label: const Text('Add card'),
       ),
@@ -460,12 +480,16 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                                 status == 'pending_verification',
                             trailing: status == 'pending_verification'
                                 ? TextButton(
-                                    onPressed: _busy ? null : () => _verify(c),
+                                    onPressed: (_topUpInProgress || _setupIntentLoading)
+                                        ? null
+                                        : () => _verify(c),
                                     child: const Text('Verify'),
                                   )
                                 : status == 'verified'
                                     ? TextButton(
-                                        onPressed: _busy ? null : () => _topUp(c),
+                                        onPressed: _topUpInProgress
+                                            ? null
+                                            : () => _topUp(c),
                                         child: const Text('Top up'),
                                       )
                                     : null,
@@ -593,56 +617,136 @@ class _AddStripeCardSheetState extends State<_AddStripeCardSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final pad = MediaQuery.paddingOf(context).bottom;
-    final inset = MediaQuery.viewInsetsOf(context).bottom;
-    return Padding(
-      padding: EdgeInsets.only(
-        left: AppSpacing.md,
-        right: AppSpacing.md,
-        top: AppSpacing.md,
-        bottom: pad + inset + AppSpacing.md,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Add card',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final bottomPad = MediaQuery.paddingOf(context).bottom;
+
+    InputDecoration cardDecoration(BuildContext ctx) {
+      final radius = BorderRadius.circular(AppConfig.radiusSmall);
+      return InputDecoration(
+        isDense: true,
+        filled: true,
+        fillColor: AppConfig.lightBlueBg,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        border: OutlineInputBorder(borderRadius: radius),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: radius,
+          borderSide: BorderSide(color: AppConfig.borderColor, width: 1.5),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: radius,
+          borderSide: const BorderSide(color: AppConfig.primaryColor, width: 2),
+        ),
+        hintStyle: TextStyle(
+          color: AppConfig.subtitleColor.withValues(alpha: 0.85),
+          fontSize: 15,
+          fontWeight: FontWeight.w400,
+        ),
+      );
+    }
+
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.sm,
+            AppSpacing.md,
+            bottomPad + AppSpacing.lg,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppConfig.borderColor,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                 ),
-          ),
-          const SizedBox(height: 12),
-          CardField(
-            onCardChanged: (card) {
-              setState(() {
-                _cardComplete = card?.complete == true;
-                _sheetError = null;
-              });
-            },
-          ),
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: (!_cardComplete || _submitting) ? null : _submit,
-            child: _submitting
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Save & verify'),
-          ),
-          if (_sheetError != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              _sheetError!,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-                fontSize: 13,
               ),
-            ),
-          ],
-        ],
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Add a card',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppConfig.textColor,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Enter your card below. After you save, we\'ll charge a small '
+                r'amount ($1.00–$5.00) so you can verify it from your bank statement.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppConfig.subtitleColor,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Card details',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppConfig.textColor,
+                ),
+              ),
+              const SizedBox(height: 8),
+              CardField(
+                autofocus: true,
+                style: const TextStyle(
+                  color: AppConfig.textColor,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+                cursorColor: AppConfig.primaryColor,
+                decoration: cardDecoration(context),
+                numberHintText: 'Card number',
+                expirationHintText: 'MM / YY',
+                cvcHintText: 'CVC',
+                onCardChanged: (card) {
+                  setState(() {
+                    _cardComplete = card?.complete == true;
+                    _sheetError = null;
+                  });
+                },
+              ),
+              if (_sheetError != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _sheetError!,
+                  style: TextStyle(
+                    color: theme.colorScheme.error,
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.md),
+              FilledButton(
+                onPressed: (!_cardComplete || _submitting) ? null : _submit,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: _submitting
+                    ? SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: theme.colorScheme.onPrimary,
+                        ),
+                      )
+                    : const Text('Save card'),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
