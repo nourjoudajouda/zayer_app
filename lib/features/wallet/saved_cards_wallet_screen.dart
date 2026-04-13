@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
@@ -10,6 +11,18 @@ import '../../core/network/api_error_message.dart'
 import '../../core/theme/app_spacing.dart';
 import 'providers/wallet_providers.dart';
 import 'stripe_wallet_helpers.dart';
+
+void _savedCardFlowLog(String step, [String? detail]) {
+  if (kDebugMode) {
+    debugPrint('[saved_card_flow] $step${detail != null ? ': $detail' : ''}');
+  }
+}
+
+bool _setupIntentStatusSucceeded(String status) =>
+    status.toLowerCase() == 'succeeded';
+
+bool _setupIntentStatusRequiresAction(String status) =>
+    status.toLowerCase() == 'requires_action';
 
 /// Saved cards: add via Stripe SetupIntent, verify micro-charge, top up with PaymentIntent.
 class SavedCardsWalletScreen extends ConsumerStatefulWidget {
@@ -64,12 +77,15 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
   }
 
   Future<void> _addCard() async {
+    setState(() => _busy = true);
     try {
+      _savedCardFlowLog('create_setup_intent', 'request');
       final setup = await ApiClient.instance.post<Map<String, dynamic>>(
         '/api/wallet/saved-cards/setup-intent',
       );
-      final secret =
-          setup.data?['setup_intent']?['client_secret'] as String?;
+      final siMap = setup.data?['setup_intent'] as Map<String, dynamic>?;
+      final secret = siMap?['client_secret'] as String?;
+      final intentId = siMap?['setup_intent_id'] as String?;
       if (secret == null || secret.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -80,6 +96,8 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         return;
       }
 
+      _savedCardFlowLog('create_setup_intent', 'ok id=${intentId ?? "?"}');
+
       if (!mounted) return;
 
       final confirmed = await showModalBottomSheet<bool>(
@@ -89,23 +107,43 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
         ),
-        builder: (ctx) => _AddStripeCardSheet(clientSecret: secret),
+        builder: (ctx) => _AddStripeCardSheet(
+          clientSecret: secret,
+          setupIntentId: intentId,
+        ),
       );
       if (confirmed != true || !mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            r'Check your bank for the verification amount ($1.00–$5.00), then tap Verify on the card.',
+      await _reload();
+      if (!mounted) return;
+
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Verify your card'),
+          content: const Text(
+            'We placed a small random charge on your card between \$1.00 and \$5.00 USD '
+            'to confirm you own it.\n\n'
+            'Check your bank app or card statement for the exact amount, then return here '
+            'and tap Verify on this card and enter that amount. The same amount will be '
+            'credited to your wallet when verification succeeds.',
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
         ),
       );
-      await _reload();
     } catch (e) {
+      _savedCardFlowLog('create_setup_intent', 'error: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userFacingApiMessage(e))),
       );
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -166,10 +204,12 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                             fieldError = null;
                           });
                           try {
+                            _savedCardFlowLog('verify_card_charge', 'POST amount=$amt id=$id');
                             await ApiClient.instance.post<Map<String, dynamic>>(
                               '/api/wallet/saved-cards/$id/verify',
                               data: {'amount': amt},
                             );
+                            _savedCardFlowLog('verify_card_charge', 'ok');
                             if (!ctx.mounted) return;
                             Navigator.pop(ctx);
                             if (!mounted) return;
@@ -184,6 +224,7 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                             ref.invalidate(walletTransactionsProvider);
                             await _reload();
                           } catch (e) {
+                            _savedCardFlowLog('verify_card_charge', 'error: $e');
                             final errs = validationErrorsFromDio(e);
                             setDialogState(() {
                               submitting = false;
@@ -361,39 +402,62 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                             ),
                             subtitle: Padding(
                               padding: const EdgeInsets.only(top: 6),
-                              child: Wrap(
-                                spacing: 8,
-                                runSpacing: 4,
-                                crossAxisAlignment: WrapCrossAlignment.center,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Chip(
-                                    label: Text(
-                                      _cardStatusLabel(status),
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                    backgroundColor: _cardStatusColor(status)
-                                        .withValues(alpha: 0.15),
-                                    side: BorderSide(
-                                      color: _cardStatusColor(status)
-                                          .withValues(alpha: 0.35),
-                                    ),
-                                    padding: EdgeInsets.zero,
-                                    materialTapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                    visualDensity: VisualDensity.compact,
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 4,
+                                    crossAxisAlignment:
+                                        WrapCrossAlignment.center,
+                                    children: [
+                                      Chip(
+                                        label: Text(
+                                          _cardStatusLabel(status),
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                        backgroundColor: _cardStatusColor(status)
+                                            .withValues(alpha: 0.15),
+                                        side: BorderSide(
+                                          color: _cardStatusColor(status)
+                                              .withValues(alpha: 0.35),
+                                        ),
+                                        padding: EdgeInsets.zero,
+                                        materialTapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                      if (status == 'failed_verification')
+                                        Text(
+                                          'Remove the card and add it again, or contact support.',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                color: AppConfig.subtitleColor,
+                                              ),
+                                        ),
+                                    ],
                                   ),
-                                  if (status == 'failed_verification')
+                                  if (status == 'pending_verification') ...[
+                                    const SizedBox(height: 6),
                                     Text(
-                                      'Remove the card and add it again, or contact support.',
+                                      r'Look for a $1.00–$5.00 charge on your statement, '
+                                      r'then tap Verify and enter the exact amount.',
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodySmall
-                                          ?.copyWith(color: AppConfig.subtitleColor),
+                                          ?.copyWith(
+                                            color: AppConfig.subtitleColor,
+                                            height: 1.35,
+                                          ),
                                     ),
+                                  ],
                                 ],
                               ),
                             ),
-                            isThreeLine: status == 'failed_verification',
+                            isThreeLine: status == 'failed_verification' ||
+                                status == 'pending_verification',
                             trailing: status == 'pending_verification'
                                 ? TextButton(
                                     onPressed: _busy ? null : () => _verify(c),
@@ -416,9 +480,13 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
 }
 
 class _AddStripeCardSheet extends StatefulWidget {
-  const _AddStripeCardSheet({required this.clientSecret});
+  const _AddStripeCardSheet({
+    required this.clientSecret,
+    this.setupIntentId,
+  });
 
   final String clientSecret;
+  final String? setupIntentId;
 
   @override
   State<_AddStripeCardSheet> createState() => _AddStripeCardSheetState();
@@ -435,13 +503,47 @@ class _AddStripeCardSheetState extends State<_AddStripeCardSheet> {
       _sheetError = null;
     });
     try {
-      final si = await Stripe.instance.confirmSetupIntent(
+      _savedCardFlowLog(
+        'confirm_setup_intent',
+        'start setupIntentId=${widget.setupIntentId ?? "?"}',
+      );
+
+      var si = await Stripe.instance.confirmSetupIntent(
         paymentIntentClientSecret: widget.clientSecret,
         params: const PaymentMethodParams.card(
           paymentMethodData: PaymentMethodData(),
         ),
       );
+      _savedCardFlowLog('confirm_setup_intent', 'status=${si.status}');
 
+      var actionAttempts = 0;
+      while (_setupIntentStatusRequiresAction(si.status) && actionAttempts < 5) {
+        actionAttempts++;
+        _savedCardFlowLog(
+          'confirm_setup_intent',
+          'handleNextActionForSetupIntent attempt $actionAttempts',
+        );
+        si = await Stripe.instance.handleNextActionForSetupIntent(
+          widget.clientSecret,
+        );
+        _savedCardFlowLog('confirm_setup_intent', 'status=${si.status}');
+      }
+
+      if (!_setupIntentStatusSucceeded(si.status)) {
+        _savedCardFlowLog(
+          'confirm_setup_intent',
+          'aborted: not succeeded (${si.status})',
+        );
+        if (!mounted) return;
+        setState(() {
+          _submitting = false;
+          _sheetError =
+              'Card setup did not finish. Complete any bank prompts, or try another card.';
+        });
+        return;
+      }
+
+      _savedCardFlowLog('save_card_backend', 'POST setup_intent_id=${si.id}');
       final complete = await ApiClient.instance.post<Map<String, dynamic>>(
         '/api/wallet/saved-cards',
         data: {'setup_intent_id': si.id},
@@ -449,28 +551,43 @@ class _AddStripeCardSheetState extends State<_AddStripeCardSheet> {
 
       final ver = complete.data?['verification'] as Map<String, dynamic>?;
       final cs = ver?['client_secret'] as String?;
-      if (ver?['requires_action'] == true && cs != null && cs.isNotEmpty) {
-        await Stripe.instance.handleNextAction(cs);
+      final needsAction = ver?['requires_action'] == true;
+      if (needsAction && cs != null && cs.isNotEmpty) {
+        _savedCardFlowLog('verify_card_charge', 'handleNextAction (PI)');
+        final pi = await Stripe.instance.handleNextAction(cs);
+        if (pi.status != PaymentIntentsStatus.Succeeded) {
+          _savedCardFlowLog(
+            'verify_card_charge',
+            'PI not succeeded: ${pi.status}',
+          );
+          if (!mounted) return;
+          setState(() {
+            _submitting = false;
+            _sheetError =
+                'The verification charge could not be completed. Try again or use another card.';
+          });
+          return;
+        }
       }
 
+      _savedCardFlowLog('save_card_backend', 'complete');
       if (!mounted) return;
       Navigator.pop(context, true);
     } on StripeException catch (e) {
+      _savedCardFlowLog('confirm_setup_intent', 'StripeException: ${e.error.message}');
       if (!mounted) return;
       setState(() {
         _submitting = false;
-        _sheetError = e.error.message ?? 'Card could not be saved. Try again.';
+        _sheetError =
+            e.error.message ?? 'Card could not be saved. Please try again.';
       });
     } catch (e) {
+      _savedCardFlowLog('save_card_backend', 'error: $e');
       if (!mounted) return;
       setState(() {
         _submitting = false;
         _sheetError = userFacingApiMessage(e);
       });
-    } finally {
-      if (mounted && _submitting) {
-        setState(() => _submitting = false);
-      }
     }
   }
 
