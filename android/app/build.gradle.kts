@@ -47,4 +47,6 @@ flutter {
 }
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // Required for Theme.AppCompat* parents in styles.xml (flutter_stripe / Stripe SDK).
+    implementation("androidx.appcompat:appcompat:1.7.0")
 }
