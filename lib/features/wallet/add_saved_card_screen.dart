@@ -43,17 +43,37 @@ class _AddSavedCardScreenState extends ConsumerState<AddSavedCardScreen> {
   bool _cardComplete = false;
   bool _submitting = false;
   String? _pageError;
+  bool _stripeLoading = true;
+  bool _stripeReady = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final cfg = ref.read(bootstrapConfigProvider).valueOrNull;
-      applyStripePublishableKey(cfg);
-      try {
-        await Stripe.instance.applySettings();
-      } catch (_) {}
-    });
+    _initStripe();
+  }
+
+  Future<void> _initStripe() async {
+    try {
+      final cfg = await ref.read(bootstrapConfigProvider.future);
+      final ok = await ensureStripeInitializedFromBootstrap(cfg);
+      if (!mounted) return;
+      setState(() {
+        _stripeLoading = false;
+        _stripeReady = ok;
+        if (!ok) {
+          _pageError =
+              'Card entry is unavailable because payment settings did not load. '
+              'Go back and pull to refresh, then try again.';
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _stripeLoading = false;
+        _stripeReady = false;
+        _pageError = userFacingApiMessage(e);
+      });
+    }
   }
 
   Future<void> _submit() async {
@@ -184,6 +204,61 @@ class _AddSavedCardScreenState extends ConsumerState<AddSavedCardScreen> {
     final androidRender = defaultTargetPlatform == TargetPlatform.android
         ? AndroidPlatformViewRenderType.androidView
         : AndroidPlatformViewRenderType.expensiveAndroidView;
+
+    if (_stripeLoading) {
+      return Scaffold(
+        backgroundColor: AppConfig.backgroundColor,
+        appBar: AppBar(
+          title: const Text('Add a card'),
+          backgroundColor: AppConfig.backgroundColor,
+          foregroundColor: AppConfig.textColor,
+          elevation: 0,
+        ),
+        body: const Center(
+          child: SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    if (!_stripeReady) {
+      return Scaffold(
+        backgroundColor: AppConfig.backgroundColor,
+        appBar: AppBar(
+          title: const Text('Add a card'),
+          backgroundColor: AppConfig.backgroundColor,
+          foregroundColor: AppConfig.textColor,
+          elevation: 0,
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  _pageError ??
+                      'Card entry is unavailable. Go back and try again.',
+                  style: TextStyle(
+                    color: theme.colorScheme.error,
+                    fontSize: 14,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                OutlinedButton(
+                  onPressed: () => context.pop(false),
+                  child: const Text('Go back'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,

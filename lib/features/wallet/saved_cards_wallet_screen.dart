@@ -42,10 +42,7 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
 
   Future<void> _bootstrapStripe() async {
     final cfg = ref.read(bootstrapConfigProvider).valueOrNull;
-    applyStripePublishableKey(cfg);
-    try {
-      await Stripe.instance.applySettings();
-    } catch (_) {}
+    await ensureStripeInitializedFromBootstrap(cfg);
     await _reload();
   }
 
@@ -76,6 +73,20 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
     String? secret;
     String? intentId;
     try {
+      final cfg = await ref.read(bootstrapConfigProvider.future);
+      final stripeOk = await ensureStripeInitializedFromBootstrap(cfg);
+      if (!stripeOk) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Card payments are not configured yet. Pull to refresh or try again later.',
+            ),
+          ),
+        );
+        return;
+      }
+
       savedCardFlowLog('create_setup_intent', 'request');
       final setup = await ApiClient.instance.post<Map<String, dynamic>>(
         '/api/wallet/saved-cards/setup-intent',

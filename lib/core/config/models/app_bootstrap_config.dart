@@ -349,6 +349,13 @@ class PromoBannerConfig {
   }
 }
 
+String? _firstNonEmptyTrimmedString(List<dynamic?> values) {
+  for (final v in values) {
+    if (v is String && v.trim().isNotEmpty) return v.trim();
+  }
+  return null;
+}
+
 class PaymentGatewayProviderConfig {
   const PaymentGatewayProviderConfig({
     required this.enabled,
@@ -363,12 +370,16 @@ class PaymentGatewayProviderConfig {
   final bool supportsWebCheckout;
 
   factory PaymentGatewayProviderConfig.fromJson(Map<String, dynamic> json) {
+    final pk = _firstNonEmptyTrimmedString([
+      json['publishable_key'],
+      json['stripe_publishable_key'],
+    ]);
     return PaymentGatewayProviderConfig(
       enabled: json['enabled'] as bool? ?? false,
       environment: (json['environment'] as String?)?.trim().isNotEmpty == true
           ? (json['environment'] as String).trim()
           : 'test',
-      publishableKey: json['publishable_key'] as String?,
+      publishableKey: pk,
       supportsWebCheckout: json['supports_web_checkout'] as bool? ?? true,
     );
   }
@@ -475,6 +486,7 @@ class AppBootstrapConfig {
     this.appName,
     this.appIconUrl,
     this.paymentGateways,
+    this.stripePublishableKey,
     this.walletFunding,
     this.checkoutPaymentMode,
     this.refundFeePercent = 0,
@@ -494,6 +506,8 @@ class AppBootstrapConfig {
   /// App icon/logo URL from admin. Used inside the app (e.g. AppBar).
   final String? appIconUrl;
   final PaymentGatewaysConfig? paymentGateways;
+  /// Stripe publishable key when returned at bootstrap root as `stripe_publishable_key`.
+  final String? stripePublishableKey;
   /// Zelle destination + wire copy text for manual wallet top-ups.
   final WalletFundingConfig? walletFunding;
   /// Same source as checkout: `wallet_only` | `gateway_only` | `wallet_and_gateway`.
@@ -514,6 +528,11 @@ class AppBootstrapConfig {
     final paymentGatewaysJson = json['payment_gateways'] as Map<String, dynamic>?;
     final paymentGateways = paymentGatewaysJson != null
         ? PaymentGatewaysConfig.fromJson(paymentGatewaysJson)
+        : null;
+    final stripePkRoot = json['stripe_publishable_key'];
+    final stripePublishableKey = stripePkRoot is String &&
+            stripePkRoot.trim().isNotEmpty
+        ? stripePkRoot.trim()
         : null;
     final walletFundingJson = json['wallet_funding'] as Map<String, dynamic>?;
     final walletFunding = WalletFundingConfig.fromJson(walletFundingJson);
@@ -539,6 +558,7 @@ class AppBootstrapConfig {
       appName: appName != null && appName.trim().isNotEmpty ? appName.trim() : null,
       appIconUrl: appIconUrl != null && appIconUrl.trim().isNotEmpty ? appIconUrl.trim() : null,
       paymentGateways: paymentGateways,
+      stripePublishableKey: stripePublishableKey,
       walletFunding: walletFunding,
       checkoutPaymentMode: checkoutMode != null && checkoutMode.isNotEmpty
           ? checkoutMode

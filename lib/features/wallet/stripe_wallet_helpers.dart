@@ -16,11 +16,35 @@ bool setupIntentStatusSucceeded(String status) =>
 bool setupIntentStatusRequiresAction(String status) =>
     status.toLowerCase() == 'requires_action';
 
+/// Resolves Stripe publishable key: nested `payment_gateways.providers.stripe` first,
+/// then root-level [AppBootstrapConfig.stripePublishableKey] (e.g. `stripe_publishable_key`).
+String? resolveStripePublishableKey(AppBootstrapConfig? config) {
+  if (config == null) return null;
+  final nested = config.paymentGateways?.providers['stripe']?.publishableKey;
+  if (nested != null && nested.trim().isNotEmpty) return nested.trim();
+  final root = config.stripePublishableKey;
+  if (root != null && root.trim().isNotEmpty) return root.trim();
+  return null;
+}
+
 /// Applies Stripe publishable key from bootstrap (required before CardField / confirmations).
 void applyStripePublishableKey(AppBootstrapConfig? config) {
-  final pk = config?.paymentGateways?.providers['stripe']?.publishableKey;
-  if (pk != null && pk.trim().isNotEmpty) {
-    Stripe.publishableKey = pk.trim();
+  final pk = resolveStripePublishableKey(config);
+  if (pk != null && pk.isNotEmpty) {
+    Stripe.publishableKey = pk;
+  }
+}
+
+/// Sets [Stripe.publishableKey], then [Stripe.instance.applySettings]. Returns false if no key or apply fails.
+Future<bool> ensureStripeInitializedFromBootstrap(AppBootstrapConfig? config) async {
+  applyStripePublishableKey(config);
+  final pk = resolveStripePublishableKey(config);
+  if (pk == null || pk.isEmpty) return false;
+  try {
+    await Stripe.instance.applySettings();
+    return true;
+  } catch (_) {
+    return false;
   }
 }
 
