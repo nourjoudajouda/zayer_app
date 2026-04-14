@@ -27,6 +27,66 @@ bool isSetupIntentAlreadySucceededError(StripeException e) {
       stripeCode == 'setup_intent_unexpected_state';
 }
 
+/// Duplicate client [confirmPayment] after the server already confirmed the PI.
+bool isPaymentIntentAlreadySucceededError(StripeException e) {
+  final msg = (e.error.message ?? '').toLowerCase();
+  final loc = (e.error.localizedMessage ?? '').toLowerCase();
+  return msg.contains('already succeeded') || loc.contains('already succeeded');
+}
+
+/// Laravel creates saved-card top-up PaymentIntents with `confirm: true`, so the
+/// PaymentIntent is often already [PaymentIntentsStatus.Succeeded] when this runs.
+/// This must **not** call [Stripe.instance.confirmPayment] in that case (would error).
+///
+/// For [requires_action], uses [Stripe.instance.handleNextAction]. For the rare
+/// [RequiresConfirmation], calls [confirmPayment] once.
+Future<void> runSavedCardTopUpStripeClientStep({
+  required String clientSecret,
+  String? serverReportedStatus,
+}) async {
+  final fast = serverReportedStatus?.toLowerCase().trim();
+  if (fast == 'succeeded' || fast == 'processing') {
+    return;
+  }
+
+  PaymentIntent pi = await Stripe.instance.retrievePaymentIntent(clientSecret);
+
+  for (var attempt = 0; attempt < 6; attempt++) {
+    if (pi.status == PaymentIntentsStatus.Succeeded ||
+        pi.status == PaymentIntentsStatus.Processing) {
+      return;
+    }
+    if (pi.status == PaymentIntentsStatus.RequiresAction) {
+      pi = await Stripe.instance.handleNextAction(clientSecret);
+      continue;
+    }
+    if (pi.status == PaymentIntentsStatus.RequiresConfirmation) {
+      try {
+        pi = await Stripe.instance.confirmPayment(
+          paymentIntentClientSecret: clientSecret,
+        );
+      } on StripeException catch (e) {
+        if (isPaymentIntentAlreadySucceededError(e)) {
+          return;
+        }
+        rethrow;
+      }
+      continue;
+    }
+    throw Exception(
+      'The payment could not be completed. Try again or use another card.',
+    );
+  }
+
+  if (pi.status == PaymentIntentsStatus.Succeeded ||
+      pi.status == PaymentIntentsStatus.Processing) {
+    return;
+  }
+  throw Exception(
+    'The payment could not be completed. Try again or use another card.',
+  );
+}
+
 /// Resolves Stripe publishable key: nested `payment_gateways.providers.stripe` first,
 /// then root-level [AppBootstrapConfig.stripePublishableKey] (e.g. `stripe_publishable_key`).
 String? resolveStripePublishableKey(AppBootstrapConfig? config) {

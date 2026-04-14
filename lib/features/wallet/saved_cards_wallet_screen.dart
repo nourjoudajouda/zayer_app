@@ -31,6 +31,8 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
   bool _setupIntentLoading = false;
   /// Saved-card wallet top-up (Stripe PaymentIntent) only.
   bool _topUpInProgress = false;
+  /// Prevents overlapping top-up requests before [setState] disables the button.
+  bool _topUpActionLock = false;
   String? _error;
   List<Map<String, dynamic>> _cards = [];
 
@@ -269,6 +271,7 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
   }
 
   Future<void> _topUp(Map<String, dynamic> card) async {
+    if (_topUpActionLock || _topUpInProgress) return;
     final id = int.tryParse(card['id']?.toString() ?? '');
     if (id == null) return;
     final ctrl = TextEditingController(
@@ -304,30 +307,40 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
       return;
     }
 
+    _topUpActionLock = true;
     setState(() => _topUpInProgress = true);
     try {
       final res = await ApiClient.instance.post<Map<String, dynamic>>(
         '/api/wallet/top-up-saved-card',
         data: {'amount': amt, 'saved_payment_method_id': id},
       );
-      final secret =
-          res.data?['payment_intent']?['client_secret'] as String?;
-      if (secret == null || secret.isEmpty) throw Exception('No client secret');
+      final piRaw = res.data?['payment_intent'];
+      final piMap = piRaw is Map<String, dynamic> ? piRaw : null;
+      final secret = piMap?['client_secret'] as String?;
+      final serverStatus = piMap?['status'] as String?;
+      if (secret == null || secret.isEmpty) {
+        throw Exception('Invalid payment response from server.');
+      }
 
-      await Stripe.instance.confirmPayment(
-        paymentIntentClientSecret: secret,
+      await runSavedCardTopUpStripeClientStep(
+        clientSecret: secret,
+        serverReportedStatus: serverStatus,
       );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Payment submitted. Your wallet will update shortly.')),
+        const SnackBar(
+          content: Text('Payment submitted. Your wallet will update shortly.'),
+        ),
       );
       ref.invalidate(walletBalanceProvider);
       ref.invalidate(walletTransactionsProvider);
     } on StripeException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.error.message ?? 'Payment failed')),
+        SnackBar(
+          content: Text(_savedCardTopUpStripeUserMessage(e)),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -335,8 +348,20 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         SnackBar(content: Text(userFacingApiMessage(e))),
       );
     } finally {
+      _topUpActionLock = false;
       if (mounted) setState(() => _topUpInProgress = false);
     }
+  }
+
+  String _savedCardTopUpStripeUserMessage(StripeException e) {
+    if (isPaymentIntentAlreadySucceededError(e)) {
+      return 'This payment was already completed. Your balance will update shortly.';
+    }
+    final t = e.error.localizedMessage ?? e.error.message;
+    if (t == null || t.trim().isEmpty) {
+      return 'Payment could not be completed. Please try again.';
+    }
+    return t;
   }
 
   static String _cardStatusLabel(String status) {
