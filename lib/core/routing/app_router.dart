@@ -22,7 +22,6 @@ import '../../features/orders/order_detail_screen.dart';
 import '../../features/orders/order_invoice_screen.dart';
 import '../../features/orders/order_tracking_screen.dart';
 import '../../features/orders/post_order_hub_screen.dart';
-import '../../features/placeholders/coming_soon_screen.dart';
 import '../../features/profile/add_edit_address_screen.dart';
 import '../../features/security/active_sessions_screen.dart';
 import '../../features/security/change_password_screen.dart';
@@ -428,9 +427,13 @@ GoRouter _createAppRouter() {
       ),
       GoRoute(
         path: AppRoutes.paymentMethods,
-        builder: (context, state) => ComingSoonScreen(
-          title: 'Payment Methods',
-        ),
+        builder: (context, state) {
+          final extra = state.extra;
+          final initial = extra is double
+              ? extra
+              : (extra is num ? extra.toDouble() : null);
+          return SavedCardsWalletScreen(initialTopUpAmount: initial);
+        },
       ),
       GoRoute(
         path: AppRoutes.supportInbox,

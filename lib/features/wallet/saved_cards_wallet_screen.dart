@@ -6,19 +6,27 @@ import 'package:go_router/go_router.dart';
 import '../../core/config/app_config.dart';
 import '../../core/config/app_config_provider.dart';
 import '../../core/network/api_client.dart';
-import '../../core/network/api_error_message.dart'
-    show userFacingApiMessage, validationErrorsFromDio;
+import '../../core/network/api_error_message.dart' show userFacingApiMessage;
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../generated/l10n/app_localizations.dart';
 import 'add_saved_card_screen.dart';
 import 'providers/wallet_providers.dart';
+import 'saved_card_top_up_amount_dialog.dart';
+import 'saved_card_verify_amount_dialog.dart';
 import 'stripe_wallet_helpers.dart';
 
 /// Saved cards: add via Stripe SetupIntent, verify micro-charge, top up with PaymentIntent.
 class SavedCardsWalletScreen extends ConsumerStatefulWidget {
-  const SavedCardsWalletScreen({super.key, this.initialTopUpAmount});
+  const SavedCardsWalletScreen({
+    super.key,
+    this.initialTopUpAmount,
+    this.appBarTitle,
+  });
 
   final double? initialTopUpAmount;
+  /// When null, uses [AppLocalizations.paymentMethods].
+  final String? appBarTitle;
 
   @override
   ConsumerState<SavedCardsWalletScreen> createState() =>
@@ -171,135 +179,44 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
   Future<void> _verify(Map<String, dynamic> card) async {
     final id = card['id']?.toString();
     if (id == null) return;
-    final ctrl = TextEditingController();
-    await showDialog<void>(
+    final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) {
-        String? fieldError;
-        var submitting = false;
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Verification amount'),
-              content: TextField(
-                controller: ctrl,
-                autofocus: true,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (_) => setDialogState(() => fieldError = null),
-                decoration: InputDecoration(
-                  labelText: 'Exact USD amount charged',
-                  hintText: 'e.g. 3.47',
-                  helperText: r'Must be between $1.00 and $5.00',
-                  errorText: fieldError,
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed:
-                      submitting ? null : () => Navigator.pop(ctx),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: submitting
-                      ? null
-                      : () async {
-                          final raw = ctrl.text.trim();
-                          final amt = double.tryParse(raw);
-                          if (amt == null) {
-                            setDialogState(
-                              () => fieldError =
-                                  'Enter the exact amount from your bank.',
-                            );
-                            return;
-                          }
-                          if (amt < 1 || amt > 5) {
-                            setDialogState(
-                              () => fieldError =
-                                  r'Enter an amount between $1.00 and $5.00.',
-                            );
-                            return;
-                          }
-                          setDialogState(() {
-                            submitting = true;
-                            fieldError = null;
-                          });
-                          try {
-                            savedCardFlowLog('verify_card_charge', 'POST amount=$amt id=$id');
-                            await ApiClient.instance.post<Map<String, dynamic>>(
-                              '/api/wallet/saved-cards/$id/verify',
-                              data: {'amount': amt},
-                            );
-                            savedCardFlowLog('verify_card_charge', 'ok');
-                            if (!ctx.mounted) return;
-                            Navigator.pop(ctx);
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(this.context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Card verified. Amount added to wallet.',
-                                ),
-                              ),
-                            );
-                            ref.invalidate(walletBalanceProvider);
-                            ref.invalidate(walletTransactionsProvider);
-                            await _reload();
-                          } catch (e) {
-                            savedCardFlowLog('verify_card_charge', 'error: $e');
-                            final errs = validationErrorsFromDio(e);
-                            setDialogState(() {
-                              submitting = false;
-                              fieldError = errs['amount'] ??
-                                  userFacingApiMessage(e);
-                            });
-                          }
-                        },
-                  child: submitting
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Verify'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    ).whenComplete(ctrl.dispose);
+      barrierDismissible: false,
+      builder: (ctx) => SavedCardVerifyAmountDialog(cardId: id),
+    );
+    if (ok != true || !mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _afterVerifyDialogClosed());
+  }
+
+  void _afterVerifyDialogClosed() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Card verified. The credited amount may take a moment to appear in your balance.',
+        ),
+      ),
+    );
+    ref.invalidate(walletBalanceProvider);
+    ref.invalidate(walletTransactionsProvider);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await _reload();
+    });
   }
 
   Future<void> _topUp(Map<String, dynamic> card) async {
     if (_topUpActionLock || _topUpInProgress) return;
     final id = int.tryParse(card['id']?.toString() ?? '');
     if (id == null) return;
-    final ctrl = TextEditingController(
-      text: widget.initialTopUpAmount?.toStringAsFixed(2) ?? '50.00',
-    );
-    final ok = await showDialog<bool>(
+    final amt = await showDialog<double?>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Top up wallet'),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'Amount USD'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Continue')),
-        ],
+      builder: (ctx) => SavedCardTopUpAmountDialog(
+        initialAmount: widget.initialTopUpAmount,
       ),
     );
-    if (ok != true) {
-      ctrl.dispose();
-      return;
-    }
-    final raw = ctrl.text.trim();
-    ctrl.dispose();
-    final amt = double.tryParse(raw);
-    if (amt == null || amt < 1) {
+    if (amt == null) return;
+    if (amt < 1) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Enter an amount of at least \$1.00.')),
@@ -329,8 +246,8 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Payment submitted. Your wallet will update shortly.'),
+        SnackBar(
+          content: Text(_snackbarMessageForTopUpResponse(res.data)),
         ),
       );
       ref.invalidate(walletBalanceProvider);
@@ -351,6 +268,23 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
       _topUpActionLock = false;
       if (mounted) setState(() => _topUpInProgress = false);
     }
+  }
+
+  /// Aligns copy with API: Stripe PI status + local wallet top-up row status.
+  String _snackbarMessageForTopUpResponse(Map<String, dynamic>? data) {
+    final topUp = data?['top_up'] as Map<String, dynamic>?;
+    final pi = data?['payment_intent'] as Map<String, dynamic>?;
+    final tu = topUp?['payment_status']?.toString().toLowerCase().trim() ?? '';
+    final piSt = pi?['status']?.toString().toLowerCase().trim() ?? '';
+
+    const credited = {'completed', 'paid', 'succeeded', 'success'};
+    if (tu.isNotEmpty && credited.contains(tu)) {
+      return 'Wallet credited successfully.';
+    }
+    if (piSt == 'succeeded' || piSt == 'processing') {
+      return 'Top-up is being processed. Your balance may take a moment to update.';
+    }
+    return 'Top-up is being processed. Your balance may take a moment to update.';
   }
 
   String _savedCardTopUpStripeUserMessage(StripeException e) {
@@ -394,10 +328,12 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final title = widget.appBarTitle ?? l10n.paymentMethods;
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
       appBar: AppBar(
-        title: const Text('Cards'),
+        title: Text(title),
         backgroundColor: AppConfig.backgroundColor,
         foregroundColor: AppConfig.textColor,
         elevation: 0,
@@ -428,9 +364,30 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                   onRefresh: _reload,
                   child: ListView.builder(
                     padding: const EdgeInsets.all(AppSpacing.md),
-                    itemCount: _cards.length,
+                    itemCount: _cards.isEmpty ? 2 : _cards.length + 1,
                     itemBuilder: (context, i) {
-                      final c = _cards[i];
+                      if (i == 0) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                          child: Text(
+                            'Saved cards for wallet top-ups. Verify pending cards, '
+                            'then use Top up on a verified card.',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: AppConfig.subtitleColor,
+                                  height: 1.4,
+                                ),
+                          ),
+                        );
+                      }
+                      if (_cards.isEmpty) {
+                        return Text(
+                          'No cards yet. Tap Add card to link one.',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: AppConfig.subtitleColor,
+                              ),
+                        );
+                      }
+                      final c = _cards[i - 1];
                       final status = c['verification_status']?.toString() ?? '';
                       final last4 = c['last4']?.toString() ?? '????';
                       final brand = c['brand']?.toString() ?? 'Card';

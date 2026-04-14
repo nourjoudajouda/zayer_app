@@ -69,8 +69,10 @@ class _AddFundsHubScreenState extends ConsumerState<AddFundsHubScreen> {
                 ? 'Save a card with Stripe, verify a small charge, then top up from saved cards. Or pay in your browser.'
                 : 'Stripe is not enabled for this app build.',
             onTap: stripeOn
-                ? () => context.push(AppRoutes.walletSavedCards,
-                    extra: widget.initialAmount)
+                ? () => context.push(
+                      AppRoutes.paymentMethods,
+                      extra: widget.initialAmount,
+                    )
                 : null,
             trailing: stripeOn
                 ? TextButton(
