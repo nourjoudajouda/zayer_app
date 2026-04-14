@@ -42,6 +42,8 @@ class AddSavedCardScreen extends ConsumerStatefulWidget {
 class _AddSavedCardScreenState extends ConsumerState<AddSavedCardScreen> {
   bool _cardComplete = false;
   bool _submitting = false;
+  /// Synchronous guard so two taps cannot start two confirms before the next frame.
+  bool _submitLocked = false;
   String? _pageError;
   bool _stripeLoading = true;
   bool _stripeReady = false;
@@ -76,27 +78,154 @@ class _AddSavedCardScreenState extends ConsumerState<AddSavedCardScreen> {
     }
   }
 
+  /// After Stripe and backend work, close the route on the next frame so the
+  /// [CardField] platform view can detach before the widget subtree is torn down
+  /// (avoids `InheritedWidget` / `_dependents` assertions during pop).
+  void _schedulePopSuccess() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      context.pop(true);
+    });
+  }
+
+  Future<SetupIntent?> _retrieveSucceededSetupIntent() async {
+    try {
+      final si =
+          await Stripe.instance.retrieveSetupIntent(widget.args.clientSecret);
+      if (setupIntentStatusSucceeded(si.status)) {
+        return si;
+      }
+    } catch (e) {
+      savedCardFlowLog('retrieve_setup_intent', 'error: $e');
+    }
+    return null;
+  }
+
+  /// Backend POST + optional verification PI 3DS, then one deferred pop on success.
+  Future<bool> _completeAfterSetupIntentSucceeded(SetupIntent si) async {
+    if (!setupIntentStatusSucceeded(si.status)) {
+      savedCardFlowLog(
+        'confirm_setup_intent',
+        'aborted: not succeeded (${si.status})',
+      );
+      if (!mounted) return false;
+      setState(() {
+        _submitting = false;
+        _pageError =
+            'Card setup did not finish. Complete any bank prompts, or try another card.';
+      });
+      return false;
+    }
+
+    try {
+      savedCardFlowLog('save_card_backend', 'POST setup_intent_id=${si.id}');
+      final complete = await ApiClient.instance.post<Map<String, dynamic>>(
+        '/api/wallet/saved-cards',
+        data: {'setup_intent_id': si.id},
+      );
+
+      if (!mounted) return false;
+
+      final ver = complete.data?['verification'] as Map<String, dynamic>?;
+      final cs = ver?['client_secret'] as String?;
+      final needsAction = ver?['requires_action'] == true;
+      if (needsAction && cs != null && cs.isNotEmpty) {
+        savedCardFlowLog('verify_card_charge', 'handleNextAction (PI)');
+        final pi = await Stripe.instance.handleNextAction(cs);
+        if (!mounted) return false;
+        if (pi.status != PaymentIntentsStatus.Succeeded) {
+          savedCardFlowLog(
+            'verify_card_charge',
+            'PI not succeeded: ${pi.status}',
+          );
+          setState(() {
+            _submitting = false;
+            _pageError =
+                'The verification charge could not be completed. Try again or use another card.';
+          });
+          return false;
+        }
+      }
+
+      savedCardFlowLog('save_card_backend', 'complete');
+      if (!mounted) return false;
+      _schedulePopSuccess();
+      return true;
+    } catch (e) {
+      savedCardFlowLog('save_card_backend', 'error: $e');
+      if (!mounted) return false;
+      setState(() {
+        _submitting = false;
+        _pageError = userFacingApiMessage(e);
+      });
+      return false;
+    }
+  }
+
+  String _friendlyStripeConfirmError(StripeException e) {
+    if (isSetupIntentAlreadySucceededError(e)) {
+      return 'This card step was already completed. Go back and tap Add card again to use a new setup.';
+    }
+    final text = e.error.localizedMessage ?? e.error.message;
+    if (text == null || text.trim().isEmpty) {
+      return 'Card could not be saved. Please try again.';
+    }
+    return text;
+  }
+
   Future<void> _submit() async {
+    if (_submitLocked || _submitting) return;
+    _submitLocked = true;
+    if (!mounted) {
+      _submitLocked = false;
+      return;
+    }
     setState(() {
       _submitting = true;
       _pageError = null;
     });
+
     try {
       savedCardFlowLog(
         'confirm_setup_intent',
         'start setupIntentId=${widget.args.setupIntentId ?? "?"}',
       );
 
-      var si = await Stripe.instance.confirmSetupIntent(
-        paymentIntentClientSecret: widget.args.clientSecret,
-        params: const PaymentMethodParams.card(
-          paymentMethodData: PaymentMethodData(),
-        ),
-      );
+      late SetupIntent si;
+      try {
+        si = await Stripe.instance.confirmSetupIntent(
+          paymentIntentClientSecret: widget.args.clientSecret,
+          params: const PaymentMethodParams.card(
+            paymentMethodData: PaymentMethodData(),
+          ),
+        );
+      } on StripeException catch (e) {
+        if (isSetupIntentAlreadySucceededError(e)) {
+          savedCardFlowLog(
+            'confirm_setup_intent',
+            'recover: already succeeded — retrieve SI',
+          );
+          final recovered = await _retrieveSucceededSetupIntent();
+          if (!mounted) return;
+          if (recovered == null) {
+            setState(() {
+              _submitting = false;
+              _pageError =
+                  'This card setup was already completed. Go back and try Add card again.';
+            });
+            return;
+          }
+          si = recovered;
+        } else {
+          rethrow;
+        }
+      }
+
       savedCardFlowLog('confirm_setup_intent', 'status=${si.status}');
 
       var actionAttempts = 0;
       while (setupIntentStatusRequiresAction(si.status) && actionAttempts < 5) {
+        if (!mounted) return;
         actionAttempts++;
         savedCardFlowLog(
           'confirm_setup_intent',
@@ -108,50 +237,7 @@ class _AddSavedCardScreenState extends ConsumerState<AddSavedCardScreen> {
         savedCardFlowLog('confirm_setup_intent', 'status=${si.status}');
       }
 
-      if (!setupIntentStatusSucceeded(si.status)) {
-        savedCardFlowLog(
-          'confirm_setup_intent',
-          'aborted: not succeeded (${si.status})',
-        );
-        if (!mounted) return;
-        setState(() {
-          _submitting = false;
-          _pageError =
-              'Card setup did not finish. Complete any bank prompts, or try another card.';
-        });
-        return;
-      }
-
-      savedCardFlowLog('save_card_backend', 'POST setup_intent_id=${si.id}');
-      final complete = await ApiClient.instance.post<Map<String, dynamic>>(
-        '/api/wallet/saved-cards',
-        data: {'setup_intent_id': si.id},
-      );
-
-      final ver = complete.data?['verification'] as Map<String, dynamic>?;
-      final cs = ver?['client_secret'] as String?;
-      final needsAction = ver?['requires_action'] == true;
-      if (needsAction && cs != null && cs.isNotEmpty) {
-        savedCardFlowLog('verify_card_charge', 'handleNextAction (PI)');
-        final pi = await Stripe.instance.handleNextAction(cs);
-        if (pi.status != PaymentIntentsStatus.Succeeded) {
-          savedCardFlowLog(
-            'verify_card_charge',
-            'PI not succeeded: ${pi.status}',
-          );
-          if (!mounted) return;
-          setState(() {
-            _submitting = false;
-            _pageError =
-                'The verification charge could not be completed. Try again or use another card.';
-          });
-          return;
-        }
-      }
-
-      savedCardFlowLog('save_card_backend', 'complete');
-      if (!mounted) return;
-      context.pop(true);
+      await _completeAfterSetupIntentSucceeded(si);
     } on StripeException catch (e) {
       savedCardFlowLog(
         'confirm_setup_intent',
@@ -160,8 +246,7 @@ class _AddSavedCardScreenState extends ConsumerState<AddSavedCardScreen> {
       if (!mounted) return;
       setState(() {
         _submitting = false;
-        _pageError =
-            e.error.message ?? 'Card could not be saved. Please try again.';
+        _pageError = _friendlyStripeConfirmError(e);
       });
     } catch (e) {
       savedCardFlowLog('save_card_backend', 'error: $e');
@@ -170,6 +255,8 @@ class _AddSavedCardScreenState extends ConsumerState<AddSavedCardScreen> {
         _submitting = false;
         _pageError = userFacingApiMessage(e);
       });
+    } finally {
+      _submitLocked = false;
     }
   }
 
@@ -339,6 +426,7 @@ class _AddSavedCardScreenState extends ConsumerState<AddSavedCardScreen> {
                     expirationHintText: 'MM / YY',
                     cvcHintText: 'CVC',
                     onCardChanged: (card) {
+                      if (!mounted) return;
                       setState(() {
                         _cardComplete = card?.complete == true;
                         _pageError = null;

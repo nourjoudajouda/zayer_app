@@ -16,6 +16,17 @@ bool setupIntentStatusSucceeded(String status) =>
 bool setupIntentStatusRequiresAction(String status) =>
     status.toLowerCase() == 'requires_action';
 
+/// True when [StripeException] from [Stripe.instance.confirmSetupIntent] indicates the
+/// SetupIntent is no longer confirmable because it already completed (e.g. duplicate confirm).
+bool isSetupIntentAlreadySucceededError(StripeException e) {
+  final msg = (e.error.message ?? '').toLowerCase();
+  final loc = (e.error.localizedMessage ?? '').toLowerCase();
+  final stripeCode = (e.error.stripeErrorCode ?? '').toLowerCase();
+  return msg.contains('already succeeded') ||
+      loc.contains('already succeeded') ||
+      stripeCode == 'setup_intent_unexpected_state';
+}
+
 /// Resolves Stripe publishable key: nested `payment_gateways.providers.stripe` first,
 /// then root-level [AppBootstrapConfig.stripePublishableKey] (e.g. `stripe_publishable_key`).
 String? resolveStripePublishableKey(AppBootstrapConfig? config) {

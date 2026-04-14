@@ -129,35 +129,41 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
     );
     if (confirmed != true || !mounted) return;
 
-    try {
-      await _reload();
+    // Defer list reload + dialog until after the add-card route has finished popping
+    // so the Stripe [CardField] is not torn down while the parent rebuilds (avoids
+    // `_dependents.isEmpty` / inherited-widget assertions).
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+      try {
+        await _reload();
+        if (!mounted) return;
 
-      await showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Verify your card'),
-          content: const Text(
-            'We placed a small random charge on your card between \$1.00 and \$5.00 USD '
-            'to confirm you own it.\n\n'
-            'Check your bank app or card statement for the exact amount, then return here '
-            'and tap Verify on this card and enter that amount. The same amount will be '
-            'credited to your wallet when verification succeeds.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK'),
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Verify your card'),
+            content: const Text(
+              'We placed a small random charge on your card between \$1.00 and \$5.00 USD '
+              'to confirm you own it.\n\n'
+              'Check your bank app or card statement for the exact amount, then return here '
+              'and tap Verify on this card and enter that amount. The same amount will be '
+              'credited to your wallet when verification succeeds.',
             ),
-          ],
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e))),
-      );
-    }
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userFacingApiMessage(e))),
+        );
+      }
+    });
   }
 
   Future<void> _verify(Map<String, dynamic> card) async {
