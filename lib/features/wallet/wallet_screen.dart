@@ -111,6 +111,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
       onRefresh: () async {
         ref.invalidate(walletBalanceProvider);
         ref.invalidate(walletTransactionsProvider);
+        ref.invalidate(walletStripeTopUpsProvider);
         await ref.read(walletBalanceProvider.future);
       },
       child: SingleChildScrollView(
@@ -238,6 +239,8 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
             const SizedBox(height: AppSpacing.lg),
             _BalanceBreakdownCard(balance: balance),
             const SizedBox(height: AppSpacing.md),
+            const _WalletStripeTopUpsPanel(),
+            const SizedBox(height: AppSpacing.md),
             _WalletUsageCard(),
             const SizedBox(height: AppSpacing.xxl),
           ],
@@ -255,6 +258,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
       onRefresh: () async {
         ref.invalidate(walletBalanceProvider);
         ref.invalidate(walletTransactionsProvider);
+        ref.invalidate(walletStripeTopUpsProvider);
         await ref.read(walletTransactionsProvider.future);
       },
       child: SingleChildScrollView(
@@ -679,6 +683,115 @@ class _BalanceBreakdownCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Card / Checkout Stripe top-ups (pending vs paid) from GET /api/wallet/stripe-top-ups.
+class _WalletStripeTopUpsPanel extends ConsumerWidget {
+  const _WalletStripeTopUpsPanel();
+
+  static String _statusLabel(String? s) {
+    switch ((s ?? '').toLowerCase()) {
+      case 'paid':
+        return 'Completed';
+      case 'processing':
+      case 'pending':
+        return 'Processing';
+      case 'failed':
+        return 'Failed';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return s ?? '—';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(walletStripeTopUpsProvider);
+    return async.when(
+      data: (rows) {
+        if (rows.isEmpty) return const SizedBox.shrink();
+        final recent = rows.take(6).toList();
+        return Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppConfig.cardColor,
+            borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
+            border: Border.all(color: AppConfig.borderColor),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'RECENT CARD TOP-UPS (STRIPE)',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: AppConfig.subtitleColor,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.4,
+                    ),
+              ),
+              const SizedBox(height: 10),
+              ...recent.map((r) {
+                final amt = (r['amount'] as num?)?.toDouble() ?? 0;
+                final st = r['status']?.toString();
+                final method = r['method']?.toString() == 'saved_card'
+                    ? 'Saved card'
+                    : 'Checkout';
+                final refStr = r['reference']?.toString() ?? '';
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '\$${amt.toStringAsFixed(2)} · $method',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                            if (refStr.isNotEmpty)
+                              Text(
+                                refStr,
+                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                      color: AppConfig.subtitleColor,
+                                    ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppConfig.lightBlueBg,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          _statusLabel(st),
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: AppConfig.textColor,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
     );
   }
 }

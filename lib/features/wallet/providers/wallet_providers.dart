@@ -55,11 +55,9 @@ final walletTransactionsProvider = FutureProvider<List<WalletTransaction>>((
         if (typeStr == 'admin_credit' || typeStr == 'admin-credits') {
           type = WalletActivityType.adminCredits;
         }
-        if (typeStr == 'top_up') {
+        if (typeStr == 'top_up' || typeStr == 'card_topup_credit') {
           type = WalletActivityType.topUps;
-        }
-        if (typeStr == 'card_verification_credit' ||
-            typeStr == 'card_topup_credit' ||
+        } else if (typeStr == 'card_verification_credit' ||
             typeStr == 'wire_transfer_credit' ||
             typeStr == 'zelle_credit') {
           type = WalletActivityType.fundingCredits;
@@ -74,6 +72,21 @@ final walletTransactionsProvider = FutureProvider<List<WalletTransaction>>((
           isCredit: t['is_credit'] == true,
         );
       }).toList();
+    }
+  } catch (_) {}
+  return const [];
+});
+
+/// Stripe wallet top-up rows (saved card + checkout): GET /api/wallet/stripe-top-ups
+final walletStripeTopUpsProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  try {
+    final res = await ApiClient.instance.get<Map<String, dynamic>>(
+      '/api/wallet/stripe-top-ups',
+    );
+    final list = res.data?['top_ups'];
+    if (list is List) {
+      return list.whereType<Map<String, dynamic>>().toList();
     }
   } catch (_) {}
   return const [];

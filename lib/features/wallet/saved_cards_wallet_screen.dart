@@ -252,6 +252,7 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
       );
       ref.invalidate(walletBalanceProvider);
       ref.invalidate(walletTransactionsProvider);
+      ref.invalidate(walletStripeTopUpsProvider);
     } on StripeException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -270,19 +271,25 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
     }
   }
 
-  /// Aligns copy with API: Stripe PI status + local wallet top-up row status.
+  /// Aligns copy with API: backend may mark `top_up.payment_status` paid after sync settle.
   String _snackbarMessageForTopUpResponse(Map<String, dynamic>? data) {
     final topUp = data?['top_up'] as Map<String, dynamic>?;
     final pi = data?['payment_intent'] as Map<String, dynamic>?;
     final tu = topUp?['payment_status']?.toString().toLowerCase().trim() ?? '';
     final piSt = pi?['status']?.toString().toLowerCase().trim() ?? '';
 
-    const credited = {'completed', 'paid', 'succeeded', 'success'};
+    if (tu == 'paid') {
+      return 'Wallet credited successfully.';
+    }
+    const credited = {'completed', 'succeeded', 'success'};
     if (tu.isNotEmpty && credited.contains(tu)) {
       return 'Wallet credited successfully.';
     }
-    if (piSt == 'succeeded' || piSt == 'processing') {
+    if (piSt == 'succeeded') {
       return 'Top-up is being processed. Your balance may take a moment to update.';
+    }
+    if (piSt == 'processing' || tu == 'processing') {
+      return 'Top-up is being processed. Check your wallet activity shortly.';
     }
     return 'Top-up is being processed. Your balance may take a moment to update.';
   }
@@ -388,94 +395,167 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                         );
                       }
                       final c = _cards[i - 1];
+                      final theme = Theme.of(context);
                       final status = c['verification_status']?.toString() ?? '';
                       final last4 = c['last4']?.toString() ?? '????';
                       final brand = c['brand']?.toString() ?? 'Card';
                       final def = c['is_default'] == true;
-                      return Card(
-                        color: AppConfig.cardColor,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 4,
-                            horizontal: 4,
-                          ),
-                          child: ListTile(
-                            title: Text(
-                              '$brand •••• $last4${def ? ' (default)' : ''}',
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: Material(
+                          color: AppConfig.cardColor,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppConfig.radiusMedium),
+                            side: BorderSide(
+                              color: AppConfig.borderColor.withValues(alpha: 0.65),
                             ),
-                            subtitle: Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 4,
-                                    crossAxisAlignment:
-                                        WrapCrossAlignment.center,
-                                    children: [
-                                      Chip(
-                                        label: Text(
-                                          _cardStatusLabel(status),
-                                          style: const TextStyle(fontSize: 12),
-                                        ),
-                                        backgroundColor: _cardStatusColor(status)
-                                            .withValues(alpha: 0.15),
-                                        side: BorderSide(
-                                          color: _cardStatusColor(status)
-                                              .withValues(alpha: 0.35),
-                                        ),
-                                        padding: EdgeInsets.zero,
-                                        materialTapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                        visualDensity: VisualDensity.compact,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 22,
+                                      backgroundColor: AppConfig.lightBlueBg,
+                                      child: Icon(
+                                        Icons.credit_card_rounded,
+                                        color: AppConfig.primaryColor,
+                                        size: 24,
                                       ),
-                                      if (status == 'failed_verification')
-                                        Text(
-                                          'Remove the card and add it again, or contact support.',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall
-                                              ?.copyWith(
-                                                color: AppConfig.subtitleColor,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  '${brand.toUpperCase()} •••• $last4',
+                                                  style: theme
+                                                      .textTheme.titleSmall
+                                                      ?.copyWith(
+                                                    fontWeight: FontWeight.w600,
+                                                    color: AppConfig.textColor,
+                                                  ),
+                                                ),
                                               ),
-                                        ),
-                                    ],
-                                  ),
-                                  if (status == 'pending_verification') ...[
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      r'Look for a $1.00–$5.00 charge on your statement, '
-                                      r'then tap Verify and enter the exact amount.',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: AppConfig.subtitleColor,
-                                            height: 1.35,
+                                              if (def)
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 2,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: AppConfig.primaryColor
+                                                        .withValues(alpha: 0.12),
+                                                    borderRadius:
+                                                        BorderRadius.circular(8),
+                                                  ),
+                                                  child: Text(
+                                                    'Default',
+                                                    style: theme
+                                                        .textTheme.labelSmall
+                                                        ?.copyWith(
+                                                      color:
+                                                          AppConfig.primaryColor,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
                                           ),
+                                          const SizedBox(height: 8),
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 4,
+                                            crossAxisAlignment:
+                                                WrapCrossAlignment.center,
+                                            children: [
+                                              Chip(
+                                                label: Text(
+                                                  _cardStatusLabel(status),
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                                backgroundColor:
+                                                    _cardStatusColor(status)
+                                                        .withValues(alpha: 0.15),
+                                                side: BorderSide(
+                                                  color: _cardStatusColor(status)
+                                                      .withValues(alpha: 0.35),
+                                                ),
+                                                padding: EdgeInsets.zero,
+                                                materialTapTargetSize:
+                                                    MaterialTapTargetSize
+                                                        .shrinkWrap,
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                              ),
+                                              if (status ==
+                                                  'failed_verification')
+                                                Text(
+                                                  'Remove the card and add it again, or contact support.',
+                                                  style: theme
+                                                      .textTheme.bodySmall
+                                                      ?.copyWith(
+                                                    color:
+                                                        AppConfig.subtitleColor,
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                          if (status ==
+                                              'pending_verification') ...[
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              r'Look for a $1.00–$5.00 charge on your statement, '
+                                              r'then tap Verify and enter the exact amount.',
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                color: AppConfig.subtitleColor,
+                                                height: 1.35,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
                                     ),
                                   ],
-                                ],
-                              ),
+                                ),
+                                const SizedBox(height: 10),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: status == 'pending_verification'
+                                      ? FilledButton.tonal(
+                                          onPressed: (_topUpInProgress ||
+                                                  _setupIntentLoading)
+                                              ? null
+                                              : () => _verify(c),
+                                          child: const Text('Verify amount'),
+                                        )
+                                      : status == 'verified'
+                                          ? FilledButton(
+                                              onPressed: _topUpInProgress
+                                                  ? null
+                                                  : () => _topUp(c),
+                                              child: const Text('Top up wallet'),
+                                            )
+                                          : const SizedBox.shrink(),
+                                ),
+                              ],
                             ),
-                            isThreeLine: status == 'failed_verification' ||
-                                status == 'pending_verification',
-                            trailing: status == 'pending_verification'
-                                ? TextButton(
-                                    onPressed: (_topUpInProgress || _setupIntentLoading)
-                                        ? null
-                                        : () => _verify(c),
-                                    child: const Text('Verify'),
-                                  )
-                                : status == 'verified'
-                                    ? TextButton(
-                                        onPressed: _topUpInProgress
-                                            ? null
-                                            : () => _topUp(c),
-                                        child: const Text('Top up'),
-                                      )
-                                    : null,
                           ),
                         ),
                       );
