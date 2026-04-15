@@ -154,6 +154,21 @@ NotificationNavigationTarget? _routeFromRouteKey(
         targetType: 'orders_list',
         notificationId: notificationId,
       );
+    case 'purchase_assistant':
+    case 'purchase_assistant_request':
+      if (id != null && id.isNotEmpty) {
+        return NotificationNavigationTarget(
+          route: '${AppRoutes.purchaseAssistantRequests}/$id',
+          targetType: 'purchase_assistant_request',
+          targetId: id,
+          notificationId: notificationId,
+        );
+      }
+      return NotificationNavigationTarget(
+        route: AppRoutes.purchaseAssistantRequests,
+        targetType: 'purchase_assistant_list',
+        notificationId: notificationId,
+      );
     case 'support_inbox':
       return NotificationNavigationTarget(
         route: AppRoutes.supportInbox,

@@ -88,6 +88,7 @@ class ProductLinkImportRepositoryApi implements ProductLinkImportRepository {
       }
     }
 
+    final importFlow = (d['import_flow'] ?? 'standard').toString().trim();
     return ProductImportResult(
       name: (d['name'] ?? 'Product').toString(),
       price: (d['price'] as num?)?.toDouble() ?? 0,
@@ -113,6 +114,7 @@ class ProductLinkImportRepositoryApi implements ProductLinkImportRepository {
       appFeeAmount: (d['app_fee_amount'] as num?)?.toDouble() ?? 0,
       payableNowTotal: (d['payable_now_total'] as num?)?.toDouble() ?? 0,
       shippingPayableNow: (d['shipping_payable_now'] as num?)?.toInt() ?? 0,
+      importFlow: importFlow == 'purchase_assistant' ? 'purchase_assistant' : 'standard',
     );
   }
 }

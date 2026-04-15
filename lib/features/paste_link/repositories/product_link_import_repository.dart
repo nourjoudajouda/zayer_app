@@ -75,6 +75,7 @@ class ProductLinkImportRepositoryMock implements ProductLinkImportRepository {
           weight: null,
           dimensions: null,
           canonicalUrl: normalized.canonicalUrl,
+          importFlow: 'standard',
         );
       } else {
         // Extraction failed - use detected product as fallback
@@ -228,6 +229,7 @@ class ProductLinkImportRepositoryMock implements ProductLinkImportRepository {
       weight: null,
       dimensions: null,
       canonicalUrl: canonicalUrl,
+      importFlow: 'standard',
     );
   }
 

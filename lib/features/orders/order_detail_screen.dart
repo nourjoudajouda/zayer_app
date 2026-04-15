@@ -107,6 +107,21 @@ class _OrderDetailContent extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (order.isPurchaseAssistant)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Chip(
+                    label: const Text('Purchase Assistant'),
+                    padding: EdgeInsets.zero,
+                    labelStyle: Theme.of(context).textTheme.labelSmall,
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    backgroundColor: AppConfig.primaryColor.withValues(alpha: 0.12),
+                  ),
+                ),
+              ),
             Text(
               'Order ${order.orderNumber}',
               style: const TextStyle(fontWeight: FontWeight.bold),

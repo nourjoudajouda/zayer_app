@@ -27,6 +27,8 @@ class ProductImportResult {
     this.appFeeAmount = 0,
     this.payableNowTotal = 0,
     this.shippingPayableNow = 0,
+    /// Backend: `standard` = normal import/cart path; `purchase_assistant` = manual team pricing.
+    this.importFlow = 'standard',
   });
 
   final String name;
@@ -83,6 +85,9 @@ class ProductImportResult {
 
   /// Always 0 at this stage — shipping is not charged with product yet.
   final int shippingPayableNow;
+
+  /// `standard` or `purchase_assistant` (from API `import_flow`).
+  final String importFlow;
 }
 
 class ProductDimensions {

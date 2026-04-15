@@ -64,6 +64,10 @@ import '../../features/development/dev_mode_screen.dart';
 import '../../features/development/under_development_screen.dart';
 import '../../features/store_landing/store_landing_screen.dart';
 import '../../features/store_webview/store_webview_screen.dart';
+import '../../features/purchase_assistant/purchase_assistant_detail_screen.dart';
+import '../../features/purchase_assistant/purchase_assistant_list_screen.dart';
+import '../../features/purchase_assistant/purchase_assistant_submit_screen.dart';
+import '../../features/purchase_assistant/models/purchase_assistant_prefill.dart';
 
 /// App route paths.
 class AppRoutes {
@@ -125,6 +129,9 @@ class AppRoutes {
   static const String privacyPolicy = '/privacy-policy';
   static const String devMode = '/dev';
   static const String underDevelopment = '/under-development';
+  /// Purchase Assistant (manual pricing for unsupported Add via Link).
+  static const String purchaseAssistantRequests = '/purchase-assistant-requests';
+  static const String purchaseAssistantSubmit = '/purchase-assistant-requests/submit';
 }
 
 final GoRouter appRouter = _createAppRouter();
@@ -273,6 +280,26 @@ GoRouter _createAppRouter() {
       GoRoute(
         path: AppRoutes.pasteLink,
         builder: (context, state) => const PasteProductLinkScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.purchaseAssistantSubmit,
+        builder: (context, state) {
+          final extra = state.extra;
+          final prefill =
+              extra is PurchaseAssistantPrefill ? extra : null;
+          return PurchaseAssistantSubmitScreen(prefill: prefill);
+        },
+      ),
+      GoRoute(
+        path: '${AppRoutes.purchaseAssistantRequests}/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return PurchaseAssistantDetailScreen(requestId: id);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.purchaseAssistantRequests,
+        builder: (context, state) => const PurchaseAssistantListScreen(),
       ),
       GoRoute(
         path: AppRoutes.confirmProduct,

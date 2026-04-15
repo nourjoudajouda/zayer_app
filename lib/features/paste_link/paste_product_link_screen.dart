@@ -23,6 +23,7 @@ import '../cart/models/cart_item_model.dart';
 import '../cart/providers/cart_providers.dart';
 import '../cart/repositories/cart_repository.dart';
 import '../product_import/import_progress_screen.dart';
+import '../purchase_assistant/models/purchase_assistant_prefill.dart';
 import 'models/product_import_result.dart';
 import 'providers/paste_link_providers.dart';
 
@@ -406,22 +407,15 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
     });
 
     if (outcome is UnsupportedLinkException) {
-      setState(() {
-        _state = _PasteLinkState.manual;
-        _result = null;
-        _unitPrice = null;
-        _quantity = 1;
-        _nameController.clear();
-        _unitPriceController.clear();
-        _weightController.clear();
-        _lengthController.clear();
-        _widthController.clear();
-        _heightController.clear();
-        _selectedVariationIndices.clear();
-        _showNormalizedHint = false;
-      });
+      final rawUrl = _urlController.text.trim();
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _scheduleShippingEstimate();
+        if (!mounted) return;
+        context.push(
+          AppRoutes.purchaseAssistantSubmit,
+          extra: PurchaseAssistantPrefill(
+            sourceUrl: rawUrl.isNotEmpty ? rawUrl : 'https://invalid.local/',
+          ),
+        );
       });
       return;
     }
@@ -437,6 +431,23 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
 
     if (outcome is ProductImportResult) {
       final result = outcome;
+      if (result.importFlow == 'purchase_assistant') {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          context.push(
+            AppRoutes.purchaseAssistantSubmit,
+            extra: PurchaseAssistantPrefill(
+              sourceUrl: result.canonicalUrl ?? _urlController.text.trim(),
+              title: result.name,
+              quantity: _quantity,
+              customerEstimatedPrice: result.price > 0 ? result.price : null,
+              currency: 'USD',
+              imageUrl: result.imageUrl,
+            ),
+          );
+        });
+        return;
+      }
       final canonical = result.canonicalUrl;
       if (canonical != null &&
           canonical.isNotEmpty &&

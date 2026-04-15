@@ -129,6 +129,7 @@ class OrderModel {
     this.invoiceIssueDate,
     this.transactionId,
     this.executionStatusKey,
+    this.isPurchaseAssistant = false,
   });
 
   final String id;
@@ -156,6 +157,9 @@ class OrderModel {
   final String? paymentMethodLastFour;
   final String? invoiceIssueDate;
   final String? transactionId;
+
+  /// True when order was created from a Purchase Assistant request.
+  final bool isPurchaseAssistant;
 
   String get originLabel {
     switch (origin) {
@@ -426,6 +430,7 @@ class OrderModel {
       paymentMethodLastFour: j['payment_method_last_four'] as String?,
       invoiceIssueDate: j['invoice_issue_date'] as String?,
       transactionId: j['transaction_id'] as String?,
+      isPurchaseAssistant: j['is_purchase_assistant'] == true,
     );
   }
 
