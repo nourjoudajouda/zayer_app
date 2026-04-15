@@ -2,10 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/network/api_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/ui/rounded_card.dart';
+import '../profile/widgets/badge_pill.dart';
 import 'models/purchase_assistant_request_model.dart';
 import 'purchase_assistant_repository_api.dart';
+import 'purchase_assistant_ui.dart';
+import 'widgets/purchase_assistant_store_avatar.dart';
 
 class PurchaseAssistantListScreen extends StatefulWidget {
   const PurchaseAssistantListScreen({super.key});
@@ -34,7 +39,10 @@ class _PurchaseAssistantListScreenState
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
+      backgroundColor: AppConfig.backgroundColor,
       appBar: AppBar(
         title: const Text('Purchase Assistant'),
         leading: IconButton(
@@ -78,28 +86,90 @@ class _PurchaseAssistantListScreenState
             return ListView.separated(
               padding: const EdgeInsets.all(AppSpacing.md),
               itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+              separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
               itemBuilder: (context, i) {
                 final r = items[i];
-                return Card(
-                  child: ListTile(
-                    title: Text(
-                      r.title?.isNotEmpty == true ? r.title! : r.sourceUrl,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      '${r.status}\n${r.sourceUrl}',
-                      maxLines: 3,
-                    ),
-                    isThreeLine: true,
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () async {
-                      await context.push(
-                        '${AppRoutes.purchaseAssistantRequests}/${r.id}',
-                      );
-                      _reload();
-                    },
+                final store = paStoreLabel(r);
+                final title = paProductTitleLine(r);
+                final img = r.imageUrls.isNotEmpty
+                    ? resolveAssetUrl(r.imageUrls.first)
+                    : null;
+                final dateLine = paFormatCreatedAt(r.createdAt);
+                final statusColor = paStatusColor(r.status);
+
+                return RoundedCard(
+                  onTap: () async {
+                    await context.push(
+                      '${AppRoutes.purchaseAssistantRequests}/${r.id}',
+                    );
+                    _reload();
+                  },
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      PurchaseAssistantStoreAvatar(
+                        imageUrl: img,
+                        labelForInitials: store,
+                        size: 64,
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: AppConfig.textColor,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              store,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: AppConfig.subtitleColor,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                BadgePill(
+                                  label: paStatusLabel(r.status),
+                                  color: statusColor,
+                                ),
+                                if (r.quantity > 1)
+                                  Text(
+                                    'Qty ${r.quantity}',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: AppConfig.subtitleColor,
+                                    ),
+                                  ),
+                                if (dateLine != null)
+                                  Text(
+                                    dateLine,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: AppConfig.subtitleColor,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right,
+                        color: AppConfig.subtitleColor.withValues(alpha: 0.7),
+                      ),
+                    ],
                   ),
                 );
               },
