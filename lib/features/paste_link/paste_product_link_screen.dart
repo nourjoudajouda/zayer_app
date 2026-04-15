@@ -431,6 +431,7 @@ class _PasteProductLinkScreenState extends ConsumerState<PasteProductLinkScreen>
 
     if (outcome is ProductImportResult) {
       final result = outcome;
+      // Backend sets import_flow from active Featured Stores only; all other domains → Purchase Assistant (no manual cart).
       if (result.importFlow == 'purchase_assistant') {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
