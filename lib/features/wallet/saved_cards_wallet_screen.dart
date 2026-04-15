@@ -521,17 +521,27 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
+                                          Text(
+                                            brand.toUpperCase(),
+                                            style: theme.textTheme.labelSmall
+                                                ?.copyWith(
+                                              color: AppConfig.subtitleColor,
+                                              letterSpacing: 0.6,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
                                           Row(
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
                                               Expanded(
                                                 child: Text(
-                                                  '${brand.toUpperCase()} •••• $last4',
+                                                  '•••• $last4',
                                                   style: theme
-                                                      .textTheme.titleSmall
+                                                      .textTheme.titleMedium
                                                       ?.copyWith(
-                                                    fontWeight: FontWeight.w600,
+                                                    fontWeight: FontWeight.w700,
                                                     color: AppConfig.textColor,
                                                   ),
                                                 ),
@@ -564,7 +574,7 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                                             ],
                                           ),
                                           if (expiry != null) ...[
-                                            const SizedBox(height: 4),
+                                            const SizedBox(height: 6),
                                             Text(
                                               expiry,
                                               style: theme.textTheme.bodySmall
