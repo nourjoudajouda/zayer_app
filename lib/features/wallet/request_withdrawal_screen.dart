@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -25,9 +27,18 @@ class _RequestWithdrawalScreenState extends ConsumerState<RequestWithdrawalScree
   final _noteCtrl = TextEditingController();
   bool _submitting = false;
   Map<String, double>? _quote;
+  Timer? _quoteDebounce;
+  int _quoteGen = 0;
+
+  double? _parseAmount(String raw) {
+    final t = raw.trim().replaceAll(',', '');
+    if (t.isEmpty) return null;
+    return double.tryParse(t);
+  }
 
   @override
   void dispose() {
+    _quoteDebounce?.cancel();
     _amountCtrl.dispose();
     _ibanCtrl.dispose();
     _bankCtrl.dispose();
@@ -36,19 +47,50 @@ class _RequestWithdrawalScreenState extends ConsumerState<RequestWithdrawalScree
     super.dispose();
   }
 
+  void _scheduleQuoteRefresh() {
+    _quoteDebounce?.cancel();
+    _quoteDebounce = Timer(const Duration(milliseconds: 420), () {
+      if (!mounted) return;
+      _refreshQuote();
+    });
+  }
+
   Future<void> _refreshQuote() async {
-    final amount = double.tryParse(_amountCtrl.text.trim());
+    final gen = ++_quoteGen;
+    final amount = _parseAmount(_amountCtrl.text);
     if (amount == null || amount <= 0) {
-      setState(() => _quote = null);
+      if (mounted) setState(() => _quote = null);
       return;
     }
     final q = await fetchWithdrawalQuote(amount);
-    if (mounted) setState(() => _quote = q);
+    if (!mounted || gen != _quoteGen) return;
+    setState(() => _quote = q);
   }
 
   Future<void> _submit() async {
-    final amount = double.tryParse(_amountCtrl.text.trim());
-    if (amount == null || amount <= 0) return;
+    final amount = _parseAmount(_amountCtrl.text);
+    if (amount == null || amount <= 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter a withdrawal amount greater than zero.'),
+        ),
+      );
+      return;
+    }
+    final bal = ref.read(walletBalanceProvider).valueOrNull?.available ?? 0;
+    if (amount > bal + 1e-9) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Withdrawal amount cannot be greater than your available balance '
+            '(\$${bal.toStringAsFixed(2)}).',
+          ),
+        ),
+      );
+      return;
+    }
     setState(() => _submitting = true);
     try {
       final result = await createWalletWithdrawal(
@@ -119,8 +161,10 @@ class _RequestWithdrawalScreenState extends ConsumerState<RequestWithdrawalScree
                 decoration: const InputDecoration(
                   labelText: 'Amount to withdraw (USD)',
                   border: OutlineInputBorder(),
+                  helperText:
+                      'Fee estimate updates shortly after you stop typing.',
                 ),
-                onChanged: (_) => _refreshQuote(),
+                onChanged: (_) => _scheduleQuoteRefresh(),
               ),
               const SizedBox(height: AppSpacing.sm),
               OutlinedButton(

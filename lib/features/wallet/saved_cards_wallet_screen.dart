@@ -179,13 +179,79 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
   Future<void> _verify(Map<String, dynamic> card) async {
     final id = card['id']?.toString();
     if (id == null) return;
+    final ar = card['attempts_remaining'];
+    final mx = card['max_verification_attempts'];
     final ok = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => SavedCardVerifyAmountDialog(cardId: id),
+      builder: (ctx) => SavedCardVerifyAmountDialog(
+        cardId: id,
+        attemptsRemaining: ar is num ? ar.toInt() : null,
+        maxAttempts: mx is num ? mx.toInt() : 3,
+      ),
     );
     if (ok != true || !mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) => _afterVerifyDialogClosed());
+  }
+
+  Future<void> _setDefault(Map<String, dynamic> card) async {
+    final id = card['id']?.toString();
+    if (id == null) return;
+    try {
+      await ApiClient.instance.post<Map<String, dynamic>>(
+        '/api/wallet/saved-cards/$id/default',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Default card updated.')),
+      );
+      await _reload();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userFacingApiMessage(e))),
+      );
+    }
+  }
+
+  Future<void> _removeCard(Map<String, dynamic> card) async {
+    final id = card['id']?.toString();
+    if (id == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove card?'),
+        content: const Text(
+          'This removes the card from your account. You can add it again later.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await ApiClient.instance.delete<Map<String, dynamic>>(
+        '/api/wallet/saved-cards/$id',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Card removed.')),
+      );
+      await _reload();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userFacingApiMessage(e))),
+      );
+    }
   }
 
   void _afterVerifyDialogClosed() {
@@ -311,6 +377,8 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         return 'Pending verification';
       case 'verified':
         return 'Verified';
+      case 'blocked':
+        return 'Blocked';
       case 'failed_verification':
         return 'Verification failed';
       case 'disabled':
@@ -325,12 +393,24 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
       case 'verified':
         return AppConfig.successGreen;
       case 'failed_verification':
+      case 'blocked':
         return Colors.red.shade700;
       case 'pending_verification':
         return AppConfig.warningOrange;
       default:
         return AppConfig.subtitleColor;
     }
+  }
+
+  static String? _expiryLabel(Map<String, dynamic> c) {
+    final m = c['exp_month'];
+    final y = c['exp_year'];
+    final mi = m is num ? m.toInt() : int.tryParse('$m');
+    final yi = y is num ? y.toInt() : int.tryParse('$y');
+    if (mi == null || yi == null) return null;
+    if (mi < 1 || mi > 12) return null;
+    final yy = yi >= 100 ? yi % 100 : yi;
+    return 'Exp ${mi.toString().padLeft(2, '0')}/$yy';
   }
 
   @override
@@ -400,6 +480,12 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                       final last4 = c['last4']?.toString() ?? '????';
                       final brand = c['brand']?.toString() ?? 'Card';
                       final def = c['is_default'] == true;
+                      final expiry = _expiryLabel(c);
+                      final attemptsRem = c['attempts_remaining'];
+                      final busy = _topUpInProgress || _setupIntentLoading;
+                      final canVerify = status == 'pending_verification';
+                      final canTopUp = status == 'verified';
+                      final isBlocked = status == 'blocked';
                       return Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                         child: Material(
@@ -413,7 +499,7 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                             ),
                           ),
                           child: Padding(
-                            padding: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.all(14),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -436,6 +522,8 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                                             CrossAxisAlignment.start,
                                         children: [
                                           Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
                                               Expanded(
                                                 child: Text(
@@ -475,6 +563,16 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                                                 ),
                                             ],
                                           ),
+                                          if (expiry != null) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              expiry,
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                color: AppConfig.subtitleColor,
+                                              ),
+                                            ),
+                                          ],
                                           const SizedBox(height: 8),
                                           Wrap(
                                             spacing: 8,
@@ -503,21 +601,46 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                                                 visualDensity:
                                                     VisualDensity.compact,
                                               ),
-                                              if (status ==
-                                                  'failed_verification')
+                                              if (canVerify &&
+                                                  attemptsRem is num)
                                                 Text(
-                                                  'Remove the card and add it again, or contact support.',
+                                                  '${attemptsRem.toInt()} try${attemptsRem == 1 ? '' : 's'} left',
                                                   style: theme
                                                       .textTheme.bodySmall
                                                       ?.copyWith(
                                                     color:
                                                         AppConfig.subtitleColor,
+                                                    fontWeight: FontWeight.w500,
                                                   ),
                                                 ),
                                             ],
                                           ),
                                           if (status ==
-                                              'pending_verification') ...[
+                                              'failed_verification') ...[
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              'The bank could not complete the verification charge. '
+                                              'Remove this card and try another, or contact support.',
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                color: AppConfig.subtitleColor,
+                                                height: 1.35,
+                                              ),
+                                            ),
+                                          ],
+                                          if (isBlocked) ...[
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              'This card is blocked after too many failed attempts. '
+                                              'An administrator must review and unblock it before you can verify or use it.',
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                color: Colors.red.shade800,
+                                                height: 1.35,
+                                              ),
+                                            ),
+                                          ],
+                                          if (canVerify) ...[
                                             const SizedBox(height: 8),
                                             Text(
                                               r'Look for a $1.00–$5.00 charge on your statement, '
@@ -534,25 +657,42 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 10),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: status == 'pending_verification'
-                                      ? FilledButton.tonal(
-                                          onPressed: (_topUpInProgress ||
-                                                  _setupIntentLoading)
-                                              ? null
-                                              : () => _verify(c),
-                                          child: const Text('Verify amount'),
-                                        )
-                                      : status == 'verified'
-                                          ? FilledButton(
-                                              onPressed: _topUpInProgress
-                                                  ? null
-                                                  : () => _topUp(c),
-                                              child: const Text('Top up wallet'),
-                                            )
-                                          : const SizedBox.shrink(),
+                                const SizedBox(height: 12),
+                                Wrap(
+                                  alignment: WrapAlignment.end,
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    if (canVerify)
+                                      FilledButton.tonal(
+                                        onPressed:
+                                            busy ? null : () => _verify(c),
+                                        child: const Text('Verify amount'),
+                                      ),
+                                    if (canTopUp)
+                                      FilledButton(
+                                        onPressed:
+                                            busy ? null : () => _topUp(c),
+                                        child: const Text('Top up wallet'),
+                                      ),
+                                    if (canTopUp && !def)
+                                      OutlinedButton(
+                                        onPressed:
+                                            busy ? null : () => _setDefault(c),
+                                        child: const Text('Set as default'),
+                                      ),
+                                    TextButton(
+                                      onPressed: busy
+                                          ? null
+                                          : () => _removeCard(c),
+                                      child: Text(
+                                        'Remove',
+                                        style: TextStyle(
+                                          color: Colors.red.shade700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/network/api_client.dart';
@@ -8,9 +9,16 @@ import 'stripe_wallet_helpers.dart';
 /// Standalone dialog: owns its [TextEditingController] and disposes it in [State.dispose]
 /// (avoids racing [whenComplete] disposal against dialog teardown / `_dependents` asserts).
 class SavedCardVerifyAmountDialog extends StatefulWidget {
-  const SavedCardVerifyAmountDialog({super.key, required this.cardId});
+  const SavedCardVerifyAmountDialog({
+    super.key,
+    required this.cardId,
+    this.attemptsRemaining,
+    this.maxAttempts = 3,
+  });
 
   final String cardId;
+  final int? attemptsRemaining;
+  final int maxAttempts;
 
   @override
   State<SavedCardVerifyAmountDialog> createState() =>
@@ -21,11 +29,13 @@ class _SavedCardVerifyAmountDialogState extends State<SavedCardVerifyAmountDialo
   late final TextEditingController _controller;
   String? _fieldError;
   bool _submitting = false;
+  int? _attemptsRemaining;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController();
+    _attemptsRemaining = widget.attemptsRemaining;
   }
 
   @override
@@ -67,11 +77,41 @@ class _SavedCardVerifyAmountDialogState extends State<SavedCardVerifyAmountDialo
       savedCardFlowLog('verify_card_charge', 'error: $e');
       if (!mounted) return;
       final errs = validationErrorsFromDio(e);
+      int? ar;
+      String? apiMsg;
+      if (e is DioException) {
+        final d = e.response?.data;
+        if (d is Map<String, dynamic>) {
+          final raw = d['attempts_remaining'];
+          if (raw is num) {
+            ar = raw.toInt();
+          }
+          final m = d['message'];
+          if (m is String && m.trim().isNotEmpty) {
+            apiMsg = m.trim();
+          }
+        }
+      }
       setState(() {
         _submitting = false;
-        _fieldError = errs['amount'] ?? userFacingApiMessage(e);
+        if (ar != null) {
+          _attemptsRemaining = ar;
+        }
+        _fieldError = errs['amount'] ?? apiMsg ?? userFacingApiMessage(e);
       });
     }
+  }
+
+  String _attemptsHint() {
+    final max = widget.maxAttempts;
+    final rem = _attemptsRemaining;
+    if (rem == null) {
+      return r'You have up to $max incorrect tries before the card is blocked.';
+    }
+    if (rem <= 0) {
+      return 'No attempts remaining.';
+    }
+    return '$rem incorrect ${rem == 1 ? 'try' : 'tries'} left (max $max before block).';
   }
 
   @override
@@ -86,7 +126,8 @@ class _SavedCardVerifyAmountDialogState extends State<SavedCardVerifyAmountDialo
         decoration: InputDecoration(
           labelText: 'Exact USD amount charged',
           hintText: 'e.g. 3.47',
-          helperText: r'Must be between $1.00 and $5.00',
+          helperText:
+              '${r'Must be between $1.00 and $5.00. '}${_attemptsHint()}',
           errorText: _fieldError,
         ),
       ),
