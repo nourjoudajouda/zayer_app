@@ -14,6 +14,7 @@ import '../../core/network/api_error_message.dart'
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import 'widgets/manual_funding_input_theme.dart';
+import 'wallet_feedback.dart';
 
 /// Submit a wire-transfer funding request (multipart).
 class WireFundingScreen extends ConsumerStatefulWidget {
@@ -74,7 +75,7 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
   Future<void> _submit() async {
     final err = _validateBeforeSubmit();
     if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+      await walletShowError(context, message: err);
       return;
     }
     final amt = double.tryParse(_amount.text.trim().replaceAll(',', ''))!;
@@ -88,10 +89,9 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
         const maxBytes = 10 * 1024 * 1024;
         if (len > maxBytes) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Proof file must be 10 MB or smaller.'),
-            ),
+          await walletShowError(
+            context,
+            message: 'Proof file must be 10 MB or smaller.',
           );
           return;
         }
@@ -118,13 +118,12 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
       );
       if (!mounted) return;
       setState(() => _submitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
+      await walletShowSuccess(
+        context,
+        message:
             'Request submitted. Our team will review it before crediting your wallet.',
-          ),
-        ),
       );
+      if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
@@ -132,9 +131,7 @@ class _WireFundingScreenState extends ConsumerState<WireFundingScreen> {
       if (errs.isNotEmpty) {
         setState(() => _apiFieldErrors = errs);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userFacingApiMessage(e))),
-        );
+        await walletShowError(context, message: userFacingApiMessage(e));
       }
     } finally {
       if (mounted) setState(() => _submitting = false);

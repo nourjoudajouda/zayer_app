@@ -11,6 +11,7 @@ import '../../core/theme/app_spacing.dart';
 import '../checkout/payment_webview_screen.dart';
 import 'models/wallet_model.dart';
 import 'providers/wallet_providers.dart';
+import 'wallet_feedback.dart';
 
 /// Top Up Wallet: available balance, amount presets + custom, payment method, order summary, confirm.
 class TopUpWalletScreen extends ConsumerStatefulWidget {
@@ -88,9 +89,7 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
       if (res.statusCode != null && res.statusCode! >= 400) {
         final msg = data['message']?.toString() ?? 'Top-up could not start.';
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(msg), backgroundColor: Colors.orange.shade800),
-          );
+          await walletShowError(context, title: 'Top-up', message: msg);
         }
         return;
       }
@@ -112,28 +111,33 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
         ref.invalidate(walletBalanceProvider);
         ref.invalidate(walletTransactionsProvider);
         if (result == PaymentWebViewResult.failedToLoad) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Payment page could not load. Please try again or use another device.')),
+          await walletShowError(
+            context,
+            title: 'Payment',
+            message:
+                'Payment page could not load. Please try again or use another device.',
           );
           return;
         }
         // On close/maybeCompleted, refresh wallet and leave the screen.
         await ref.read(walletBalanceProvider.future);
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Wallet updated.')),
+        await walletShowSuccess(
+          context,
+          message: 'Wallet updated. Check Transactions for activity.',
         );
+        if (!mounted) return;
         context.pop();
         return;
       }
 
       // No checkout URL returned: do not pretend the top-up completed.
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Top-up payment is not available right now. Please try again later.'),
-            backgroundColor: Colors.orange,
-          ),
+        await walletShowError(
+          context,
+          title: 'Top-up unavailable',
+          message:
+              'Top-up payment is not available right now. Please try again later.',
         );
       }
     } on DioException catch (e) {
@@ -142,16 +146,14 @@ class _TopUpWalletScreenState extends ConsumerState<TopUpWalletScreen> {
           ? (data['message']?.toString() ?? e.message ?? 'Top-up failed.')
           : (e.message ?? 'Top-up failed.');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg)),
-        );
+        await walletShowError(context, message: msg);
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Top-up failed. Please try again or use another payment method.'),
-          ),
+        await walletShowError(
+          context,
+          message:
+              'Top-up failed. Please try again or use another payment method.',
         );
       }
     } finally {

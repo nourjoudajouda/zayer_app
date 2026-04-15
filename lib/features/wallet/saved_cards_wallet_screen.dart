@@ -15,6 +15,7 @@ import 'providers/wallet_providers.dart';
 import 'saved_card_top_up_amount_dialog.dart';
 import 'saved_card_verify_amount_dialog.dart';
 import 'stripe_wallet_helpers.dart';
+import 'wallet_feedback.dart';
 
 /// Saved cards: add via Stripe SetupIntent, verify micro-charge, top up with PaymentIntent.
 class SavedCardsWalletScreen extends ConsumerStatefulWidget {
@@ -35,8 +36,8 @@ class SavedCardsWalletScreen extends ConsumerStatefulWidget {
 
 class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen> {
   bool _loading = true;
-  /// POST /saved-cards/setup-intent only (brief). Never true while card sheet is open.
-  bool _setupIntentLoading = false;
+  /// True while creating SetupIntent, opening add-card flow, until the route returns.
+  bool _addCardFlow = false;
   /// Saved-card wallet top-up (Stripe PaymentIntent) only.
   bool _topUpInProgress = false;
   /// Prevents overlapping top-up requests before [setState] disables the button.
@@ -77,22 +78,22 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
   }
 
   Future<void> _addCard() async {
-    if (_loading || _setupIntentLoading || _topUpInProgress) return;
+    if (_loading || _addCardFlow || _topUpInProgress) return;
 
-    setState(() => _setupIntentLoading = true);
+    setState(() => _addCardFlow = true);
     String? secret;
     String? intentId;
     try {
       final cfg = await ref.read(bootstrapConfigProvider.future);
       final stripeOk = await ensureStripeInitializedFromBootstrap(cfg);
       if (!stripeOk) {
+        if (mounted) setState(() => _addCardFlow = false);
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
+        await walletShowError(
+          context,
+          title: 'Cards unavailable',
+          message:
               'Card payments are not configured yet. Pull to refresh or try again later.',
-            ),
-          ),
         );
         return;
       }
@@ -105,13 +106,13 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
       secret = siMap?['client_secret'] as String?;
       intentId = siMap?['setup_intent_id'] as String?;
       if (secret == null || secret.isEmpty) {
+        if (mounted) setState(() => _addCardFlow = false);
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
+        await walletShowError(
+          context,
+          title: 'Could not start',
+          message:
               'Card setup could not be started. Check your connection and try again.',
-            ),
-          ),
         );
         return;
       }
@@ -119,13 +120,13 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
       savedCardFlowLog('create_setup_intent', 'ok id=${intentId ?? "?"}');
     } catch (e) {
       savedCardFlowLog('create_setup_intent', 'error: $e');
+      if (mounted) setState(() => _addCardFlow = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e))),
+      await walletShowError(
+        context,
+        message: userFacingApiMessage(e),
       );
       return;
-    } finally {
-      if (mounted) setState(() => _setupIntentLoading = false);
     }
 
     if (!mounted) return;
@@ -137,7 +138,10 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         setupIntentId: intentId,
       ),
     );
-    if (confirmed != true || !mounted) return;
+    if (confirmed != true || !mounted) {
+      if (mounted) setState(() => _addCardFlow = false);
+      return;
+    }
 
     // Defer list reload + dialog until after the add-card route has finished popping
     // so the Stripe [CardField] is not torn down while the parent rebuilds (avoids
@@ -151,6 +155,9 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         await showDialog<void>(
           context: context,
           builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppConfig.radiusLarge),
+            ),
             title: const Text('Verify your card'),
             content: const Text(
               'We placed a small random charge on your card between \$1.00 and \$5.00 USD '
@@ -169,9 +176,12 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         );
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userFacingApiMessage(e))),
+        await walletShowError(
+          context,
+          message: userFacingApiMessage(e),
         );
+      } finally {
+        if (mounted) setState(() => _addCardFlow = false);
       }
     });
   }
@@ -181,7 +191,7 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
     if (id == null) return;
     final ar = card['attempts_remaining'];
     final mx = card['max_verification_attempts'];
-    final ok = await showDialog<bool>(
+    final outcome = await showDialog<SavedCardVerifyOutcome?>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => SavedCardVerifyAmountDialog(
@@ -190,7 +200,22 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         maxAttempts: mx is num ? mx.toInt() : 3,
       ),
     );
-    if (ok != true || !mounted) return;
+    if (!mounted) return;
+    if (outcome == SavedCardVerifyOutcome.blocked) {
+      await _reload();
+      if (!mounted) return;
+      await walletShowError(
+        context,
+        title: 'Card blocked',
+        message:
+            'This card was blocked after too many wrong verification attempts. '
+            'Contact support if you need an administrator to review it.',
+      );
+      ref.invalidate(walletBalanceProvider);
+      ref.invalidate(walletTransactionsProvider);
+      return;
+    }
+    if (outcome == null || outcome != SavedCardVerifyOutcome.success) return;
     WidgetsBinding.instance.addPostFrameCallback((_) => _afterVerifyDialogClosed());
   }
 
@@ -202,15 +227,14 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         '/api/wallet/saved-cards/$id/default',
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Default card updated.')),
+      await walletShowSuccess(
+        context,
+        message: 'Default card updated.',
       );
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e))),
-      );
+      await walletShowError(context, message: userFacingApiMessage(e));
     }
   }
 
@@ -242,26 +266,24 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         '/api/wallet/saved-cards/$id',
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Card removed.')),
+      await walletShowSuccess(
+        context,
+        message: 'Card removed.',
       );
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e))),
-      );
+      await walletShowError(context, message: userFacingApiMessage(e));
     }
   }
 
-  void _afterVerifyDialogClosed() {
+  Future<void> _afterVerifyDialogClosed() async {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Card verified. The credited amount may take a moment to appear in your balance.',
-        ),
-      ),
+    await walletShowSuccess(
+      context,
+      title: 'Card verified',
+      message:
+          'The verification amount was added to your wallet. You can review it under Wallet → Transactions.',
     );
     ref.invalidate(walletBalanceProvider);
     ref.invalidate(walletTransactionsProvider);
@@ -284,8 +306,10 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
     if (amt == null) return;
     if (amt < 1) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter an amount of at least \$1.00.')),
+      await walletShowError(
+        context,
+        title: 'Invalid amount',
+        message: r'Enter an amount of at least $1.00.',
       );
       return;
     }
@@ -311,26 +335,22 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_snackbarMessageForTopUpResponse(res.data)),
-        ),
+      await walletShowSuccess(
+        context,
+        message: _snackbarMessageForTopUpResponse(res.data),
       );
       ref.invalidate(walletBalanceProvider);
       ref.invalidate(walletTransactionsProvider);
       ref.invalidate(walletStripeTopUpsProvider);
     } on StripeException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_savedCardTopUpStripeUserMessage(e)),
-        ),
+      await walletShowError(
+        context,
+        message: _savedCardTopUpStripeUserMessage(e),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e))),
-      );
+      await walletShowError(context, message: userFacingApiMessage(e));
     } finally {
       _topUpActionLock = false;
       if (mounted) setState(() => _topUpInProgress = false);
@@ -425,7 +445,7 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         foregroundColor: AppConfig.textColor,
         elevation: 0,
         actions: [
-          if (_setupIntentLoading || _topUpInProgress)
+          if (_addCardFlow || _topUpInProgress)
             const Padding(
               padding: EdgeInsets.all(16),
               child: SizedBox(
@@ -437,19 +457,22 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: (_loading || _setupIntentLoading || _topUpInProgress)
+        onPressed: (_loading || _addCardFlow || _topUpInProgress)
             ? null
             : _addCard,
         icon: const Icon(Icons.add),
         label: const Text('Add card'),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(child: Text(_error!, textAlign: TextAlign.center))
-              : RefreshIndicator(
-                  onRefresh: _reload,
-                  child: ListView.builder(
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(child: Text(_error!, textAlign: TextAlign.center))
+                    : RefreshIndicator(
+                        onRefresh: _reload,
+                        child: ListView.builder(
                     padding: const EdgeInsets.all(AppSpacing.md),
                     itemCount: _cards.isEmpty ? 2 : _cards.length + 1,
                     itemBuilder: (context, i) {
@@ -482,7 +505,7 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                       final def = c['is_default'] == true;
                       final expiry = _expiryLabel(c);
                       final attemptsRem = c['attempts_remaining'];
-                      final busy = _topUpInProgress || _setupIntentLoading;
+                      final busy = _topUpInProgress || _addCardFlow;
                       final canVerify = status == 'pending_verification';
                       final canTopUp = status == 'verified';
                       final isBlocked = status == 'blocked';
@@ -710,8 +733,65 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
                         ),
                       );
                     },
+                        ),
+                      ),
+          ),
+          if (_addCardFlow)
+            Positioned.fill(
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.45),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    margin: const EdgeInsets.symmetric(horizontal: 28),
+                    decoration: BoxDecoration(
+                      color: AppConfig.cardColor,
+                      borderRadius:
+                          BorderRadius.circular(AppConfig.radiusMedium),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 24,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 44,
+                          height: 44,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3.5,
+                            color: AppConfig.primaryColor,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          'Adding your card',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Secure connection to the payment provider. '
+                          'Do not close the app.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppConfig.subtitleColor,
+                                height: 1.35,
+                              ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

@@ -9,6 +9,7 @@ import '../../core/theme/app_spacing.dart';
 import 'providers/wallet_providers.dart';
 import 'providers/wallet_withdrawal_providers.dart';
 import 'wallet_financial_api.dart';
+import 'wallet_feedback.dart';
 
 /// Withdraw wallet balance to bank (IBAN). Fee applies per admin settings.
 class RequestWithdrawalScreen extends ConsumerStatefulWidget {
@@ -71,23 +72,22 @@ class _RequestWithdrawalScreenState extends ConsumerState<RequestWithdrawalScree
     final amount = _parseAmount(_amountCtrl.text);
     if (amount == null || amount <= 0) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Enter a withdrawal amount greater than zero.'),
-        ),
+      await walletShowError(
+        context,
+        title: 'Amount',
+        message: 'Enter a withdrawal amount greater than zero.',
       );
       return;
     }
     final bal = ref.read(walletBalanceProvider).valueOrNull?.available ?? 0;
     if (amount > bal + 1e-9) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
+      await walletShowError(
+        context,
+        title: 'Balance',
+        message:
             'Withdrawal amount cannot be greater than your available balance '
             '(\$${bal.toStringAsFixed(2)}).',
-          ),
-        ),
       );
       return;
     }
@@ -104,18 +104,17 @@ class _RequestWithdrawalScreenState extends ConsumerState<RequestWithdrawalScree
       if (result.ok) {
         ref.invalidate(walletWithdrawalsProvider);
         ref.invalidate(walletBalanceProvider);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
+        await walletShowSuccess(
+          context,
+          message:
               result.data['message']?.toString() ?? 'Request submitted',
-            ),
-          ),
         );
+        if (!mounted) return;
         context.pop();
         return;
       }
       final msg = result.data['message']?.toString() ?? 'Request failed';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      await walletShowError(context, message: msg);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

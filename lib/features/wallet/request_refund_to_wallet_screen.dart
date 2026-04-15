@@ -9,6 +9,7 @@ import '../warehouse/warehouse_providers.dart';
 import 'providers/wallet_refund_to_wallet_providers.dart';
 import 'providers/wallet_providers.dart';
 import 'wallet_financial_api.dart';
+import 'wallet_feedback.dart';
 
 /// Request operational refund from an order or shipment (credits wallet when approved).
 class RequestRefundToWalletScreen extends ConsumerStatefulWidget {
@@ -74,8 +75,9 @@ class _RequestRefundToWalletScreenState
       sid = int.tryParse(_selectedShipmentId ?? '');
     }
     if (sid == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select an order or shipment.')),
+      await walletShowError(
+        context,
+        message: 'Select an order or shipment.',
       );
       return;
     }
@@ -92,18 +94,17 @@ class _RequestRefundToWalletScreenState
       if (result.ok) {
         ref.invalidate(walletRefundsToWalletProvider);
         ref.invalidate(walletBalanceProvider);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
+        await walletShowSuccess(
+          context,
+          message:
               result.data['message']?.toString() ?? 'Request submitted',
-            ),
-          ),
         );
+        if (!mounted) return;
         context.pop();
         return;
       }
       final msg = result.data['message']?.toString() ?? 'Request failed';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      await walletShowError(context, message: msg);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

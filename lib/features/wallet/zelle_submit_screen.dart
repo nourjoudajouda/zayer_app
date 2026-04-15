@@ -17,6 +17,7 @@ import 'providers/funding_requests_provider.dart';
 import 'providers/wallet_providers.dart';
 import 'widgets/manual_funding_input_theme.dart';
 import 'widgets/zelle_payment_instructions_view.dart';
+import 'wallet_feedback.dart';
 
 /// Zelle step 2: proof and details after user paid in their bank app.
 class ZelleSubmitScreen extends ConsumerStatefulWidget {
@@ -122,7 +123,7 @@ class _ZelleSubmitScreenState extends ConsumerState<ZelleSubmitScreen> {
   Future<void> _submit() async {
     final msg = _validateBeforeSubmit();
     if (msg != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      await walletShowError(context, message: msg);
       return;
     }
     final em = _senderEmail.text.trim();
@@ -138,10 +139,9 @@ class _ZelleSubmitScreenState extends ConsumerState<ZelleSubmitScreen> {
         const maxBytes = 10 * 1024 * 1024;
         if (len > maxBytes) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Proof file must be 10 MB or smaller.'),
-            ),
+          await walletShowError(
+            context,
+            message: 'Proof file must be 10 MB or smaller.',
           );
           return;
         }
@@ -168,13 +168,12 @@ class _ZelleSubmitScreenState extends ConsumerState<ZelleSubmitScreen> {
       ref.invalidate(fundingRequestsProvider);
       ref.invalidate(walletBalanceProvider);
       setState(() => _submitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
+      await walletShowSuccess(
+        context,
+        message:
             'Request submitted. Our team will review it before crediting your wallet.',
-          ),
-        ),
       );
+      if (!mounted) return;
       context.go(AppRoutes.walletFundingHistory);
     } catch (e) {
       if (!mounted) return;
@@ -182,9 +181,7 @@ class _ZelleSubmitScreenState extends ConsumerState<ZelleSubmitScreen> {
       if (errs.isNotEmpty) {
         setState(() => _apiFieldErrors = errs);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userFacingApiMessage(e))),
-        );
+        await walletShowError(context, message: userFacingApiMessage(e));
       }
     } finally {
       if (mounted) setState(() => _submitting = false);

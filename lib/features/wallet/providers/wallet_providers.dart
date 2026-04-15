@@ -55,10 +55,11 @@ final walletTransactionsProvider = FutureProvider<List<WalletTransaction>>((
         if (typeStr == 'admin_credit' || typeStr == 'admin-credits') {
           type = WalletActivityType.adminCredits;
         }
-        if (typeStr == 'top_up' || typeStr == 'card_topup_credit') {
+        if (typeStr == 'top_up' ||
+            typeStr == 'card_topup_credit' ||
+            typeStr == 'card_verification_credit') {
           type = WalletActivityType.topUps;
-        } else if (typeStr == 'card_verification_credit' ||
-            typeStr == 'wire_transfer_credit' ||
+        } else if (typeStr == 'wire_transfer_credit' ||
             typeStr == 'zelle_credit') {
           type = WalletActivityType.fundingCredits;
         }

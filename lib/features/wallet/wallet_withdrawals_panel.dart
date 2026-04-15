@@ -11,6 +11,7 @@ import 'widgets/transfer_proof_viewer.dart';
 import 'widgets/wallet_financial_detail_rows.dart';
 import 'widgets/wallet_financial_status.dart';
 import 'models/wallet_withdrawal_model.dart';
+import 'wallet_feedback.dart';
 
 /// Withdraw wallet balance to bank (IBAN).
 class WalletWithdrawalsPanel extends ConsumerWidget {
@@ -285,12 +286,10 @@ class _WithdrawalTileState extends State<_WithdrawalTile> {
                               );
                             } catch (e) {
                               if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Download failed: ${e.toString()}',
-                                    ),
-                                  ),
+                                await walletShowError(
+                                  context,
+                                  title: 'Download',
+                                  message: 'Download failed: ${e.toString()}',
                                 );
                               }
                             } finally {
