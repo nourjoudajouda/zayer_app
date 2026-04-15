@@ -252,6 +252,23 @@ NotificationNavigationTarget? _routeFromTargetType(
         targetType: type,
         notificationId: notificationId,
       );
+    case 'purchase_assistant_request':
+    case 'purchase_assistant':
+      if (id != null && id.isNotEmpty) {
+        return NotificationNavigationTarget(
+          route: '${AppRoutes.purchaseAssistantRequests}/$id',
+          targetType: type,
+          targetId: id,
+          notificationId: notificationId,
+          meta: meta,
+        );
+      }
+      return NotificationNavigationTarget(
+        route: AppRoutes.purchaseAssistantRequests,
+        targetType: type,
+        notificationId: notificationId,
+        meta: meta,
+      );
     default:
       return null;
   }

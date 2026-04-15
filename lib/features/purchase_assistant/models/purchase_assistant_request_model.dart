@@ -3,6 +3,7 @@ class PurchaseAssistantRequestModel {
     required this.id,
     required this.sourceUrl,
     this.sourceDomain,
+    this.storeDisplayName,
     this.title,
     this.details,
     required this.quantity,
@@ -22,6 +23,7 @@ class PurchaseAssistantRequestModel {
   final String id;
   final String sourceUrl;
   final String? sourceDomain;
+  final String? storeDisplayName;
   final String? title;
   final String? details;
   final int quantity;
@@ -43,6 +45,7 @@ class PurchaseAssistantRequestModel {
       id: (j['id'] ?? '').toString(),
       sourceUrl: (j['source_url'] ?? '').toString(),
       sourceDomain: j['source_domain'] as String?,
+      storeDisplayName: j['store_display_name'] as String?,
       title: j['title'] as String?,
       details: j['details'] as String?,
       quantity: (j['quantity'] as num?)?.toInt() ?? 1,

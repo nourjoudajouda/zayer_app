@@ -99,10 +99,10 @@ class _PurchaseAssistantListScreenState
 
                 return RoundedCard(
                   onTap: () async {
-                    await context.push(
+                    await context.push<bool>(
                       '${AppRoutes.purchaseAssistantRequests}/${r.id}',
                     );
-                    _reload();
+                    if (context.mounted) _reload();
                   },
                   padding: const EdgeInsets.all(AppSpacing.md),
                   child: Row(

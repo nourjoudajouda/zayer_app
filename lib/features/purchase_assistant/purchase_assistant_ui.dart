@@ -6,6 +6,10 @@ import 'models/purchase_assistant_request_model.dart';
 
 /// Display label for store (domain), for list/detail rows.
 String paStoreLabel(PurchaseAssistantRequestModel r) {
+  final label = r.storeDisplayName?.trim();
+  if (label != null && label.isNotEmpty) {
+    return label;
+  }
   final d = r.sourceDomain?.trim();
   if (d != null && d.isNotEmpty) {
     return d;

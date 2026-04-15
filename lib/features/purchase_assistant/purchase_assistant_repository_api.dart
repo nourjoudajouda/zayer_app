@@ -92,6 +92,11 @@ class PurchaseAssistantRepositoryApi {
     return PurchaseAssistantRequestModel.fromJson(inner);
   }
 
+  /// DELETE /api/purchase-assistant-requests/{id} — only when status is submitted.
+  Future<void> deleteRequest(String requestId) async {
+    await _dio.delete<void>('/api/purchase-assistant-requests/$requestId');
+  }
+
   /// POST /api/purchase-assistant-requests/{id}/start-payment — same shape as order pay.
   Future<String?> startPayment(String requestId) async {
     final res = await _dio.post<Map<String, dynamic>>(
