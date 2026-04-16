@@ -376,7 +376,7 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
                     return;
                   }
                   ref.invalidate(cartItemsProvider);
-                  ref.invalidate(ordersProvider);
+                  invalidateOrderListProviders(ref);
                   ref.invalidate(walletBalanceProvider);
                   ref.invalidate(walletTransactionsProvider);
                   final orderId = result.orderId;
@@ -409,7 +409,7 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
                     context.go('${AppRoutes.orderDetail}/$orderId');
                     ref.invalidate(cartItemsProvider);
                     ref.invalidate(orderByIdProvider(orderId));
-                    ref.invalidate(ordersProvider);
+                    invalidateOrderListProviders(ref);
                     ref.invalidate(checkoutReviewProvider);
                     try {
                       await ref.read(orderByIdProvider(orderId).future);

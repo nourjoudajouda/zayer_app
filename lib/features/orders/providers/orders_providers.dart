@@ -4,10 +4,29 @@ import 'package:intl/intl.dart';
 import '../../../core/network/api_client.dart';
 import '../models/order_model.dart';
 
-/// Fetch orders from API: GET /api/orders
-Future<List<OrderModel>> _fetchOrders() async {
+/// Top-level tabs on the Orders screen (each maps to API `source` query).
+enum OrdersListTab {
+  all,
+  purchaseAssistant,
+  standard,
+}
+
+/// Call after checkout, payment, or when refreshing all order lists.
+void invalidateOrderListProviders(WidgetRef ref) {
+  for (final t in OrdersListTab.values) {
+    ref.invalidate(ordersByListTabProvider(t));
+  }
+}
+
+Future<List<OrderModel>> _fetchOrders({String? source}) async {
   try {
-    final res = await ApiClient.instance.get<List<dynamic>>('/api/orders');
+    var path = '/api/orders';
+    if (source == 'purchase_assistant') {
+      path = '/api/orders?source=purchase_assistant';
+    } else if (source == 'standard') {
+      path = '/api/orders?source=standard';
+    }
+    final res = await ApiClient.instance.get<List<dynamic>>(path);
     final list = res.data;
     if (list != null) {
       return list
@@ -19,9 +38,21 @@ Future<List<OrderModel>> _fetchOrders() async {
   return [];
 }
 
-final ordersProvider = FutureProvider<List<OrderModel>>(
-  (ref) => _fetchOrders(),
-);
+/// Per-tab dataset: `GET /api/orders` or `?source=purchase_assistant|standard`.
+final ordersByListTabProvider =
+    FutureProvider.family<List<OrderModel>, OrdersListTab>((ref, tab) async {
+  final source = switch (tab) {
+    OrdersListTab.all => null,
+    OrdersListTab.purchaseAssistant => 'purchase_assistant',
+    OrdersListTab.standard => 'standard',
+  };
+  return _fetchOrders(source: source);
+});
+
+/// Full list (all sources) for hubs, refunds, and [orderByIdProvider] fallback.
+final ordersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
+  return ref.watch(ordersByListTabProvider(OrdersListTab.all));
+});
 
 /// Filter aligned with execution status groups.
 enum OrdersFilter {
@@ -34,9 +65,6 @@ enum OrdersFilter {
 
 /// Filter by order origin (shipment source).
 enum OrdersOriginFilter { all, usa, turkey, multiOrigin }
-
-/// Filter by whether the order came from Purchase Assistant (linked request).
-enum OrdersSourceFilter { all, standard, purchaseAssistant }
 
 /// Sort orders.
 enum OrdersSortOption {
@@ -54,34 +82,28 @@ final ordersOriginFilterProvider = StateProvider<OrdersOriginFilter>(
   (ref) => OrdersOriginFilter.all,
 );
 
-final ordersSourceFilterProvider = StateProvider<OrdersSourceFilter>(
-  (ref) => OrdersSourceFilter.all,
-);
-
 final ordersSortProvider = StateProvider<OrdersSortOption>(
   (ref) => OrdersSortOption.newestFirst,
 );
 
-final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
-  final async = ref.watch(ordersProvider);
+/// Status / origin / sort applied to the dataset for [listTab] (source comes from tab API).
+final filteredOrdersForListTabProvider =
+    Provider.family<AsyncValue<List<OrderModel>>, OrdersListTab>((ref, listTab) {
+  final async = ref.watch(ordersByListTabProvider(listTab));
   final statusFilter = ref.watch(ordersFilterProvider);
   final originFilter = ref.watch(ordersOriginFilterProvider);
-  final sourceFilter = ref.watch(ordersSourceFilterProvider);
   final sortOption = ref.watch(ordersSortProvider);
 
   DateTime? parsePlacedDate(String v) {
     var cleaned = v.trim();
-    // Some mock/legacy data may include "Placed on <date>"
     cleaned = cleaned
         .replaceFirst(RegExp(r'^\s*placed\s*on\s*', caseSensitive: false), '')
         .trim();
     if (cleaned.isEmpty) return null;
 
-    // Server format: $o->placed_at?->format('M j, Y') => e.g. "Oct 12, 2023"
     try {
       return DateFormat('MMM d, yyyy').parse(cleaned);
     } catch (_) {
-      // Fallback for variants like "October 12, 2023".
       try {
         return DateFormat('MMMM d, yyyy').parse(cleaned);
       } catch (_) {
@@ -104,7 +126,6 @@ final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
       return 1;
     }
 
-    // Stable fallback: higher id treated as newer.
     return parseOrderId(b.id).compareTo(parseOrderId(a.id));
   }
 
@@ -120,7 +141,6 @@ final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
       return 1;
     }
 
-    // Stable fallback: lower id treated as older.
     return parseOrderId(a.id).compareTo(parseOrderId(b.id));
   }
 
@@ -154,16 +174,6 @@ final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
             break;
           case OrdersOriginFilter.multiOrigin:
             if (o.origin != OrderOrigin.multiOrigin) return false;
-            break;
-        }
-        switch (sourceFilter) {
-          case OrdersSourceFilter.all:
-            break;
-          case OrdersSourceFilter.standard:
-            if (o.isPurchaseAssistant) return false;
-            break;
-          case OrdersSourceFilter.purchaseAssistant:
-            if (!o.isPurchaseAssistant) return false;
             break;
         }
         return true;
@@ -223,7 +233,6 @@ bool _isDelivered(OrderModel o) {
   return o.status == OrderStatus.delivered;
 }
 
-/// Reviewed / purchase / warehouse / shipment pipeline (not awaiting review, not terminal).
 bool _isInExecution(OrderModel o) {
   if (_isDelivered(o) || _isCancelled(o)) return false;
   if (_isAwaitingReview(o)) return false;
@@ -247,7 +256,7 @@ final orderByIdProvider = FutureProvider.family<OrderModel?, String>((
     );
     if (res.data != null) return OrderModel.fromJson(res.data!);
   } catch (_) {}
-  final list = await ref.watch(ordersProvider.future);
+  final list = await ref.read(ordersByListTabProvider(OrdersListTab.all).future);
   try {
     return list.firstWhere((o) => o.id == id);
   } catch (_) {

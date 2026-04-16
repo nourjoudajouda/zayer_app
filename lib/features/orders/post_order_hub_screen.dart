@@ -57,7 +57,7 @@ class _PostOrderHubScreenState extends ConsumerState<PostOrderHubScreen>
     _lastRefreshedTab = index;
     switch (index) {
       case 0:
-        ref.invalidate(ordersProvider);
+        invalidateOrderListProviders(ref);
         break;
       case 1:
         ref.invalidate(warehouseItemsProvider);

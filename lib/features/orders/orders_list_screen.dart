@@ -6,18 +6,15 @@ import '../../core/config/app_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import 'models/order_model.dart';
-import 'orders_empty_screen.dart';
 import 'providers/orders_providers.dart';
 
 void _showFilterSheet(
   BuildContext context, {
   required OrdersFilter statusFilter,
   required OrdersOriginFilter originFilter,
-  required OrdersSourceFilter sourceFilter,
   required OrdersSortOption sortOption,
   required ValueChanged<OrdersFilter> onStatusChanged,
   required ValueChanged<OrdersOriginFilter> onOriginChanged,
-  required ValueChanged<OrdersSourceFilter> onSourceChanged,
   required ValueChanged<OrdersSortOption> onSortChanged,
 }) {
   showModalBottomSheet<void>(
@@ -119,31 +116,6 @@ void _showFilterSheet(
                 Navigator.of(ctx).pop();
               },
             ),
-            _SectionTitle(title: 'Source'),
-            _SheetOption(
-              label: 'All sources',
-              isSelected: sourceFilter == OrdersSourceFilter.all,
-              onTap: () {
-                onSourceChanged(OrdersSourceFilter.all);
-                Navigator.of(ctx).pop();
-              },
-            ),
-            _SheetOption(
-              label: 'Purchase Assistant',
-              isSelected: sourceFilter == OrdersSourceFilter.purchaseAssistant,
-              onTap: () {
-                onSourceChanged(OrdersSourceFilter.purchaseAssistant);
-                Navigator.of(ctx).pop();
-              },
-            ),
-            _SheetOption(
-              label: 'Standard',
-              isSelected: sourceFilter == OrdersSourceFilter.standard,
-              onTap: () {
-                onSourceChanged(OrdersSourceFilter.standard);
-                Navigator.of(ctx).pop();
-              },
-            ),
             _SectionTitle(title: 'Sort by'),
             _SheetOption(
               label: 'Newest first',
@@ -234,257 +206,240 @@ class _SheetOption extends StatelessWidget {
 }
 
 /// Orders list screen. Route: /orders (tab in shell) or embedded in [PostOrderHubScreen].
-/// Design: back, title, filter icon; execution-aligned pills; cards with origin flags, status, map (in transit), actions.
-class OrdersListScreen extends ConsumerWidget {
+/// Top-level [TabBar]: All Orders · Purchase Assistant · Standard (each loads `?source=` from API).
+class OrdersListScreen extends ConsumerStatefulWidget {
   const OrdersListScreen({super.key, this.hubEmbedded = false});
 
   /// When true, omits app bar back/home; hub provides outer navigation.
   final bool hubEmbedded;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final ordersAsync = ref.watch(ordersProvider);
-    final filterAsync = ref.watch(filteredOrdersProvider);
+  ConsumerState<OrdersListScreen> createState() => _OrdersListScreenState();
+}
+
+class _OrdersListScreenState extends ConsumerState<OrdersListScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _onRefresh() async {
+    invalidateOrderListProviders(ref);
+    await Future.wait([
+      ref.read(ordersByListTabProvider(OrdersListTab.all).future),
+      ref.read(ordersByListTabProvider(OrdersListTab.purchaseAssistant).future),
+      ref.read(ordersByListTabProvider(OrdersListTab.standard).future),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final statusFilter = ref.watch(ordersFilterProvider);
     final originFilter = ref.watch(ordersOriginFilterProvider);
-    final sourceFilter = ref.watch(ordersSourceFilterProvider);
     final sortOption = ref.watch(ordersSortProvider);
 
-    return ordersAsync.when(
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (e, _) => Scaffold(
-        appBar: AppBar(title: const Text('Orders')),
-        body: Center(child: Text('Error: $e')),
+    final tabBar = Material(
+      color: AppConfig.backgroundColor,
+      child: TabBar(
+        controller: _tabController,
+        labelColor: AppConfig.primaryColor,
+        unselectedLabelColor: AppConfig.subtitleColor,
+        indicatorColor: AppConfig.primaryColor,
+        isScrollable: true,
+        tabAlignment: TabAlignment.start,
+        tabs: const [
+          Tab(text: 'All Orders'),
+          Tab(text: 'Purchase Assistant'),
+          Tab(text: 'Standard'),
+        ],
       ),
-      data: (allOrders) {
-        if (allOrders.isEmpty) {
-          if (hubEmbedded) {
-            return Scaffold(
-              backgroundColor: AppConfig.backgroundColor,
-              body: RefreshIndicator(
-                onRefresh: () async {
-                  ref.invalidate(ordersProvider);
-                  await ref.read(ordersProvider.future);
-                },
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  child: SizedBox(
-                    height: MediaQuery.sizeOf(context).height * 0.65,
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(AppSpacing.lg),
-                        child: Text(
-                          'No orders yet.',
+    );
+
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.hubEmbedded)
+          Align(
+            alignment: Alignment.centerRight,
+            child: IconButton(
+              icon: Icon(Icons.tune_rounded, color: AppConfig.primaryColor),
+              onPressed: () => _showFilterSheet(
+                context,
+                statusFilter: statusFilter,
+                originFilter: originFilter,
+                sortOption: sortOption,
+                onStatusChanged: (f) =>
+                    ref.read(ordersFilterProvider.notifier).state = f,
+                onOriginChanged: (f) =>
+                    ref.read(ordersOriginFilterProvider.notifier).state = f,
+                onSortChanged: (s) =>
+                    ref.read(ordersSortProvider.notifier).state = s,
+              ),
+            ),
+          ),
+        tabBar,
+        _OrdersFilterPills(
+          selected: statusFilter,
+          onSelected: (f) =>
+              ref.read(ordersFilterProvider.notifier).state = f,
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _OrdersTabList(
+                listTab: OrdersListTab.all,
+                activeFilter: statusFilter,
+                onRefresh: _onRefresh,
+              ),
+              _OrdersTabList(
+                listTab: OrdersListTab.purchaseAssistant,
+                activeFilter: statusFilter,
+                onRefresh: _onRefresh,
+              ),
+              _OrdersTabList(
+                listTab: OrdersListTab.standard,
+                activeFilter: statusFilter,
+                onRefresh: _onRefresh,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (widget.hubEmbedded) {
+      return Scaffold(
+        backgroundColor: AppConfig.backgroundColor,
+        body: SafeArea(child: body),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: AppConfig.backgroundColor,
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go(AppRoutes.home),
+        ),
+        title: const Text('Orders'),
+        centerTitle: true,
+        backgroundColor: AppConfig.backgroundColor,
+        foregroundColor: AppConfig.textColor,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.tune_rounded, color: AppConfig.primaryColor),
+            onPressed: () => _showFilterSheet(
+              context,
+              statusFilter: statusFilter,
+              originFilter: originFilter,
+              sortOption: sortOption,
+              onStatusChanged: (f) =>
+                  ref.read(ordersFilterProvider.notifier).state = f,
+              onOriginChanged: (f) =>
+                  ref.read(ordersOriginFilterProvider.notifier).state = f,
+              onSortChanged: (s) =>
+                  ref.read(ordersSortProvider.notifier).state = s,
+            ),
+          ),
+        ],
+      ),
+      body: SafeArea(child: body),
+    );
+  }
+}
+
+class _OrdersTabList extends ConsumerWidget {
+  const _OrdersTabList({
+    required this.listTab,
+    required this.activeFilter,
+    required this.onRefresh,
+  });
+
+  final OrdersListTab listTab;
+  final OrdersFilter activeFilter;
+  final Future<void> Function() onRefresh;
+
+  String get _emptyMessage {
+    switch (listTab) {
+      case OrdersListTab.all:
+        return 'No orders match these filters.';
+      case OrdersListTab.purchaseAssistant:
+        return 'No Purchase Assistant orders yet.';
+      case OrdersListTab.standard:
+        return 'No standard orders match these filters.';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final filterAsync = ref.watch(filteredOrdersForListTabProvider(listTab));
+
+    return filterAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Error: $e')),
+      data: (orders) {
+        if (orders.isEmpty) {
+          return RefreshIndicator(
+            onRefresh: onRefresh,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: SizedBox(
+                height: MediaQuery.sizeOf(context).height * 0.45,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.xl),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.inbox_outlined,
+                          size: 56,
+                          color: AppConfig.subtitleColor,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        Text(
+                          listTab == OrdersListTab.all && activeFilter == OrdersFilter.all
+                              ? 'No orders yet.'
+                              : _emptyMessage,
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                 color: AppConfig.subtitleColor,
                               ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 ),
               ),
-            );
-          }
-          return const OrdersEmptyScreen();
+            ),
+          );
         }
-        return filterAsync.when(
-          data: (filteredOrders) => _OrdersListContent(
-            hubEmbedded: hubEmbedded,
-            orders: filteredOrders,
-            activeFilter: statusFilter,
-            originFilter: originFilter,
-            sourceFilter: sourceFilter,
-            sortOption: sortOption,
-            onRefresh: () async {
-              ref.invalidate(ordersProvider);
-              await ref.read(ordersProvider.future);
+        return RefreshIndicator(
+          onRefresh: onRefresh,
+          child: ListView.builder(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            itemCount: orders.length,
+            itemBuilder: (context, index) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: _OrderCard(order: orders[index]),
+              );
             },
-            onFilterChanged: (f) =>
-                ref.read(ordersFilterProvider.notifier).state = f,
-            onOriginChanged: (f) =>
-                ref.read(ordersOriginFilterProvider.notifier).state = f,
-            onSourceChanged: (f) =>
-                ref.read(ordersSourceFilterProvider.notifier).state = f,
-            onSortChanged: (s) =>
-                ref.read(ordersSortProvider.notifier).state = s,
-          ),
-          loading: () =>
-              const Scaffold(body: Center(child: CircularProgressIndicator())),
-          error: (e, _) => Scaffold(
-            appBar: AppBar(title: const Text('Orders')),
-            body: Center(child: Text('Error: $e')),
           ),
         );
       },
-    );
-  }
-}
-
-class _OrdersListContent extends StatelessWidget {
-  const _OrdersListContent({
-    required this.hubEmbedded,
-    required this.orders,
-    required this.activeFilter,
-    required this.originFilter,
-    required this.sourceFilter,
-    required this.sortOption,
-    required this.onRefresh,
-    required this.onFilterChanged,
-    required this.onOriginChanged,
-    required this.onSourceChanged,
-    required this.onSortChanged,
-  });
-
-  final bool hubEmbedded;
-  final List<OrderModel> orders;
-  final OrdersFilter activeFilter;
-  final OrdersOriginFilter originFilter;
-  final OrdersSourceFilter sourceFilter;
-  final OrdersSortOption sortOption;
-  final Future<void> Function() onRefresh;
-  final ValueChanged<OrdersFilter> onFilterChanged;
-  final ValueChanged<OrdersOriginFilter> onOriginChanged;
-  final ValueChanged<OrdersSourceFilter> onSourceChanged;
-  final ValueChanged<OrdersSortOption> onSortChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppConfig.backgroundColor,
-      appBar: hubEmbedded
-          ? null
-          : AppBar(
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => context.go(AppRoutes.home),
-              ),
-              title: const Text('Orders'),
-              centerTitle: true,
-              backgroundColor: AppConfig.backgroundColor,
-              foregroundColor: AppConfig.textColor,
-              elevation: 0,
-              actions: [
-                IconButton(
-                  icon: Icon(
-                    Icons.tune_rounded,
-                    color: AppConfig.primaryColor,
-                  ),
-                  onPressed: () => _showFilterSheet(
-                    context,
-                    statusFilter: activeFilter,
-                    originFilter: originFilter,
-                    sourceFilter: sourceFilter,
-                    sortOption: sortOption,
-                    onStatusChanged: onFilterChanged,
-                    onOriginChanged: onOriginChanged,
-                    onSourceChanged: onSourceChanged,
-                    onSortChanged: onSortChanged,
-                  ),
-                ),
-              ],
-            ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            if (hubEmbedded)
-              Align(
-                alignment: Alignment.centerRight,
-                child: IconButton(
-                  icon: Icon(Icons.tune_rounded, color: AppConfig.primaryColor),
-                  onPressed: () => _showFilterSheet(
-                    context,
-                    statusFilter: activeFilter,
-                    originFilter: originFilter,
-                    sourceFilter: sourceFilter,
-                    sortOption: sortOption,
-                    onStatusChanged: onFilterChanged,
-                    onOriginChanged: onOriginChanged,
-                    onSourceChanged: onSourceChanged,
-                    onSortChanged: onSortChanged,
-                  ),
-                ),
-              ),
-            _OrdersFilterPills(
-              selected: activeFilter,
-              onSelected: onFilterChanged,
-            ),
-            _SourceFilterPills(
-              selected: sourceFilter,
-              onSelected: onSourceChanged,
-            ),
-            Expanded(
-              child: orders.isEmpty
-                  ? _FilterEmptyState(activeFilter: activeFilter)
-                  : RefreshIndicator(
-                      onRefresh: onRefresh,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        itemCount: orders.length,
-                        itemBuilder: (context, index) {
-                          return Padding(
-                            padding: const EdgeInsets.only(
-                              bottom: AppSpacing.md,
-                            ),
-                            child: _OrderCard(order: orders[index]),
-                          );
-                        },
-                      ),
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FilterEmptyState extends StatelessWidget {
-  const _FilterEmptyState({required this.activeFilter});
-
-  final OrdersFilter activeFilter;
-
-  String get _message {
-    switch (activeFilter) {
-      case OrdersFilter.awaitingReview:
-        return 'No orders awaiting review';
-      case OrdersFilter.inExecution:
-        return 'No orders in execution';
-      case OrdersFilter.delivered:
-        return 'No delivered orders';
-      case OrdersFilter.cancelled:
-        return 'No cancelled orders';
-      case OrdersFilter.all:
-        return 'No orders';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.inbox_outlined,
-              size: 64,
-              color: AppConfig.subtitleColor,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              _message,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(color: AppConfig.subtitleColor),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -533,56 +488,6 @@ class _OrdersFilterPills extends StatelessWidget {
             label: 'Cancelled',
             isSelected: selected == OrdersFilter.cancelled,
             onTap: () => onSelected(OrdersFilter.cancelled),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Quick filter: Purchase Assistant vs standard orders (same data as filter sheet "Source").
-class _SourceFilterPills extends StatelessWidget {
-  const _SourceFilterPills({required this.selected, required this.onSelected});
-
-  final OrdersSourceFilter selected;
-  final ValueChanged<OrdersSourceFilter> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        0,
-        AppSpacing.md,
-        AppSpacing.sm,
-      ),
-      child: Row(
-        children: [
-          Text(
-            'Source',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppConfig.subtitleColor,
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          _Pill(
-            label: 'All',
-            isSelected: selected == OrdersSourceFilter.all,
-            onTap: () => onSelected(OrdersSourceFilter.all),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          _Pill(
-            label: 'Purchase Assistant',
-            isSelected: selected == OrdersSourceFilter.purchaseAssistant,
-            onTap: () => onSelected(OrdersSourceFilter.purchaseAssistant),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          _Pill(
-            label: 'Standard',
-            isSelected: selected == OrdersSourceFilter.standard,
-            onTap: () => onSelected(OrdersSourceFilter.standard),
           ),
         ],
       ),
