@@ -13,9 +13,11 @@ void _showFilterSheet(
   BuildContext context, {
   required OrdersFilter statusFilter,
   required OrdersOriginFilter originFilter,
+  required OrdersSourceFilter sourceFilter,
   required OrdersSortOption sortOption,
   required ValueChanged<OrdersFilter> onStatusChanged,
   required ValueChanged<OrdersOriginFilter> onOriginChanged,
+  required ValueChanged<OrdersSourceFilter> onSourceChanged,
   required ValueChanged<OrdersSortOption> onSortChanged,
 }) {
   showModalBottomSheet<void>(
@@ -114,6 +116,31 @@ void _showFilterSheet(
               isSelected: originFilter == OrdersOriginFilter.multiOrigin,
               onTap: () {
                 onOriginChanged(OrdersOriginFilter.multiOrigin);
+                Navigator.of(ctx).pop();
+              },
+            ),
+            _SectionTitle(title: 'Source'),
+            _SheetOption(
+              label: 'All sources',
+              isSelected: sourceFilter == OrdersSourceFilter.all,
+              onTap: () {
+                onSourceChanged(OrdersSourceFilter.all);
+                Navigator.of(ctx).pop();
+              },
+            ),
+            _SheetOption(
+              label: 'Purchase Assistant',
+              isSelected: sourceFilter == OrdersSourceFilter.purchaseAssistant,
+              onTap: () {
+                onSourceChanged(OrdersSourceFilter.purchaseAssistant);
+                Navigator.of(ctx).pop();
+              },
+            ),
+            _SheetOption(
+              label: 'Standard',
+              isSelected: sourceFilter == OrdersSourceFilter.standard,
+              onTap: () {
+                onSourceChanged(OrdersSourceFilter.standard);
                 Navigator.of(ctx).pop();
               },
             ),
@@ -220,6 +247,7 @@ class OrdersListScreen extends ConsumerWidget {
     final filterAsync = ref.watch(filteredOrdersProvider);
     final statusFilter = ref.watch(ordersFilterProvider);
     final originFilter = ref.watch(ordersOriginFilterProvider);
+    final sourceFilter = ref.watch(ordersSourceFilterProvider);
     final sortOption = ref.watch(ordersSortProvider);
 
     return ordersAsync.when(
@@ -268,6 +296,7 @@ class OrdersListScreen extends ConsumerWidget {
             orders: filteredOrders,
             activeFilter: statusFilter,
             originFilter: originFilter,
+            sourceFilter: sourceFilter,
             sortOption: sortOption,
             onRefresh: () async {
               ref.invalidate(ordersProvider);
@@ -277,6 +306,8 @@ class OrdersListScreen extends ConsumerWidget {
                 ref.read(ordersFilterProvider.notifier).state = f,
             onOriginChanged: (f) =>
                 ref.read(ordersOriginFilterProvider.notifier).state = f,
+            onSourceChanged: (f) =>
+                ref.read(ordersSourceFilterProvider.notifier).state = f,
             onSortChanged: (s) =>
                 ref.read(ordersSortProvider.notifier).state = s,
           ),
@@ -298,10 +329,12 @@ class _OrdersListContent extends StatelessWidget {
     required this.orders,
     required this.activeFilter,
     required this.originFilter,
+    required this.sourceFilter,
     required this.sortOption,
     required this.onRefresh,
     required this.onFilterChanged,
     required this.onOriginChanged,
+    required this.onSourceChanged,
     required this.onSortChanged,
   });
 
@@ -309,10 +342,12 @@ class _OrdersListContent extends StatelessWidget {
   final List<OrderModel> orders;
   final OrdersFilter activeFilter;
   final OrdersOriginFilter originFilter;
+  final OrdersSourceFilter sourceFilter;
   final OrdersSortOption sortOption;
   final Future<void> Function() onRefresh;
   final ValueChanged<OrdersFilter> onFilterChanged;
   final ValueChanged<OrdersOriginFilter> onOriginChanged;
+  final ValueChanged<OrdersSourceFilter> onSourceChanged;
   final ValueChanged<OrdersSortOption> onSortChanged;
 
   @override
@@ -341,9 +376,11 @@ class _OrdersListContent extends StatelessWidget {
                     context,
                     statusFilter: activeFilter,
                     originFilter: originFilter,
+                    sourceFilter: sourceFilter,
                     sortOption: sortOption,
                     onStatusChanged: onFilterChanged,
                     onOriginChanged: onOriginChanged,
+                    onSourceChanged: onSourceChanged,
                     onSortChanged: onSortChanged,
                   ),
                 ),
@@ -361,9 +398,11 @@ class _OrdersListContent extends StatelessWidget {
                     context,
                     statusFilter: activeFilter,
                     originFilter: originFilter,
+                    sourceFilter: sourceFilter,
                     sortOption: sortOption,
                     onStatusChanged: onFilterChanged,
                     onOriginChanged: onOriginChanged,
+                    onSourceChanged: onSourceChanged,
                     onSortChanged: onSortChanged,
                   ),
                 ),
@@ -371,6 +410,10 @@ class _OrdersListContent extends StatelessWidget {
             _OrdersFilterPills(
               selected: activeFilter,
               onSelected: onFilterChanged,
+            ),
+            _SourceFilterPills(
+              selected: sourceFilter,
+              onSelected: onSourceChanged,
             ),
             Expanded(
               child: orders.isEmpty
@@ -497,6 +540,56 @@ class _OrdersFilterPills extends StatelessWidget {
   }
 }
 
+/// Quick filter: Purchase Assistant vs standard orders (same data as filter sheet "Source").
+class _SourceFilterPills extends StatelessWidget {
+  const _SourceFilterPills({required this.selected, required this.onSelected});
+
+  final OrdersSourceFilter selected;
+  final ValueChanged<OrdersSourceFilter> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        AppSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          Text(
+            'Source',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppConfig.subtitleColor,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          _Pill(
+            label: 'All',
+            isSelected: selected == OrdersSourceFilter.all,
+            onTap: () => onSelected(OrdersSourceFilter.all),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          _Pill(
+            label: 'Purchase Assistant',
+            isSelected: selected == OrdersSourceFilter.purchaseAssistant,
+            onTap: () => onSelected(OrdersSourceFilter.purchaseAssistant),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          _Pill(
+            label: 'Standard',
+            isSelected: selected == OrdersSourceFilter.standard,
+            onTap: () => onSelected(OrdersSourceFilter.standard),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Pill extends StatelessWidget {
   const _Pill({
     required this.label,
@@ -593,6 +686,24 @@ class _OrderCard extends StatelessWidget {
           Row(
             children: [
               _OriginTag(origin: order.origin),
+              if (order.isPurchaseAssistant) ...[
+                const SizedBox(width: AppSpacing.sm),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE0F2FE),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'PA',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: const Color(0xFF0369A1),
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.4,
+                        ),
+                  ),
+                ),
+              ],
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(

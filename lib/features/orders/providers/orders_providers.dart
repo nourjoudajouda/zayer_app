@@ -35,6 +35,9 @@ enum OrdersFilter {
 /// Filter by order origin (shipment source).
 enum OrdersOriginFilter { all, usa, turkey, multiOrigin }
 
+/// Filter by whether the order came from Purchase Assistant (linked request).
+enum OrdersSourceFilter { all, standard, purchaseAssistant }
+
 /// Sort orders.
 enum OrdersSortOption {
   newestFirst,
@@ -51,6 +54,10 @@ final ordersOriginFilterProvider = StateProvider<OrdersOriginFilter>(
   (ref) => OrdersOriginFilter.all,
 );
 
+final ordersSourceFilterProvider = StateProvider<OrdersSourceFilter>(
+  (ref) => OrdersSourceFilter.all,
+);
+
 final ordersSortProvider = StateProvider<OrdersSortOption>(
   (ref) => OrdersSortOption.newestFirst,
 );
@@ -59,6 +66,7 @@ final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
   final async = ref.watch(ordersProvider);
   final statusFilter = ref.watch(ordersFilterProvider);
   final originFilter = ref.watch(ordersOriginFilterProvider);
+  final sourceFilter = ref.watch(ordersSourceFilterProvider);
   final sortOption = ref.watch(ordersSortProvider);
 
   DateTime? parsePlacedDate(String v) {
@@ -146,6 +154,16 @@ final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
             break;
           case OrdersOriginFilter.multiOrigin:
             if (o.origin != OrderOrigin.multiOrigin) return false;
+            break;
+        }
+        switch (sourceFilter) {
+          case OrdersSourceFilter.all:
+            break;
+          case OrdersSourceFilter.standard:
+            if (o.isPurchaseAssistant) return false;
+            break;
+          case OrdersSourceFilter.purchaseAssistant:
+            if (!o.isPurchaseAssistant) return false;
             break;
         }
         return true;
