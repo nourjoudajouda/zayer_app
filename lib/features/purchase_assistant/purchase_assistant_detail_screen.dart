@@ -29,6 +29,7 @@ class _PurchaseAssistantDetailScreenState
     extends State<PurchaseAssistantDetailScreen> {
   final _repo = PurchaseAssistantRepositoryApi();
   late Future<PurchaseAssistantRequestModel> _future;
+  bool _deleteBusy = false;
 
   @override
   void initState() {
@@ -103,6 +104,7 @@ class _PurchaseAssistantDetailScreenState
       ),
     );
     if (ok != true || !mounted) return;
+    setState(() => _deleteBusy = true);
     try {
       await _repo.deleteRequest(r.id);
       if (!mounted) return;
@@ -118,6 +120,8 @@ class _PurchaseAssistantDetailScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(msg)),
       );
+    } finally {
+      if (mounted) setState(() => _deleteBusy = false);
     }
   }
 
@@ -139,11 +143,23 @@ class _PurchaseAssistantDetailScreenState
             ),
             actions: [
               if (r != null && r.status == 'submitted')
-                IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  tooltip: 'Delete request',
-                  onPressed: () => _confirmDelete(r),
-                ),
+                _deleteBusy
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        tooltip: 'Delete request',
+                        onPressed: () => _confirmDelete(r),
+                      ),
             ],
           ),
           body: _buildBody(context, theme, snap),

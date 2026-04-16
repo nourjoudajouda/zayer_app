@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -24,6 +25,7 @@ class _PurchaseAssistantListScreenState
     extends State<PurchaseAssistantListScreen> {
   final _repo = PurchaseAssistantRepositoryApi();
   late Future<List<PurchaseAssistantRequestModel>> _future;
+  final Set<String> _deletingIds = {};
 
   @override
   void initState() {
@@ -35,6 +37,51 @@ class _PurchaseAssistantListScreenState
     setState(() {
       _future = _repo.list();
     });
+  }
+
+  Future<void> _confirmAndDelete(PurchaseAssistantRequestModel r) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete request?'),
+        content: const Text(
+          'This removes your submitted request. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() => _deletingIds.add(r.id));
+    try {
+      await _repo.deleteRequest(r.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Request removed')),
+      );
+      _reload();
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final msg = e.response?.data is Map
+          ? (e.response!.data['message']?.toString() ?? 'Could not delete')
+          : 'Could not delete';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg)),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _deletingIds.remove(r.id));
+      }
+    }
   }
 
   @override
@@ -96,79 +143,132 @@ class _PurchaseAssistantListScreenState
                     : null;
                 final dateLine = paFormatCreatedAt(r.createdAt);
                 final statusColor = paStatusColor(r.status);
+                final canDelete = r.status == 'submitted';
+                final busy = _deletingIds.contains(r.id);
 
                 return RoundedCard(
-                  onTap: () async {
-                    await context.push<bool>(
-                      '${AppRoutes.purchaseAssistantRequests}/${r.id}',
-                    );
-                    if (context.mounted) _reload();
-                  },
                   padding: const EdgeInsets.all(AppSpacing.md),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      PurchaseAssistantStoreAvatar(
-                        imageUrl: img,
-                        labelForInitials: store,
-                        size: 64,
-                      ),
-                      const SizedBox(width: AppSpacing.md),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title,
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: AppConfig.textColor,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
+                        child: InkWell(
+                          onTap: busy
+                              ? null
+                              : () async {
+                                  await context.push<bool>(
+                                    '${AppRoutes.purchaseAssistantRequests}/${r.id}',
+                                  );
+                                  if (context.mounted) _reload();
+                                },
+                          borderRadius:
+                              BorderRadius.circular(AppConfig.radiusMedium),
+                          child: Padding(
+                            padding: const EdgeInsets.only(
+                              right: AppSpacing.sm,
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              store,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: AppConfig.subtitleColor,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: AppSpacing.sm),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 6,
-                              crossAxisAlignment: WrapCrossAlignment.center,
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                BadgePill(
-                                  label: paStatusLabel(r.status),
-                                  color: statusColor,
+                                PurchaseAssistantStoreAvatar(
+                                  imageUrl: img,
+                                  labelForInitials: store,
+                                  size: 64,
                                 ),
-                                if (r.quantity > 1)
-                                  Text(
-                                    'Qty ${r.quantity}',
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: AppConfig.subtitleColor,
-                                    ),
+                                const SizedBox(width: AppSpacing.md),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        title,
+                                        style: theme.textTheme.titleSmall
+                                            ?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                          color: AppConfig.textColor,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        store,
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                          color: AppConfig.subtitleColor,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: AppSpacing.sm),
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 6,
+                                        crossAxisAlignment:
+                                            WrapCrossAlignment.center,
+                                        children: [
+                                          BadgePill(
+                                            label: paStatusLabel(r.status),
+                                            color: statusColor,
+                                          ),
+                                          if (r.quantity > 1)
+                                            Text(
+                                              'Qty ${r.quantity}',
+                                              style: theme
+                                                  .textTheme.bodySmall
+                                                  ?.copyWith(
+                                                color: AppConfig.subtitleColor,
+                                              ),
+                                            ),
+                                          if (dateLine != null)
+                                            Text(
+                                              dateLine,
+                                              style: theme
+                                                  .textTheme.bodySmall
+                                                  ?.copyWith(
+                                                color:
+                                                    AppConfig.subtitleColor,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
-                                if (dateLine != null)
-                                  Text(
-                                    dateLine,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: AppConfig.subtitleColor,
-                                    ),
-                                  ),
+                                ),
+                                Icon(
+                                  Icons.chevron_right,
+                                  color: AppConfig.subtitleColor
+                                      .withValues(alpha: 0.7),
+                                ),
                               ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
-                      Icon(
-                        Icons.chevron_right,
-                        color: AppConfig.subtitleColor.withValues(alpha: 0.7),
-                      ),
+                      if (canDelete) ...[
+                        const SizedBox(width: 4),
+                        busy
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              )
+                            : IconButton(
+                                icon: Icon(
+                                  Icons.delete_outline,
+                                  color: AppConfig.errorRed
+                                      .withValues(alpha: 0.9),
+                                ),
+                                tooltip: 'Delete request',
+                                onPressed: () => _confirmAndDelete(r),
+                              ),
+                      ],
                     ],
                   ),
                 );
