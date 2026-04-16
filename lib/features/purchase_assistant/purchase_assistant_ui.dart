@@ -68,3 +68,108 @@ String? paFormatCreatedAt(String? iso) {
     return iso;
   }
 }
+
+String? paFormatMoney(double? amount, String? currency) {
+  if (amount == null) return null;
+  final c = (currency != null && currency.isNotEmpty) ? currency : 'USD';
+  return '${amount.toStringAsFixed(2)} $c';
+}
+
+/// Milestones for history (derived; only shows meaningful steps for current status).
+List<PaTimelineStep> paBuildTimeline(
+  String status, {
+  required String? createdIso,
+  required String? updatedIso,
+}) {
+  final order = [
+    'submitted',
+    'under_review',
+    'awaiting_customer_payment',
+    'payment_under_review',
+    'paid',
+    'purchasing',
+    'purchased',
+    'in_transit_to_warehouse',
+    'received_at_warehouse',
+    'completed',
+  ];
+  final idx = order.indexOf(status);
+  final rejected = status == 'rejected' || status == 'cancelled';
+
+  String labelFor(String key) {
+    switch (key) {
+      case 'submitted':
+        return 'Request submitted';
+      case 'under_review':
+        return 'Under review';
+      case 'awaiting_customer_payment':
+        return 'Awaiting your payment';
+      case 'payment_under_review':
+        return 'Payment processing';
+      case 'paid':
+        return 'Paid';
+      case 'purchasing':
+        return 'Purchasing';
+      case 'purchased':
+        return 'Purchased';
+      case 'in_transit_to_warehouse':
+        return 'In transit to warehouse';
+      case 'received_at_warehouse':
+        return 'Received at warehouse';
+      case 'completed':
+        return 'Completed';
+      default:
+        return key;
+    }
+  }
+
+  final steps = <PaTimelineStep>[];
+  void add(String key, bool done, bool current) {
+    steps.add(PaTimelineStep(
+      key: key,
+      title: labelFor(key),
+      done: done,
+      current: current,
+    ));
+  }
+
+  if (rejected) {
+    steps.add(PaTimelineStep(
+      key: status,
+      title: status == 'rejected' ? 'Rejected' : 'Cancelled',
+      done: true,
+      current: true,
+    ));
+    return steps;
+  }
+
+  if (idx < 0) {
+    steps.add(PaTimelineStep(
+      key: status,
+      title: labelFor(status),
+      done: true,
+      current: true,
+    ));
+    return steps;
+  }
+
+  for (var i = 0; i <= idx && i < order.length; i++) {
+    add(order[i], i < idx, i == idx);
+  }
+
+  return steps;
+}
+
+class PaTimelineStep {
+  const PaTimelineStep({
+    required this.key,
+    required this.title,
+    required this.done,
+    required this.current,
+  });
+  final String key;
+  final String title;
+  final bool done;
+  final bool current;
+}
+

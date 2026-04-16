@@ -6,14 +6,15 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/routing/app_router.dart';
+import '../purchase_assistant/purchase_assistant_list_screen.dart';
+import '../purchase_assistant/purchase_assistant_providers.dart';
 import '../warehouse/my_warehouse_screen.dart';
 import '../warehouse/shipments_tracking_screen.dart';
 import '../warehouse/warehouse_providers.dart';
 import 'orders_list_screen.dart';
 import 'providers/orders_providers.dart';
 
-/// Post-checkout hub: Orders · Warehouse · Shipments (single entry from shell).
-/// Refreshes the active tab when focused (debounced) and when the app resumes.
+/// Post-checkout hub: Orders · Purchase Assistant · Warehouse · Shipments.
 class PostOrderHubScreen extends ConsumerStatefulWidget {
   const PostOrderHubScreen({super.key});
 
@@ -31,7 +32,7 @@ class _PostOrderHubScreenState extends ConsumerState<PostOrderHubScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(_onTabControllerTick);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -57,12 +58,15 @@ class _PostOrderHubScreenState extends ConsumerState<PostOrderHubScreen>
     _lastRefreshedTab = index;
     switch (index) {
       case 0:
-        invalidateOrderListProviders(ref);
+        invalidateStandardOrdersList(ref);
         break;
       case 1:
-        ref.invalidate(warehouseItemsProvider);
+        invalidatePurchaseAssistantRequests(ref);
         break;
       case 2:
+        ref.invalidate(warehouseItemsProvider);
+        break;
+      case 3:
         ref.invalidate(outboundShipmentsProvider);
         break;
     }
@@ -87,10 +91,12 @@ class _PostOrderHubScreenState extends ConsumerState<PostOrderHubScreen>
   @override
   Widget build(BuildContext context) {
     final ordersAsync = ref.watch(ordersProvider);
+    final paAsync = ref.watch(purchaseAssistantRequestsProvider);
     final warehouseAsync = ref.watch(warehouseItemsProvider);
     final shipmentsAsync = ref.watch(outboundShipmentsProvider);
 
     final ordersCount = ordersAsync.valueOrNull?.length;
+    final paCount = paAsync.valueOrNull?.length;
     final warehouseCount = warehouseAsync.valueOrNull?.length;
     final shipmentsCount = shipmentsAsync.valueOrNull?.length;
 
@@ -111,12 +117,21 @@ class _PostOrderHubScreenState extends ConsumerState<PostOrderHubScreen>
           labelColor: AppConfig.primaryColor,
           unselectedLabelColor: AppConfig.subtitleColor,
           indicatorColor: AppConfig.primaryColor,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           tabs: [
             Tab(
               child: _TabLabel(
                 icon: Icons.receipt_long_outlined,
                 label: 'Orders',
                 count: ordersCount,
+              ),
+            ),
+            Tab(
+              child: _TabLabel(
+                icon: Icons.handshake_outlined,
+                label: 'Assist',
+                count: paCount,
               ),
             ),
             Tab(
@@ -140,6 +155,7 @@ class _PostOrderHubScreenState extends ConsumerState<PostOrderHubScreen>
         controller: _tabController,
         children: const [
           OrdersListScreen(hubEmbedded: true),
+          PurchaseAssistantListScreen(hubEmbedded: true),
           MyWarehouseScreen(hubEmbedded: true),
           ShipmentsTrackingScreen(hubEmbedded: true),
         ],

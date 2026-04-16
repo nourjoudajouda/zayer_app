@@ -1,42 +1,71 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/network/api_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
-import '../../core/ui/rounded_card.dart';
-import '../profile/widgets/badge_pill.dart';
 import 'models/purchase_assistant_request_model.dart';
+import 'purchase_assistant_providers.dart';
 import 'purchase_assistant_repository_api.dart';
 import 'purchase_assistant_ui.dart';
 import 'widgets/purchase_assistant_store_avatar.dart';
 
-class PurchaseAssistantListScreen extends StatefulWidget {
-  const PurchaseAssistantListScreen({super.key});
+/// Segments for the Purchase Assistant list (client-side filter on API list).
+enum PaListSegment {
+  all,
+  requests,
+  awaitingPayment,
+  inProgress,
+  completed,
+}
+
+bool _matchesSegment(PurchaseAssistantRequestModel r, PaListSegment s) {
+  if (s == PaListSegment.all) return true;
+  switch (s) {
+    case PaListSegment.requests:
+      return r.status == 'submitted' || r.status == 'under_review';
+    case PaListSegment.awaitingPayment:
+      return r.status == 'awaiting_customer_payment' ||
+          r.status == 'payment_under_review';
+    case PaListSegment.inProgress:
+      return const {
+        'paid',
+        'purchasing',
+        'purchased',
+        'in_transit_to_warehouse',
+        'received_at_warehouse',
+      }.contains(r.status);
+    case PaListSegment.completed:
+      return const {'completed', 'rejected', 'cancelled'}.contains(r.status);
+    case PaListSegment.all:
+      return true;
+  }
+}
+
+/// Purchase Assistant: manual pricing requests — separate from [Orders] (import/shipment).
+class PurchaseAssistantListScreen extends ConsumerStatefulWidget {
+  const PurchaseAssistantListScreen({super.key, this.hubEmbedded = false});
+
+  /// Inside [PostOrderHubScreen]: no back button; hub owns navigation.
+  final bool hubEmbedded;
 
   @override
-  State<PurchaseAssistantListScreen> createState() =>
+  ConsumerState<PurchaseAssistantListScreen> createState() =>
       _PurchaseAssistantListScreenState();
 }
 
 class _PurchaseAssistantListScreenState
-    extends State<PurchaseAssistantListScreen> {
+    extends ConsumerState<PurchaseAssistantListScreen> {
   final _repo = PurchaseAssistantRepositoryApi();
-  late Future<List<PurchaseAssistantRequestModel>> _future;
   final Set<String> _deletingIds = {};
+  PaListSegment _segment = PaListSegment.all;
 
-  @override
-  void initState() {
-    super.initState();
-    _future = _repo.list();
-  }
-
-  void _reload() {
-    setState(() {
-      _future = _repo.list();
-    });
+  Future<void> _openSubmit() async {
+    await context.push(AppRoutes.purchaseAssistantSubmit);
+    if (mounted) ref.invalidate(purchaseAssistantRequestsProvider);
   }
 
   Future<void> _confirmAndDelete(PurchaseAssistantRequestModel r) async {
@@ -68,7 +97,7 @@ class _PurchaseAssistantListScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Request removed')),
       );
-      _reload();
+      ref.invalidate(purchaseAssistantRequestsProvider);
     } on DioException catch (e) {
       if (!mounted) return;
       final msg = e.response?.data is Map
@@ -87,194 +116,337 @@ class _PurchaseAssistantListScreenState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final async = ref.watch(purchaseAssistantRequestsProvider);
 
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
       appBar: AppBar(
         title: const Text('Purchase Assistant'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
-        ),
+        automaticallyImplyLeading: !widget.hubEmbedded,
+        leading: widget.hubEmbedded
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => context.pop(),
+              ),
+        backgroundColor: AppConfig.backgroundColor,
+        foregroundColor: AppConfig.textColor,
+        elevation: 0,
         actions: [
           TextButton(
-            onPressed: () async {
-              await context.push(AppRoutes.purchaseAssistantSubmit);
-              _reload();
-            },
-            child: const Text('New'),
+            onPressed: _openSubmit,
+            child: const Text('New request'),
           ),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          _reload();
-          await _future;
+          ref.invalidate(purchaseAssistantRequestsProvider);
+          await ref.read(purchaseAssistantRequestsProvider.future);
         },
-        child: FutureBuilder<List<PurchaseAssistantRequestModel>>(
-          future: _future,
-          builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snap.hasError) {
-              return Center(child: Text('Error: ${snap.error}'));
-            }
-            final items = snap.data ?? [];
-            if (items.isEmpty) {
-              return ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: const [
-                  SizedBox(height: 120),
-                  Center(child: Text('No requests yet')),
-                ],
-              );
-            }
-            return ListView.separated(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
-              itemBuilder: (context, i) {
-                final r = items[i];
-                final store = paStoreLabel(r);
-                final title = paProductTitleLine(r);
-                final img = r.imageUrls.isNotEmpty
-                    ? resolveAssetUrl(r.imageUrls.first)
-                    : null;
-                final dateLine = paFormatCreatedAt(r.createdAt);
-                final statusColor = paStatusColor(r.status);
-                final canDelete = r.status == 'submitted';
-                final busy = _deletingIds.contains(r.id);
-
-                return RoundedCard(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: InkWell(
-                          onTap: busy
-                              ? null
-                              : () async {
-                                  await context.push<bool>(
-                                    '${AppRoutes.purchaseAssistantRequests}/${r.id}',
-                                  );
-                                  if (context.mounted) _reload();
-                                },
-                          borderRadius:
-                              BorderRadius.circular(AppConfig.radiusMedium),
-                          child: Padding(
-                            padding: const EdgeInsets.only(
-                              right: AppSpacing.sm,
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                PurchaseAssistantStoreAvatar(
-                                  imageUrl: img,
-                                  labelForInitials: store,
-                                  size: 64,
-                                ),
-                                const SizedBox(width: AppSpacing.md),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        title,
-                                        style: theme.textTheme.titleSmall
-                                            ?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                          color: AppConfig.textColor,
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        store,
-                                        style: theme.textTheme.bodySmall
-                                            ?.copyWith(
-                                          color: AppConfig.subtitleColor,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: AppSpacing.sm),
-                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 6,
-                                        crossAxisAlignment:
-                                            WrapCrossAlignment.center,
-                                        children: [
-                                          BadgePill(
-                                            label: paStatusLabel(r.status),
-                                            color: statusColor,
-                                          ),
-                                          if (r.quantity > 1)
-                                            Text(
-                                              'Qty ${r.quantity}',
-                                              style: theme
-                                                  .textTheme.bodySmall
-                                                  ?.copyWith(
-                                                color: AppConfig.subtitleColor,
-                                              ),
-                                            ),
-                                          if (dateLine != null)
-                                            Text(
-                                              dateLine,
-                                              style: theme
-                                                  .textTheme.bodySmall
-                                                  ?.copyWith(
-                                                color:
-                                                    AppConfig.subtitleColor,
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Icon(
-                                  Icons.chevron_right,
-                                  color: AppConfig.subtitleColor
-                                      .withValues(alpha: 0.7),
-                                ),
-                              ],
-                            ),
+        child: async.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              SizedBox(height: MediaQuery.sizeOf(context).height * 0.25),
+              Center(child: Text('Error: $e')),
+            ],
+          ),
+          data: (items) {
+            final filtered =
+                items.where((r) => _matchesSegment(r, _segment)).toList();
+            return CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.md,
+                      0,
+                      AppSpacing.md,
+                      AppSpacing.sm,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'We price and buy products from links our app does not import automatically. '
+                          'Track your request here — this is not the same as a standard import order.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AppConfig.subtitleColor,
+                            height: 1.35,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SegmentedButton<PaListSegment>(
+                            segments: const [
+                              ButtonSegment(
+                                value: PaListSegment.all,
+                                label: Text('All'),
+                              ),
+                              ButtonSegment(
+                                value: PaListSegment.requests,
+                                label: Text('Review'),
+                              ),
+                              ButtonSegment(
+                                value: PaListSegment.awaitingPayment,
+                                label: Text('Payment'),
+                              ),
+                              ButtonSegment(
+                                value: PaListSegment.inProgress,
+                                label: Text('Progress'),
+                              ),
+                              ButtonSegment(
+                                value: PaListSegment.completed,
+                                label: Text('Done'),
+                              ),
+                            ],
+                            selected: {_segment},
+                            onSelectionChanged: (s) {
+                              setState(() => _segment = s.first);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (filtered.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.xl),
+                        child: Text(
+                          items.isEmpty
+                              ? 'No requests yet.\nTap New request to add a product link.'
+                              : 'Nothing in this section.',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: AppConfig.subtitleColor,
                           ),
                         ),
                       ),
-                      if (canDelete) ...[
-                        const SizedBox(width: 4),
-                        busy
-                            ? const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              )
-                            : IconButton(
-                                icon: Icon(
-                                  Icons.delete_outline,
-                                  color: AppConfig.errorRed
-                                      .withValues(alpha: 0.9),
-                                ),
-                                tooltip: 'Delete request',
-                                onPressed: () => _confirmAndDelete(r),
-                              ),
-                      ],
-                    ],
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    sliver: SliverList.separated(
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) =>
+                          const SizedBox(height: AppSpacing.md),
+                      itemBuilder: (context, i) {
+                        final r = filtered[i];
+                        return _PaRequestCard(
+                          r: r,
+                          busy: _deletingIds.contains(r.id),
+                          onOpen: () async {
+                            await context.push<bool>(
+                              '${AppRoutes.purchaseAssistantRequests}/${r.id}',
+                            );
+                            if (context.mounted) {
+                              ref.invalidate(purchaseAssistantRequestsProvider);
+                            }
+                          },
+                          onDelete: r.status == 'submitted'
+                              ? () => _confirmAndDelete(r)
+                              : null,
+                        );
+                      },
+                    ),
                   ),
-                );
-              },
+              ],
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _PaRequestCard extends StatelessWidget {
+  const _PaRequestCard({
+    required this.r,
+    required this.onOpen,
+    required this.busy,
+    this.onDelete,
+  });
+
+  final PurchaseAssistantRequestModel r;
+  final VoidCallback onOpen;
+  final bool busy;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final store = paStoreLabel(r);
+    final title = paProductTitleLine(r);
+    final img = r.imageUrls.isNotEmpty
+        ? resolveAssetUrl(r.imageUrls.first)
+        : null;
+    final dateLine = paFormatCreatedAt(r.createdAt);
+    final statusColor = paStatusColor(r.status);
+    final payHint = r.status == 'awaiting_customer_payment' &&
+        r.totalPayable != null;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: busy ? null : onOpen,
+        borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: AppConfig.cardColor,
+            borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
+            border: Border.all(color: AppConfig.borderColor),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0EA5E9),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(AppConfig.radiusMedium),
+                      bottomLeft: Radius.circular(AppConfig.radiusMedium),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        PurchaseAssistantStoreAvatar(
+                          imageUrl: img,
+                          labelForInitials: store,
+                          size: 72,
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: AppConfig.textColor,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                store,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: AppConfig.subtitleColor,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      paStatusLabel(r.status),
+                                      style: theme.textTheme.labelSmall?.copyWith(
+                                        color: statusColor,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  if (r.quantity > 1)
+                                    Text(
+                                      'Qty ${r.quantity}',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                        color: AppConfig.subtitleColor,
+                                      ),
+                                    ),
+                                  if (dateLine != null)
+                                    Text(
+                                      dateLine,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                        color: AppConfig.subtitleColor,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              if (payHint) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Amount due: ${paFormatMoney(r.totalPayable, r.currency) ?? '—'}',
+                                  style: theme.textTheme.labelMedium?.copyWith(
+                                    color: AppConfig.warningOrange,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        if (onDelete != null)
+                          busy
+                              ? const Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                )
+                              : IconButton(
+                                  icon: Icon(
+                                    Icons.delete_outline,
+                                    color: AppConfig.errorRed
+                                        .withValues(alpha: 0.85),
+                                  ),
+                                  onPressed: onDelete,
+                                )
+                        else
+                          Icon(
+                            Icons.chevron_right,
+                            color: AppConfig.subtitleColor
+                                .withValues(alpha: 0.6),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

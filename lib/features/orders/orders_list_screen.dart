@@ -205,70 +205,29 @@ class _SheetOption extends StatelessWidget {
   }
 }
 
-/// Orders list screen. Route: /orders (tab in shell) or embedded in [PostOrderHubScreen].
-/// Top-level [TabBar]: All Orders · Purchase Assistant · Standard (each loads `?source=` from API).
-class OrdersListScreen extends ConsumerStatefulWidget {
+/// Standard import orders only (`?source=standard`). Purchase Assistant has its own hub tab.
+class OrdersListScreen extends ConsumerWidget {
   const OrdersListScreen({super.key, this.hubEmbedded = false});
 
   /// When true, omits app bar back/home; hub provides outer navigation.
   final bool hubEmbedded;
 
-  @override
-  ConsumerState<OrdersListScreen> createState() => _OrdersListScreenState();
-}
-
-class _OrdersListScreenState extends ConsumerState<OrdersListScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+  Future<void> _onRefresh(WidgetRef ref) async {
+    invalidateStandardOrdersList(ref);
+    await ref.read(standardOrdersProvider.future);
   }
 
   @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _onRefresh() async {
-    invalidateOrderListProviders(ref);
-    await Future.wait([
-      ref.read(ordersByListTabProvider(OrdersListTab.all).future),
-      ref.read(ordersByListTabProvider(OrdersListTab.purchaseAssistant).future),
-      ref.read(ordersByListTabProvider(OrdersListTab.standard).future),
-    ]);
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final statusFilter = ref.watch(ordersFilterProvider);
     final originFilter = ref.watch(ordersOriginFilterProvider);
     final sortOption = ref.watch(ordersSortProvider);
-
-    final tabBar = Material(
-      color: AppConfig.backgroundColor,
-      child: TabBar(
-        controller: _tabController,
-        labelColor: AppConfig.primaryColor,
-        unselectedLabelColor: AppConfig.subtitleColor,
-        indicatorColor: AppConfig.primaryColor,
-        isScrollable: true,
-        tabAlignment: TabAlignment.start,
-        tabs: const [
-          Tab(text: 'All Orders'),
-          Tab(text: 'Purchase Assistant'),
-          Tab(text: 'Standard'),
-        ],
-      ),
-    );
+    final filterAsync = ref.watch(filteredOrdersProvider);
 
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (widget.hubEmbedded)
+        if (hubEmbedded)
           Align(
             alignment: Alignment.centerRight,
             child: IconButton(
@@ -287,38 +246,72 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen>
               ),
             ),
           ),
-        tabBar,
         _OrdersFilterPills(
           selected: statusFilter,
-          onSelected: (f) =>
-              ref.read(ordersFilterProvider.notifier).state = f,
+          onSelected: (f) => ref.read(ordersFilterProvider.notifier).state = f,
         ),
         Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              _OrdersTabList(
-                listTab: OrdersListTab.all,
-                activeFilter: statusFilter,
-                onRefresh: _onRefresh,
-              ),
-              _OrdersTabList(
-                listTab: OrdersListTab.purchaseAssistant,
-                activeFilter: statusFilter,
-                onRefresh: _onRefresh,
-              ),
-              _OrdersTabList(
-                listTab: OrdersListTab.standard,
-                activeFilter: statusFilter,
-                onRefresh: _onRefresh,
-              ),
-            ],
+          child: filterAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Center(child: Text('Error: $e')),
+            data: (orders) {
+              if (orders.isEmpty) {
+                return RefreshIndicator(
+                  onRefresh: () => _onRefresh(ref),
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: SizedBox(
+                      height: MediaQuery.sizeOf(context).height * 0.45,
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpacing.xl),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.inbox_outlined,
+                                size: 56,
+                                color: AppConfig.subtitleColor,
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              Text(
+                                statusFilter == OrdersFilter.all
+                                    ? 'No orders yet.'
+                                    : 'No orders match these filters.',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(color: AppConfig.subtitleColor),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }
+              return RefreshIndicator(
+                onRefresh: () => _onRefresh(ref),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  itemCount: orders.length,
+                  itemBuilder: (context, index) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: _OrderCard(order: orders[index]),
+                    );
+                  },
+                ),
+              );
+            },
           ),
         ),
       ],
     );
 
-    if (widget.hubEmbedded) {
+    if (hubEmbedded) {
       return Scaffold(
         backgroundColor: AppConfig.backgroundColor,
         body: SafeArea(child: body),
@@ -356,90 +349,6 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen>
         ],
       ),
       body: SafeArea(child: body),
-    );
-  }
-}
-
-class _OrdersTabList extends ConsumerWidget {
-  const _OrdersTabList({
-    required this.listTab,
-    required this.activeFilter,
-    required this.onRefresh,
-  });
-
-  final OrdersListTab listTab;
-  final OrdersFilter activeFilter;
-  final Future<void> Function() onRefresh;
-
-  String get _emptyMessage {
-    switch (listTab) {
-      case OrdersListTab.all:
-        return 'No orders match these filters.';
-      case OrdersListTab.purchaseAssistant:
-        return 'No Purchase Assistant orders yet.';
-      case OrdersListTab.standard:
-        return 'No standard orders match these filters.';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final filterAsync = ref.watch(filteredOrdersForListTabProvider(listTab));
-
-    return filterAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error: $e')),
-      data: (orders) {
-        if (orders.isEmpty) {
-          return RefreshIndicator(
-            onRefresh: onRefresh,
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: SizedBox(
-                height: MediaQuery.sizeOf(context).height * 0.45,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.xl),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.inbox_outlined,
-                          size: 56,
-                          color: AppConfig.subtitleColor,
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        Text(
-                          listTab == OrdersListTab.all && activeFilter == OrdersFilter.all
-                              ? 'No orders yet.'
-                              : _emptyMessage,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: AppConfig.subtitleColor,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }
-        return RefreshIndicator(
-          onRefresh: onRefresh,
-          child: ListView.builder(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            itemCount: orders.length,
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                child: _OrderCard(order: orders[index]),
-              );
-            },
-          ),
-        );
-      },
     );
   }
 }
@@ -591,24 +500,6 @@ class _OrderCard extends StatelessWidget {
           Row(
             children: [
               _OriginTag(origin: order.origin),
-              if (order.isPurchaseAssistant) ...[
-                const SizedBox(width: AppSpacing.sm),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE0F2FE),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'PA',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: const Color(0xFF0369A1),
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.4,
-                        ),
-                  ),
-                ),
-              ],
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(

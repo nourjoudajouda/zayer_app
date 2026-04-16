@@ -4,29 +4,13 @@ import 'package:intl/intl.dart';
 import '../../../core/network/api_client.dart';
 import '../models/order_model.dart';
 
-/// Top-level tabs on the Orders screen (each maps to API `source` query).
-enum OrdersListTab {
-  all,
-  purchaseAssistant,
-  standard,
-}
-
-/// Call after checkout, payment, or when refreshing all order lists.
-void invalidateOrderListProviders(WidgetRef ref) {
-  for (final t in OrdersListTab.values) {
-    ref.invalidate(ordersByListTabProvider(t));
-  }
-}
-
-Future<List<OrderModel>> _fetchOrders({String? source}) async {
+/// Normal / standard orders only (`GET /api/orders?source=standard`).
+/// Purchase Assistant checkout orders are excluded; use the Purchase Assistant module.
+final standardOrdersProvider = FutureProvider<List<OrderModel>>((ref) async {
   try {
-    var path = '/api/orders';
-    if (source == 'purchase_assistant') {
-      path = '/api/orders?source=purchase_assistant';
-    } else if (source == 'standard') {
-      path = '/api/orders?source=standard';
-    }
-    final res = await ApiClient.instance.get<List<dynamic>>(path);
+    final res = await ApiClient.instance.get<List<dynamic>>(
+      '/api/orders?source=standard',
+    );
     final list = res.data;
     if (list != null) {
       return list
@@ -36,23 +20,21 @@ Future<List<OrderModel>> _fetchOrders({String? source}) async {
     }
   } catch (_) {}
   return [];
+});
+
+/// Same data as [standardOrdersProvider] — for hub counts, refunds, fallbacks.
+final ordersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
+  return ref.watch(standardOrdersProvider);
+});
+
+/// Call after checkout or when refreshing the orders list.
+void invalidateStandardOrdersList(WidgetRef ref) {
+  ref.invalidate(standardOrdersProvider);
 }
 
-/// Per-tab dataset: `GET /api/orders` or `?source=purchase_assistant|standard`.
-final ordersByListTabProvider =
-    FutureProvider.family<List<OrderModel>, OrdersListTab>((ref, tab) async {
-  final source = switch (tab) {
-    OrdersListTab.all => null,
-    OrdersListTab.purchaseAssistant => 'purchase_assistant',
-    OrdersListTab.standard => 'standard',
-  };
-  return _fetchOrders(source: source);
-});
-
-/// Full list (all sources) for hubs, refunds, and [orderByIdProvider] fallback.
-final ordersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
-  return ref.watch(ordersByListTabProvider(OrdersListTab.all));
-});
+/// @deprecated Use [invalidateStandardOrdersList].
+void invalidateOrderListProviders(WidgetRef ref) =>
+    invalidateStandardOrdersList(ref);
 
 /// Filter aligned with execution status groups.
 enum OrdersFilter {
@@ -86,10 +68,9 @@ final ordersSortProvider = StateProvider<OrdersSortOption>(
   (ref) => OrdersSortOption.newestFirst,
 );
 
-/// Status / origin / sort applied to the dataset for [listTab] (source comes from tab API).
-final filteredOrdersForListTabProvider =
-    Provider.family<AsyncValue<List<OrderModel>>, OrdersListTab>((ref, listTab) {
-  final async = ref.watch(ordersByListTabProvider(listTab));
+/// Status / origin / sort on standard orders only.
+final filteredOrdersProvider = Provider<AsyncValue<List<OrderModel>>>((ref) {
+  final async = ref.watch(standardOrdersProvider);
   final statusFilter = ref.watch(ordersFilterProvider);
   final originFilter = ref.watch(ordersOriginFilterProvider);
   final sortOption = ref.watch(ordersSortProvider);
@@ -256,7 +237,7 @@ final orderByIdProvider = FutureProvider.family<OrderModel?, String>((
     );
     if (res.data != null) return OrderModel.fromJson(res.data!);
   } catch (_) {}
-  final list = await ref.read(ordersByListTabProvider(OrdersListTab.all).future);
+  final list = await ref.read(standardOrdersProvider.future);
   try {
     return list.firstWhere((o) => o.id == id);
   } catch (_) {

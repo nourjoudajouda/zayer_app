@@ -16,6 +16,7 @@ import 'models/checkout_review_model.dart';
 import 'payment_webview_screen.dart';
 import '../cart/providers/cart_providers.dart';
 import '../orders/providers/orders_providers.dart';
+import '../purchase_assistant/purchase_assistant_providers.dart';
 import '../profile/providers/profile_providers.dart';
 import '../wallet/providers/wallet_providers.dart';
 import 'providers/checkout_review_providers.dart';
@@ -376,7 +377,8 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
                     return;
                   }
                   ref.invalidate(cartItemsProvider);
-                  invalidateOrderListProviders(ref);
+                  invalidateStandardOrdersList(ref);
+                  invalidatePurchaseAssistantRequests(ref);
                   ref.invalidate(walletBalanceProvider);
                   ref.invalidate(walletTransactionsProvider);
                   final orderId = result.orderId;
@@ -409,7 +411,8 @@ class _ReviewPayScreenState extends ConsumerState<ReviewPayScreen> {
                     context.go('${AppRoutes.orderDetail}/$orderId');
                     ref.invalidate(cartItemsProvider);
                     ref.invalidate(orderByIdProvider(orderId));
-                    invalidateOrderListProviders(ref);
+                    invalidateStandardOrdersList(ref);
+                    invalidatePurchaseAssistantRequests(ref);
                     ref.invalidate(checkoutReviewProvider);
                     try {
                       await ref.read(orderByIdProvider(orderId).future);

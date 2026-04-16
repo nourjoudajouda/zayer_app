@@ -13,11 +13,14 @@ class PurchaseAssistantRequestModel {
     this.imageUrls = const [],
     this.adminProductPrice,
     this.adminServiceFee,
+    this.totalPayable,
     this.adminNotes,
     required this.status,
     required this.origin,
     this.convertedOrderId,
+    this.statusExplanation,
     this.createdAt,
+    this.updatedAt,
   });
 
   final String id;
@@ -33,11 +36,15 @@ class PurchaseAssistantRequestModel {
   final List<String> imageUrls;
   final double? adminProductPrice;
   final double? adminServiceFee;
+  /// Server-computed: (admin_product_price × qty) + admin_service_fee when both set.
+  final double? totalPayable;
   final String? adminNotes;
   final String status;
   final String origin;
   final String? convertedOrderId;
+  final String? statusExplanation;
   final String? createdAt;
+  final String? updatedAt;
 
   factory PurchaseAssistantRequestModel.fromJson(Map<String, dynamic> j) {
     final imgs = j['image_urls'];
@@ -57,13 +64,16 @@ class PurchaseAssistantRequestModel {
           : const [],
       adminProductPrice: (j['admin_product_price'] as num?)?.toDouble(),
       adminServiceFee: (j['admin_service_fee'] as num?)?.toDouble(),
+      totalPayable: (j['total_payable'] as num?)?.toDouble(),
       adminNotes: j['admin_notes'] as String?,
       status: (j['status'] ?? '').toString(),
       origin: (j['origin'] ?? '').toString(),
       convertedOrderId: j['converted_order_id'] != null
           ? j['converted_order_id'].toString()
           : null,
+      statusExplanation: j['status_explanation'] as String?,
       createdAt: j['created_at'] as String?,
+      updatedAt: j['updated_at'] as String?,
     );
   }
 }

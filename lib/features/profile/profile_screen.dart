@@ -303,7 +303,7 @@ class _ProfileContent extends ConsumerWidget {
           ZayerTile(
             icon: Icons.support_agent_outlined,
             title: 'Purchase Assistant',
-            subtitle: 'Manual requests from unsupported links',
+            subtitle: 'Pricing & buying for links outside standard import — also under My purchases',
             onTap: () => context.push(AppRoutes.purchaseAssistantRequests),
           ),
           const SizedBox(height: AppSpacing.sm),
