@@ -959,19 +959,7 @@ class _TransactionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final icon = transaction.type == WalletActivityType.refundToWallet
-        ? Icons.savings_outlined
-        : transaction.type == WalletActivityType.withdrawToBank
-            ? Icons.outbound_outlined
-            : transaction.type == WalletActivityType.refunds
-                ? Icons.reply
-                : transaction.type == WalletActivityType.adminCredits
-                    ? Icons.admin_panel_settings_outlined
-                    : transaction.type == WalletActivityType.fundingCredits
-                        ? Icons.payments_outlined
-                        : transaction.type == WalletActivityType.topUps
-                            ? Icons.add_circle_outline
-                            : Icons.shopping_bag_outlined;
+    final icon = _iconForTransaction(transaction);
     final iconBg = transaction.isCredit
         ? AppConfig.successGreen.withValues(alpha: 0.15)
         : AppConfig.borderColor.withValues(alpha: 0.5);
@@ -1010,6 +998,16 @@ class _TransactionTile extends StatelessWidget {
                     context,
                   ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
                 ),
+                if (_flowLabel(transaction.flow) != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    _flowLabel(transaction.flow)!,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AppConfig.primaryColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ],
                 const SizedBox(height: 2),
                 Text(
                   transaction.dateTime,
@@ -1032,7 +1030,7 @@ class _TransactionTile extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                transaction.subtitle,
+                _amountSubtitle(transaction),
                 style: Theme.of(
                   context,
                 ).textTheme.labelSmall?.copyWith(color: amountColor),
@@ -1042,5 +1040,79 @@ class _TransactionTile extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static IconData _iconForTransaction(WalletTransaction t) {
+    switch (t.flow) {
+      case WalletTransactionFlow.shipmentPayment:
+        return Icons.local_shipping_outlined;
+      case WalletTransactionFlow.purchaseAssistantPayment:
+        return Icons.handshake_outlined;
+      case WalletTransactionFlow.orderPayment:
+        return Icons.shopping_bag_outlined;
+      case WalletTransactionFlow.walletTopup:
+        return Icons.add_circle_outline;
+      case WalletTransactionFlow.walletRefund:
+        return Icons.savings_outlined;
+      case WalletTransactionFlow.withdrawal:
+        return Icons.outbound_outlined;
+      case WalletTransactionFlow.adminAdjustment:
+        return Icons.admin_panel_settings_outlined;
+      case WalletTransactionFlow.cardVerification:
+        return Icons.credit_card_outlined;
+      case WalletTransactionFlow.other:
+        break;
+    }
+    if (t.type == WalletActivityType.refundToWallet) {
+      return Icons.savings_outlined;
+    }
+    if (t.type == WalletActivityType.withdrawToBank) {
+      return Icons.outbound_outlined;
+    }
+    if (t.type == WalletActivityType.refunds) {
+      return Icons.reply;
+    }
+    if (t.type == WalletActivityType.adminCredits) {
+      return Icons.admin_panel_settings_outlined;
+    }
+    if (t.type == WalletActivityType.fundingCredits) {
+      return Icons.payments_outlined;
+    }
+    if (t.type == WalletActivityType.topUps) {
+      return Icons.add_circle_outline;
+    }
+    return Icons.account_balance_wallet_outlined;
+  }
+
+  static String? _flowLabel(WalletTransactionFlow flow) {
+    switch (flow) {
+      case WalletTransactionFlow.shipmentPayment:
+        return 'Shipment payment';
+      case WalletTransactionFlow.purchaseAssistantPayment:
+        return 'Purchase Assistant payment';
+      case WalletTransactionFlow.orderPayment:
+        return 'Order payment';
+      case WalletTransactionFlow.walletTopup:
+        return 'Wallet top-up';
+      case WalletTransactionFlow.walletRefund:
+        return 'Refund';
+      case WalletTransactionFlow.withdrawal:
+        return 'Withdrawal';
+      case WalletTransactionFlow.adminAdjustment:
+        return 'Admin';
+      case WalletTransactionFlow.cardVerification:
+        return 'Card verification';
+      case WalletTransactionFlow.other:
+        return null;
+    }
+  }
+
+  static String _amountSubtitle(WalletTransaction t) {
+    if (t.flow == WalletTransactionFlow.shipmentPayment ||
+        t.flow == WalletTransactionFlow.purchaseAssistantPayment ||
+        t.flow == WalletTransactionFlow.orderPayment) {
+      return t.isCredit ? 'Credit' : 'Debit';
+    }
+    return t.subtitle;
   }
 }

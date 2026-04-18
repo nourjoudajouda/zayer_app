@@ -3,6 +3,30 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
 import '../models/wallet_model.dart';
 
+WalletTransactionFlow _walletFlowFromApi(Object? raw) {
+  final s = raw?.toString() ?? '';
+  switch (s) {
+    case 'shipment_payment':
+      return WalletTransactionFlow.shipmentPayment;
+    case 'purchase_assistant_payment':
+      return WalletTransactionFlow.purchaseAssistantPayment;
+    case 'order_payment':
+      return WalletTransactionFlow.orderPayment;
+    case 'wallet_topup':
+      return WalletTransactionFlow.walletTopup;
+    case 'wallet_refund':
+      return WalletTransactionFlow.walletRefund;
+    case 'withdrawal':
+      return WalletTransactionFlow.withdrawal;
+    case 'admin_adjustment':
+      return WalletTransactionFlow.adminAdjustment;
+    case 'card_verification':
+      return WalletTransactionFlow.cardVerification;
+    default:
+      return WalletTransactionFlow.other;
+  }
+}
+
 /// Wallet balance from API: GET /api/wallet
 final walletBalanceProvider = FutureProvider<WalletBalance>((ref) async {
   try {
@@ -71,6 +95,7 @@ final walletTransactionsProvider = FutureProvider<List<WalletTransaction>>((
           amount: (t['amount'] ?? '').toString(),
           subtitle: (t['subtitle'] ?? '').toString(),
           isCredit: t['is_credit'] == true,
+          flow: _walletFlowFromApi(t['flow']),
         );
       }).toList();
     }

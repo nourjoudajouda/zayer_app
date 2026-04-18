@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -9,22 +10,24 @@ import '../../core/config/app_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/ui/zayer_primary_button.dart';
+import '../wallet/wallet_feedback.dart';
 import 'models/purchase_assistant_prefill.dart';
+import 'purchase_assistant_providers.dart';
 import 'purchase_assistant_repository_api.dart';
 
 /// Submit a Purchase Assistant request (unsupported / manual Add via Link).
-class PurchaseAssistantSubmitScreen extends StatefulWidget {
+class PurchaseAssistantSubmitScreen extends ConsumerStatefulWidget {
   const PurchaseAssistantSubmitScreen({super.key, this.prefill});
 
   final PurchaseAssistantPrefill? prefill;
 
   @override
-  State<PurchaseAssistantSubmitScreen> createState() =>
+  ConsumerState<PurchaseAssistantSubmitScreen> createState() =>
       _PurchaseAssistantSubmitScreenState();
 }
 
 class _PurchaseAssistantSubmitScreenState
-    extends State<PurchaseAssistantSubmitScreen> {
+    extends ConsumerState<PurchaseAssistantSubmitScreen> {
   final _repo = PurchaseAssistantRepositoryApi();
   final _urlCtrl = TextEditingController();
   final _titleCtrl = TextEditingController();
@@ -72,8 +75,10 @@ class _PurchaseAssistantSubmitScreenState
   Future<void> _submit() async {
     final url = _urlCtrl.text.trim();
     if (url.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a product URL')),
+      await walletShowError(
+        context,
+        title: 'Missing URL',
+        message: 'Please enter a product URL.',
       );
       return;
     }
@@ -95,26 +100,26 @@ class _PurchaseAssistantSubmitScreenState
         images: _images,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Request submitted. Our team will review and notify you when payment is ready.',
-          ),
-        ),
+      ref.invalidate(purchaseAssistantRequestsProvider);
+      await walletShowSuccess(
+        context,
+        title: 'Request sent',
+        message:
+            'Our team will review your link and notify you when payment is ready.',
       );
-      context.go(AppRoutes.purchaseAssistantRequests);
+      if (!mounted) return;
+      context.go('${AppRoutes.orders}?hubTab=1');
     } on DioException catch (e) {
       if (!mounted) return;
       final msg = e.response?.data is Map
           ? (e.response!.data['message']?.toString() ?? 'Could not submit')
           : 'Could not submit';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg)),
-      );
+      await walletShowError(context, message: msg);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not submit')),
+      await walletShowError(
+        context,
+        message: 'Could not submit. Please try again.',
       );
     } finally {
       if (mounted) setState(() => _submitting = false);

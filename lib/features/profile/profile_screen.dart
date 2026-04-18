@@ -300,13 +300,6 @@ class _ProfileContent extends ConsumerWidget {
             onTap: () => context.push(AppRoutes.favorites),
           ),
           const SizedBox(height: AppSpacing.sm),
-          ZayerTile(
-            icon: Icons.support_agent_outlined,
-            title: 'Purchase Assistant',
-            subtitle: 'Pricing & buying for links outside standard import — also under My purchases',
-            onTap: () => context.push(AppRoutes.purchaseAssistantRequests),
-          ),
-          const SizedBox(height: AppSpacing.sm),
           Consumer(
             builder: (context, ref, _) {
               final unreadCount = ref.watch(unreadNotificationsCountProvider);

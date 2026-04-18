@@ -16,7 +16,10 @@ import 'providers/orders_providers.dart';
 
 /// Post-checkout hub: Orders · Purchase Assistant · Warehouse · Shipments.
 class PostOrderHubScreen extends ConsumerStatefulWidget {
-  const PostOrderHubScreen({super.key});
+  const PostOrderHubScreen({super.key, this.initialTabIndex = 0});
+
+  /// Tab index: 0 Orders, 1 Assist, 2 Warehouse, 3 Shipments. Use query `hubTab` on [AppRoutes.orders].
+  final int initialTabIndex;
 
   @override
   ConsumerState<PostOrderHubScreen> createState() => _PostOrderHubScreenState();
@@ -32,7 +35,8 @@ class _PostOrderHubScreenState extends ConsumerState<PostOrderHubScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _tabController = TabController(length: 4, vsync: this);
+    final idx = widget.initialTabIndex.clamp(0, 3);
+    _tabController = TabController(length: 4, vsync: this, initialIndex: idx);
     _tabController.addListener(_onTabControllerTick);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;

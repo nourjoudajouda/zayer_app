@@ -229,9 +229,15 @@ GoRouter _createAppRouter() {
             routes: [
               GoRoute(
                 path: AppRoutes.orders,
-                pageBuilder: (context, state) => const NoTransitionPage(
-                  child: PostOrderHubScreen(),
-                ),
+                pageBuilder: (context, state) {
+                  final hubTab =
+                      int.tryParse(state.uri.queryParameters['hubTab'] ?? '') ?? 0;
+                  return NoTransitionPage(
+                    child: PostOrderHubScreen(
+                      initialTabIndex: hubTab.clamp(0, 3),
+                    ),
+                  );
+                },
               ),
             ],
           ),

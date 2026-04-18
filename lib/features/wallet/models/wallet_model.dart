@@ -15,6 +15,19 @@ class WalletBalance {
   String get promoFormatted => '\$${promo.toStringAsFixed(0)}';
 }
 
+/// Sub-type for payment rows from API `flow` (wallet transaction history).
+enum WalletTransactionFlow {
+  shipmentPayment,
+  purchaseAssistantPayment,
+  orderPayment,
+  walletTopup,
+  walletRefund,
+  withdrawal,
+  adminAdjustment,
+  cardVerification,
+  other,
+}
+
 enum WalletActivityType {
   all,
   /// API `refund_in` — refund from order/shipment to wallet.
@@ -39,6 +52,7 @@ class WalletTransaction {
     required this.amount,
     required this.subtitle,
     this.isCredit = false,
+    this.flow = WalletTransactionFlow.other,
   });
 
   final String id;
@@ -48,4 +62,5 @@ class WalletTransaction {
   final String amount;
   final String subtitle;
   final bool isCredit;
+  final WalletTransactionFlow flow;
 }

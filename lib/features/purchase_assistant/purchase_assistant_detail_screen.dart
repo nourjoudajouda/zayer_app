@@ -10,6 +10,7 @@ import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/ui/rounded_card.dart';
 import '../checkout/payment_webview_screen.dart';
+import '../wallet/wallet_feedback.dart';
 import 'models/purchase_assistant_request_model.dart';
 import 'purchase_assistant_providers.dart';
 import 'purchase_assistant_repository_api.dart';
@@ -165,12 +166,11 @@ class _PurchaseAssistantDetailScreenState
       if (topUp &&
           allowed.contains('wallet') &&
           !allowed.contains('gateway')) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
+        await walletShowError(
+          context,
+          title: 'Wallet only',
+          message:
               'Add funds to your wallet to pay — checkout is set to wallet only.',
-            ),
-          ),
         );
         return;
       }
@@ -208,15 +208,18 @@ class _PurchaseAssistantDetailScreenState
 
       if (method == 'wallet') {
         _reload();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Paid from wallet.')),
+        await walletShowSuccess(
+          context,
+          title: 'Paid',
+          message: 'Payment was taken from your wallet.',
         );
         return;
       }
 
       if (url == null || url.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not start payment')),
+        await walletShowError(
+          context,
+          message: 'Could not start payment. Try again.',
         );
         return;
       }
@@ -226,17 +229,17 @@ class _PurchaseAssistantDetailScreenState
       );
       if (!mounted) return;
       _reload();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Payment updated. Status refreshes shortly.')),
+      await walletShowSuccess(
+        context,
+        title: 'Payment',
+        message: 'Status will update shortly.',
       );
     } on DioException catch (e) {
       if (!mounted) return;
       final msg = e.response?.data is Map
           ? (e.response!.data['message']?.toString() ?? 'Payment failed')
           : 'Payment failed';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg)),
-      );
+      await walletShowError(context, message: msg);
     }
   }
 
@@ -284,8 +287,10 @@ class _PurchaseAssistantDetailScreenState
     try {
       await _repo.deleteRequest(r.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Request removed')),
+      await walletShowSuccess(
+        context,
+        title: 'Removed',
+        message: 'Your request was deleted.',
       );
       ref.invalidate(purchaseAssistantRequestsProvider);
       context.pop(true);
@@ -294,9 +299,7 @@ class _PurchaseAssistantDetailScreenState
       final msg = e.response?.data is Map
           ? (e.response!.data['message']?.toString() ?? 'Could not delete')
           : 'Could not delete';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg)),
-      );
+      await walletShowError(context, message: msg);
     } finally {
       if (mounted) setState(() => _deleteBusy = false);
     }

@@ -12,6 +12,7 @@ import 'purchase_assistant_providers.dart';
 import 'purchase_assistant_repository_api.dart';
 import 'purchase_assistant_ui.dart';
 import 'widgets/purchase_assistant_store_avatar.dart';
+import '../wallet/wallet_feedback.dart';
 
 /// Segments for the Purchase Assistant list (client-side filter on API list).
 enum PaListSegment {
@@ -113,8 +114,10 @@ class _PurchaseAssistantListScreenState
     try {
       await _repo.deleteRequest(r.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Request removed')),
+      await walletShowSuccess(
+        context,
+        title: 'Removed',
+        message: 'Your request was deleted.',
       );
       ref.invalidate(purchaseAssistantRequestsProvider);
     } on DioException catch (e) {
@@ -122,9 +125,7 @@ class _PurchaseAssistantListScreenState
       final msg = e.response?.data is Map
           ? (e.response!.data['message']?.toString() ?? 'Could not delete')
           : 'Could not delete';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg)),
-      );
+      await walletShowError(context, message: msg);
     } finally {
       if (mounted) {
         setState(() => _deletingIds.remove(r.id));
@@ -139,42 +140,40 @@ class _PurchaseAssistantListScreenState
 
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
-      appBar: AppBar(
-        title: Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Purchase Assistant',
-                overflow: TextOverflow.ellipsis,
+      appBar: widget.hubEmbedded
+          ? null
+          : AppBar(
+              title: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Purchase Assistant',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.info_outline,
+                      color: AppConfig.subtitleColor,
+                      size: 22,
+                    ),
+                    tooltip: 'About Purchase Assistant',
+                    onPressed: () => _showPaInfo(context),
+                  ),
+                ],
               ),
-            ),
-            IconButton(
-              icon: Icon(
-                Icons.info_outline,
-                color: AppConfig.subtitleColor,
-                size: 22,
-              ),
-              tooltip: 'About Purchase Assistant',
-              onPressed: () => _showPaInfo(context),
-            ),
-          ],
-        ),
-        automaticallyImplyLeading: !widget.hubEmbedded,
-        leading: widget.hubEmbedded
-            ? null
-            : IconButton(
+              leading: IconButton(
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () => context.pop(),
               ),
-        backgroundColor: AppConfig.backgroundColor,
-        foregroundColor: AppConfig.textColor,
-        elevation: 0,
-        actions: [
-          TextButton(
-            onPressed: _openSubmit,
-            child: const Text('New request'),
-          ),
-        ],
+              backgroundColor: AppConfig.backgroundColor,
+              foregroundColor: AppConfig.textColor,
+              elevation: 0,
+            ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openSubmit,
+        backgroundColor: AppConfig.primaryColor,
+        child: const Icon(Icons.add),
       ),
       body: RefreshIndicator(
         onRefresh: () async {
@@ -196,6 +195,21 @@ class _PurchaseAssistantListScreenState
             return CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
+                if (widget.hubEmbedded)
+                  SliverToBoxAdapter(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        icon: Icon(
+                          Icons.info_outline,
+                          color: AppConfig.subtitleColor,
+                          size: 22,
+                        ),
+                        tooltip: 'About Purchase Assistant',
+                        onPressed: () => _showPaInfo(context),
+                      ),
+                    ),
+                  ),
                 SliverToBoxAdapter(
                   child: _PaFilterPills(
                     selected: _segment,
@@ -210,7 +224,7 @@ class _PurchaseAssistantListScreenState
                         padding: const EdgeInsets.all(AppSpacing.xl),
                         child: Text(
                           items.isEmpty
-                              ? 'No requests yet.\nTap New request to add a product link.'
+                              ? 'No requests yet.\nTap + to add a product link.'
                               : 'Nothing in this section.',
                           textAlign: TextAlign.center,
                           style: theme.textTheme.titleMedium?.copyWith(
