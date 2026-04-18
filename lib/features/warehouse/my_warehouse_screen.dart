@@ -164,51 +164,71 @@ class _MyWarehouseScreenState extends ConsumerState<MyWarehouseScreen> {
                     final receiptUrls = r?.images.map(_resolveUrl).where((u) => u.isNotEmpty).toList() ?? [];
                     return Card(
                       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                      child: Padding(
-                        padding: const EdgeInsets.all(AppSpacing.sm),
-                        child: Column(
+                      clipBehavior: Clip.antiAlias,
+                      child: ExpansionTile(
+                        tilePadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                        childrenPadding: const EdgeInsets.fromLTRB(AppSpacing.sm, 0, AppSpacing.sm, AppSpacing.sm),
+                        initiallyExpanded: false,
+                        title: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Checkbox(
-                                  value: sel,
-                                  onChanged: (_) => _toggleSelection(it.id),
-                                ),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: TappableNetworkImage(
-                                    imageUrl: productUrl,
-                                    width: 64,
-                                    height: 64,
-                                    fit: BoxFit.cover,
-                                    borderRadius: BorderRadius.circular(8),
-                                    errorWidget: (_, __, ___) => const SizedBox(
-                                      width: 64,
-                                      height: 64,
-                                      child: Icon(Icons.image_outlined),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: AppSpacing.sm),
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: () => _toggleSelection(it.id),
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                      child: Text(
-                                        it.name,
-                                        maxLines: 4,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontWeight: FontWeight.w600),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                            Checkbox(
+                              value: sel,
+                              onChanged: (_) => _toggleSelection(it.id),
                             ),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: TappableNetworkImage(
+                                imageUrl: productUrl,
+                                width: 56,
+                                height: 56,
+                                fit: BoxFit.cover,
+                                borderRadius: BorderRadius.circular(8),
+                                errorWidget: (_, __, ___) => const SizedBox(
+                                  width: 56,
+                                  height: 56,
+                                  child: Icon(Icons.image_outlined, size: 22),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: InkWell(
+                                onTap: () => _toggleSelection(it.id),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                                  child: Text(
+                                    it.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(left: 4, top: 4),
+                          child: Text(
+                            'Qty ${it.quantity} · tap to expand',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: AppConfig.subtitleColor,
+                                ),
+                          ),
+                        ),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                            child: Text(
+                              it.name,
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.3,
+                                  ),
+                            ),
+                          ),
                             if (receiptUrls.isNotEmpty) ...[
                               const SizedBox(height: AppSpacing.sm),
                               Text(
@@ -321,8 +341,7 @@ class _MyWarehouseScreenState extends ConsumerState<MyWarehouseScreen> {
                                 style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
                               ),
                             ],
-                          ],
-                        ),
+                        ],
                       ),
                     );
                   },

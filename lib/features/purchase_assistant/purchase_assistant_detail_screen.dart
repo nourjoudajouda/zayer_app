@@ -57,6 +57,62 @@ class _PurchaseAssistantDetailScreenState
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  Future<bool> _confirmWalletPayment({
+    required BuildContext context,
+    required double amountDue,
+    required String currency,
+    required double walletBalance,
+  }) async {
+    final cur = currency.trim().isEmpty ? 'USD' : currency.trim().toUpperCase();
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm wallet payment'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'You are about to pay with your wallet balance.',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              Text('Payment method: Wallet', style: TextStyle(color: AppConfig.subtitleColor)),
+              const SizedBox(height: 8),
+              Text(
+                'Amount to charge: $cur ${amountDue.toStringAsFixed(2)}',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Wallet balance available: $cur ${walletBalance.toStringAsFixed(2)}',
+                style: TextStyle(color: AppConfig.subtitleColor),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'The amount will be deducted from your wallet immediately after you confirm.',
+                style: TextStyle(fontSize: 13, color: AppConfig.subtitleColor, height: 1.35),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Confirm and pay'),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
   Future<String?> _pickPaymentMethod(BuildContext context) async {
     return showModalBottomSheet<String>(
       context: context,
@@ -126,6 +182,22 @@ class _PurchaseAssistantDetailScreenState
         final picked = await _pickPaymentMethod(context);
         if (!mounted) return;
         method = picked ?? 'gateway';
+      }
+
+      final amountDue = (opts['amount_due_now'] as num?)?.toDouble() ??
+          (r.totalPayable ?? 0);
+      final currency = (opts['currency'] ?? r.currency ?? 'USD').toString();
+      final walletBalance = (opts['wallet_balance'] as num?)?.toDouble() ?? 0;
+
+      if (method == 'wallet') {
+        final confirmed = await _confirmWalletPayment(
+          context: context,
+          amountDue: amountDue,
+          currency: currency,
+          walletBalance: walletBalance,
+        );
+        if (!mounted) return;
+        if (!confirmed) return;
       }
 
       final url = await _repo.startOrderPayment(

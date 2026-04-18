@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +7,7 @@ import '../../core/network/api_client.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/network_image_preview.dart';
 import 'models/warehouse_models.dart';
+import 'warehouse_api.dart';
 import 'warehouse_display_units.dart';
 import 'warehouse_providers.dart';
 
@@ -58,6 +60,127 @@ class _ShipmentsTrackingScreenState extends ConsumerState<ShipmentsTrackingScree
     if (path == null || path.trim().isEmpty) return '';
     final p = path.trim();
     return p.startsWith('http') ? p : '${ApiClient.safeBaseUrl ?? ''}$p';
+  }
+
+  String? _packedBoxSummary(OutboundShipmentApi s) {
+    final w = s.finalWeightLb;
+    final l = s.finalLengthIn;
+    final wi = s.finalWidthIn;
+    final h = s.finalHeightIn;
+    final parts = <String>[];
+    if (l != null && wi != null && h != null) {
+      parts.add('Packed box: ${formatReceiptDimsIn(l, wi, h)}');
+    }
+    if (w != null && w > 0) {
+      parts.add('Packed weight: ${formatReceiptWeightLb(w)}');
+    }
+    if (parts.isEmpty) return null;
+    return parts.join(' · ');
+  }
+
+  Future<void> _promptConfirmDelivery(
+    BuildContext context,
+    WidgetRef ref,
+    OutboundShipmentApi s,
+  ) async {
+    final noteCtrl = TextEditingController();
+    int? rating;
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) {
+          return AlertDialog(
+            title: const Text('Confirm delivery'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Did you receive shipment #${s.id}?',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Optional: rate your experience and leave a short note.',
+                    style: TextStyle(fontSize: 13, color: AppConfig.subtitleColor),
+                  ),
+                  const SizedBox(height: 12),
+                  Text('Rating (optional)', style: Theme.of(ctx).textTheme.labelMedium),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (var i = 1; i <= 5; i++)
+                        ChoiceChip(
+                          label: Text('$i'),
+                          selected: rating == i,
+                          onSelected: (_) => setSt(() => rating = i),
+                        ),
+                    ],
+                  ),
+                  TextButton(
+                    onPressed: () => setSt(() => rating = null),
+                    child: const Text('Clear rating'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: noteCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Note (optional)',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 3,
+                    maxLength: 2000,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Yes, I received it'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (ok != true || !context.mounted) {
+      noteCtrl.dispose();
+      return;
+    }
+    try {
+      await confirmShipmentDelivery(
+        shipmentId: s.id,
+        rating: rating,
+        note: noteCtrl.text,
+      );
+      noteCtrl.dispose();
+      if (!context.mounted) return;
+      ref.invalidate(outboundShipmentsProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Thanks — marked as delivered.')),
+      );
+    } on DioException catch (e) {
+      noteCtrl.dispose();
+      if (!context.mounted) return;
+      final msg = e.response?.data is Map
+          ? (e.response!.data['message']?.toString() ?? 'Could not confirm')
+          : 'Could not confirm';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } catch (_) {
+      noteCtrl.dispose();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not confirm delivery.')),
+      );
+    }
   }
 
   @override
@@ -211,6 +334,85 @@ class _ShipmentsTrackingScreenState extends ConsumerState<ShipmentsTrackingScree
                                           errorWidget: (_, _, _) => const SizedBox.shrink(),
                                         ),
                                       ),
+                                    ],
+                                    if (_packedBoxSummary(s) != null) ...[
+                                      const SizedBox(height: AppSpacing.sm),
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: AppSpacing.sm,
+                                          vertical: AppSpacing.sm,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF0FDF4),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: AppConfig.successGreen.withValues(alpha: 0.35),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          _packedBoxSummary(s)!,
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                fontWeight: FontWeight.w600,
+                                                height: 1.35,
+                                              ),
+                                        ),
+                                      ),
+                                    ],
+                                    if (s.status.toLowerCase() == 'shipped') ...[
+                                      const SizedBox(height: AppSpacing.md),
+                                      Material(
+                                        color: AppConfig.primaryColor.withValues(alpha: 0.08),
+                                        borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(AppSpacing.md),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                                            children: [
+                                              Text(
+                                                'Package on the way',
+                                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                                      fontWeight: FontWeight.w700,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                'When your order arrives, confirm receipt below. '
+                                                'If something is wrong, contact support.',
+                                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                      color: AppConfig.subtitleColor,
+                                                      height: 1.35,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: AppSpacing.sm),
+                                              FilledButton(
+                                                onPressed: () => _promptConfirmDelivery(context, ref, s),
+                                                child: const Text('I received my package'),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    if (s.status.toLowerCase() == 'delivered') ...[
+                                      const SizedBox(height: AppSpacing.sm),
+                                      if (s.deliveryRating != null)
+                                        Text(
+                                          'Your rating: ${s.deliveryRating}/5',
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                        ),
+                                      if (s.deliveryNote != null && s.deliveryNote!.trim().isNotEmpty)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 4),
+                                          child: Text(
+                                            'Your note: ${s.deliveryNote}',
+                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                  color: AppConfig.subtitleColor,
+                                                ),
+                                          ),
+                                        ),
                                     ],
                                     const SizedBox(height: AppSpacing.sm),
                                     Theme(

@@ -61,6 +61,21 @@ Future<List<OutboundShipmentApi>> fetchShipments() async {
       .toList();
 }
 
+/// Customer confirms receipt (shipped → delivered). Optional [rating] 1–5 and [note].
+Future<void> confirmShipmentDelivery({
+  required String shipmentId,
+  int? rating,
+  String? note,
+}) async {
+  await ApiClient.instance.post<Map<String, dynamic>>(
+    '/api/shipments/$shipmentId/confirm-delivery',
+    data: <String, dynamic>{
+      if (rating != null) 'rating': rating,
+      if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+    },
+  );
+}
+
 Future<Map<String, dynamic>> payShipment({
   required String shipmentId,
   required String paymentMethod,

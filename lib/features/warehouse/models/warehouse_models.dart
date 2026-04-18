@@ -88,6 +88,14 @@ class OutboundShipmentApi {
     this.carrier,
     this.trackingNumber,
     this.finalBoxImage,
+    this.finalWeightLb,
+    this.finalLengthIn,
+    this.finalWidthIn,
+    this.finalHeightIn,
+    this.dispatchedAt,
+    this.deliveredAt,
+    this.deliveryRating,
+    this.deliveryNote,
     required this.shippingCost,
     required this.additionalFeesTotal,
     required this.totalShippingPayment,
@@ -102,6 +110,15 @@ class OutboundShipmentApi {
   final String? carrier;
   final String? trackingNumber;
   final String? finalBoxImage;
+  /// Packed shipping weight (lb), from API `final_weight`.
+  final double? finalWeightLb;
+  final double? finalLengthIn;
+  final double? finalWidthIn;
+  final double? finalHeightIn;
+  final String? dispatchedAt;
+  final String? deliveredAt;
+  final int? deliveryRating;
+  final String? deliveryNote;
   final double shippingCost;
   final double additionalFeesTotal;
   final double totalShippingPayment;
@@ -124,6 +141,14 @@ class OutboundShipmentApi {
       carrier: j['carrier'] as String?,
       trackingNumber: j['tracking_number'] as String?,
       finalBoxImage: j['final_box_image'] as String?,
+      finalWeightLb: (j['final_weight'] as num?)?.toDouble(),
+      finalLengthIn: (j['final_length'] as num?)?.toDouble(),
+      finalWidthIn: (j['final_width'] as num?)?.toDouble(),
+      finalHeightIn: (j['final_height'] as num?)?.toDouble(),
+      dispatchedAt: j['dispatched_at'] as String?,
+      deliveredAt: j['delivered_at'] as String?,
+      deliveryRating: (j['delivery_rating'] as num?)?.toInt(),
+      deliveryNote: j['delivery_note'] as String?,
       shippingCost: (j['shipping_cost'] as num?)?.toDouble() ?? 0,
       additionalFeesTotal: (j['additional_fees_total'] as num?)?.toDouble() ?? 0,
       totalShippingPayment: (j['total_shipping_payment'] as num?)?.toDouble() ?? 0,
