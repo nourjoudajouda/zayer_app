@@ -68,6 +68,25 @@ class _PurchaseAssistantListScreenState
     if (mounted) ref.invalidate(purchaseAssistantRequestsProvider);
   }
 
+  void _showPaInfo(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Purchase Assistant'),
+        content: const Text(
+          'We price and buy products from links our app does not import automatically. '
+          'Track your request here — this is separate from standard import orders.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _confirmAndDelete(PurchaseAssistantRequestModel r) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -121,7 +140,25 @@ class _PurchaseAssistantListScreenState
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
       appBar: AppBar(
-        title: const Text('Purchase Assistant'),
+        title: Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Purchase Assistant',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            IconButton(
+              icon: Icon(
+                Icons.info_outline,
+                color: AppConfig.subtitleColor,
+                size: 22,
+              ),
+              tooltip: 'About Purchase Assistant',
+              onPressed: () => _showPaInfo(context),
+            ),
+          ],
+        ),
         automaticallyImplyLeading: !widget.hubEmbedded,
         leading: widget.hubEmbedded
             ? null
@@ -160,58 +197,9 @@ class _PurchaseAssistantListScreenState
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.md,
-                      0,
-                      AppSpacing.md,
-                      AppSpacing.sm,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'We price and buy products from links our app does not import automatically. '
-                          'Track your request here — this is not the same as a standard import order.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: AppConfig.subtitleColor,
-                            height: 1.35,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: SegmentedButton<PaListSegment>(
-                            segments: const [
-                              ButtonSegment(
-                                value: PaListSegment.all,
-                                label: Text('All'),
-                              ),
-                              ButtonSegment(
-                                value: PaListSegment.requests,
-                                label: Text('Review'),
-                              ),
-                              ButtonSegment(
-                                value: PaListSegment.awaitingPayment,
-                                label: Text('Payment'),
-                              ),
-                              ButtonSegment(
-                                value: PaListSegment.inProgress,
-                                label: Text('Progress'),
-                              ),
-                              ButtonSegment(
-                                value: PaListSegment.completed,
-                                label: Text('Done'),
-                              ),
-                            ],
-                            selected: {_segment},
-                            onSelectionChanged: (s) {
-                              setState(() => _segment = s.first);
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
+                  child: _PaFilterPills(
+                    selected: _segment,
+                    onSelected: (s) => setState(() => _segment = s),
                   ),
                 ),
                 if (filtered.isEmpty)
@@ -262,6 +250,106 @@ class _PurchaseAssistantListScreenState
               ],
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _PaFilterPills extends StatelessWidget {
+  const _PaFilterPills({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final PaListSegment selected;
+  final ValueChanged<PaListSegment> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          _PaPill(
+            label: 'All',
+            isSelected: selected == PaListSegment.all,
+            onTap: () => onSelected(PaListSegment.all),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          _PaPill(
+            label: 'Review',
+            isSelected: selected == PaListSegment.requests,
+            onTap: () => onSelected(PaListSegment.requests),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          _PaPill(
+            label: 'Payment',
+            isSelected: selected == PaListSegment.awaitingPayment,
+            onTap: () => onSelected(PaListSegment.awaitingPayment),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          _PaPill(
+            label: 'Progress',
+            isSelected: selected == PaListSegment.inProgress,
+            onTap: () => onSelected(PaListSegment.inProgress),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          _PaPill(
+            label: 'Done',
+            isSelected: selected == PaListSegment.completed,
+            onTap: () => onSelected(PaListSegment.completed),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaPill extends StatelessWidget {
+  const _PaPill({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: isSelected ? AppConfig.primaryColor : const Color(0xFFF3F4F6),
+      borderRadius: BorderRadius.circular(24),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: 10,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isSelected
+                  ? AppConfig.primaryColor
+                  : const Color(0xFFF3F4F6),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isSelected ? Colors.white : AppConfig.textColor,
+            ),
+          ),
         ),
       ),
     );

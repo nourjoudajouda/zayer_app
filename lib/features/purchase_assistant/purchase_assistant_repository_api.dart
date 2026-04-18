@@ -97,17 +97,37 @@ class PurchaseAssistantRepositoryApi {
     await _dio.delete<void>('/api/purchase-assistant-requests/$requestId');
   }
 
-  /// POST /api/purchase-assistant-requests/{id}/start-payment — same shape as order pay.
-  Future<String?> startPayment(String requestId) async {
+  /// GET /api/orders/{id}/payment-options — checkout payment mode + wallet/gateway flags.
+  Future<Map<String, dynamic>> fetchOrderPaymentOptions(String orderId) async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/orders/$orderId/payment-options',
+    );
+    final d = res.data;
+    if (d == null) return {};
+    return Map<String, dynamic>.from(d);
+  }
+
+  /// POST /api/orders/{id}/start-payment — same rules as cart checkout (payment_method wallet|gateway).
+  /// Returns hosted checkout URL for gateway, or null when paid immediately with wallet.
+  Future<String?> startOrderPayment(
+    String orderId, {
+    required String paymentMethod,
+    String? gateway,
+  }) async {
     final res = await _dio.post<Map<String, dynamic>>(
-      '/api/purchase-assistant-requests/$requestId/start-payment',
+      '/api/orders/$orderId/start-payment',
+      data: <String, dynamic>{
+        'payment_method': paymentMethod,
+        if (gateway != null && gateway.trim().isNotEmpty) 'gateway': gateway.trim(),
+      },
     );
     final data = res.data;
     if (data == null) return null;
     final payload = (data['data'] is Map<String, dynamic>)
         ? Map<String, dynamic>.from(data['data'] as Map<String, dynamic>)
         : Map<String, dynamic>.from(data);
-    return (payload['checkout_url'] as String?)?.trim();
+    final url = (payload['checkout_url'] as String?)?.trim();
+    return url == null || url.isEmpty ? null : url;
   }
 }
 

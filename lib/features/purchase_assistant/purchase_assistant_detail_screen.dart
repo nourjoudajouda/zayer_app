@@ -57,11 +57,91 @@ class _PurchaseAssistantDetailScreenState
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  Future<String?> _pickPaymentMethod(BuildContext context) async {
+    return showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppConfig.cardColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppConfig.radiusMedium)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Pay with',
+                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              ListTile(
+                leading: Icon(Icons.account_balance_wallet_outlined, color: AppConfig.primaryColor),
+                title: const Text('Wallet balance'),
+                onTap: () => Navigator.of(ctx).pop('wallet'),
+              ),
+              ListTile(
+                leading: Icon(Icons.credit_card_outlined, color: AppConfig.primaryColor),
+                title: const Text('Card / Apple Pay / Google Pay'),
+                onTap: () => Navigator.of(ctx).pop('gateway'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _pay(PurchaseAssistantRequestModel r) async {
-    if (r.convertedOrderId == null || r.convertedOrderId!.isEmpty) return;
+    final orderId = r.convertedOrderId;
+    if (orderId == null || orderId.isEmpty) return;
     try {
-      final url = await _repo.startPayment(r.id);
+      final opts = await _repo.fetchOrderPaymentOptions(orderId);
       if (!mounted) return;
+      final allowed = (opts['allowed_payment_methods'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          <String>['gateway'];
+      final topUp = opts['top_up_required'] == true;
+      if (topUp &&
+          allowed.contains('wallet') &&
+          !allowed.contains('gateway')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Add funds to your wallet to pay — checkout is set to wallet only.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      String method;
+      if (allowed.length == 1) {
+        method = allowed.first;
+      } else {
+        final picked = await _pickPaymentMethod(context);
+        if (!mounted) return;
+        method = picked ?? 'gateway';
+      }
+
+      final url = await _repo.startOrderPayment(
+        orderId,
+        paymentMethod: method,
+      );
+      if (!mounted) return;
+
+      if (method == 'wallet') {
+        _reload();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Paid from wallet.')),
+        );
+        return;
+      }
+
       if (url == null || url.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not start payment')),
@@ -86,6 +166,25 @@ class _PurchaseAssistantDetailScreenState
         SnackBar(content: Text(msg)),
       );
     }
+  }
+
+  void _showPaInfo(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Purchase Assistant'),
+        content: const Text(
+          'Manual pricing and purchase for product links outside our standard import flow. '
+          'Standard import orders and shipment tracking stay under Orders after checkout.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _confirmDelete(PurchaseAssistantRequestModel r) async {
@@ -142,7 +241,25 @@ class _PurchaseAssistantDetailScreenState
         return Scaffold(
           backgroundColor: AppConfig.backgroundColor,
           appBar: AppBar(
-            title: const Text('Purchase Assistant'),
+            title: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Purchase Assistant',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(
+                    Icons.info_outline,
+                    color: AppConfig.subtitleColor,
+                    size: 22,
+                  ),
+                  tooltip: 'About Purchase Assistant',
+                  onPressed: () => _showPaInfo(context),
+                ),
+              ],
+            ),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () => context.pop(),
@@ -216,37 +333,6 @@ class _PurchaseAssistantDetailScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0EA5E9).withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
-                border: Border.all(
-                  color: const Color(0xFF0EA5E9).withValues(alpha: 0.25),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.storefront_outlined,
-                    color: const Color(0xFF0369A1),
-                    size: 28,
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Text(
-                      'Manual pricing & purchase for links outside our standard import flow. '
-                      'No shipment tracking here — use Orders only for standard imports after checkout.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppConfig.textColor,
-                        height: 1.35,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
             Center(
               child: PurchaseAssistantStoreAvatar(
                 imageUrl: img,
