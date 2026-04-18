@@ -240,6 +240,16 @@ class _ProfileContent extends ConsumerWidget {
           ),
           ProfileSectionHeader(title: 'PERSONAL INFO'),
           const SizedBox(height: AppSpacing.sm),
+          if (profile.customerCode != null && profile.customerCode!.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: ZayerTile(
+                icon: Icons.badge_outlined,
+                title: 'Customer code',
+                value: profile.customerCode!,
+                onTap: () {},
+              ),
+            ),
           ZayerTile(
             icon: Icons.person_outline,
             title: l10n.fullLegalName,

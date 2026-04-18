@@ -1,6 +1,7 @@
 /// User profile model. Replace with API response (GET /api/me) later.
 class UserProfile {
   const UserProfile({
+    this.customerCode,
     required this.displayName,
     required this.verified,
     this.lastVerifiedAt,
@@ -12,6 +13,8 @@ class UserProfile {
     this.isAddressLocked = false,
     this.avatarUrl,
   });
+  /// System customer id (e.g. ESH00001) from API.
+  final String? customerCode;
   final String displayName;
   final bool verified;
   final String? lastVerifiedAt;
@@ -25,6 +28,7 @@ class UserProfile {
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(
+      customerCode: json['customer_code'] as String?,
       displayName: (json['display_name'] ?? json['name'] ?? '').toString(),
       verified: json['verified'] == true,
       lastVerifiedAt: json['last_verified_at'] as String?,

@@ -254,182 +254,12 @@ class _ShipmentsTrackingScreenState extends ConsumerState<ShipmentsTrackingScree
                           itemCount: filtered.length,
                           itemBuilder: (context, i) {
                             final s = filtered[i];
-                            final boxUrl = s.finalBoxImage != null && s.finalBoxImage!.isNotEmpty
-                                ? (s.finalBoxImage!.startsWith('http')
-                                    ? s.finalBoxImage!
-                                    : '${ApiClient.safeBaseUrl ?? ''}${s.finalBoxImage}')
-                                : '';
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: AppSpacing.md),
-                              child: Padding(
-                                padding: const EdgeInsets.all(AppSpacing.md),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          'Shipment #${s.id}',
-                                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                        ),
-                                        Chip(
-                                          label: Text(s.status),
-                                          visualDensity: VisualDensity.compact,
-                                        ),
-                                      ],
-                                    ),
-                                    if (s.paymentStatus != null && s.paymentStatus!.isNotEmpty)
-                                      Text(
-                                        'Payment: ${s.paymentStatus}',
-                                        style: TextStyle(color: AppConfig.subtitleColor, fontSize: 12),
-                                      ),
-                                    if (s.destinationSummary != null && s.destinationSummary!.trim().isNotEmpty) ...[
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'To: ${s.destinationSummary}',
-                                        style: Theme.of(context).textTheme.bodySmall,
-                                      ),
-                                    ],
-                                    if (s.carrier != null && s.carrier!.isNotEmpty)
-                                      Text('Carrier: ${s.carrier}', style: TextStyle(color: AppConfig.subtitleColor)),
-                                    if (s.trackingNumber != null && s.trackingNumber!.isNotEmpty)
-                                      Text('Tracking: ${s.trackingNumber}', style: TextStyle(color: AppConfig.subtitleColor)),
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            'Shipping: \$${s.shippingCost.toStringAsFixed(2)} · '
-                                            'Fees: \$${s.additionalFeesTotal.toStringAsFixed(2)} · '
-                                            'Total: \$${s.totalShippingPayment.toStringAsFixed(2)} ${s.currency}',
-                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
-                                          ),
-                                        ),
-                                        if (s.additionalFeesTotal > 0.0001)
-                                          Tooltip(
-                                            message: kExtraFeeTooltipShort,
-                                            child: IconButton(
-                                              padding: EdgeInsets.zero,
-                                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                              icon: Icon(Icons.info_outline, size: 20, color: AppConfig.primaryColor),
-                                              onPressed: () => showWarehouseExtraFeeDialog(context),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                    if (boxUrl.isNotEmpty) ...[
-                                      const SizedBox(height: AppSpacing.sm),
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: TappableNetworkImage(
-                                          imageUrl: boxUrl,
-                                          height: 140,
-                                          width: double.infinity,
-                                          fit: BoxFit.cover,
-                                          borderRadius: BorderRadius.circular(8),
-                                          errorWidget: (_, _, _) => const SizedBox.shrink(),
-                                        ),
-                                      ),
-                                    ],
-                                    if (_packedBoxSummary(s) != null) ...[
-                                      const SizedBox(height: AppSpacing.sm),
-                                      Container(
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: AppSpacing.sm,
-                                          vertical: AppSpacing.sm,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFF0FDF4),
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(
-                                            color: AppConfig.successGreen.withValues(alpha: 0.35),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          _packedBoxSummary(s)!,
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                fontWeight: FontWeight.w600,
-                                                height: 1.35,
-                                              ),
-                                        ),
-                                      ),
-                                    ],
-                                    if (s.status.toLowerCase() == 'shipped') ...[
-                                      const SizedBox(height: AppSpacing.md),
-                                      Material(
-                                        color: AppConfig.primaryColor.withValues(alpha: 0.08),
-                                        borderRadius: BorderRadius.circular(AppConfig.radiusMedium),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(AppSpacing.md),
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                                            children: [
-                                              Text(
-                                                'Package on the way',
-                                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                                      fontWeight: FontWeight.w700,
-                                                    ),
-                                              ),
-                                              const SizedBox(height: 6),
-                                              Text(
-                                                'When your order arrives, confirm receipt below. '
-                                                'If something is wrong, contact support.',
-                                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                      color: AppConfig.subtitleColor,
-                                                      height: 1.35,
-                                                    ),
-                                              ),
-                                              const SizedBox(height: AppSpacing.sm),
-                                              FilledButton(
-                                                onPressed: () => _promptConfirmDelivery(context, ref, s),
-                                                child: const Text('I received my package'),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                    if (s.status.toLowerCase() == 'delivered') ...[
-                                      const SizedBox(height: AppSpacing.sm),
-                                      if (s.deliveryRating != null)
-                                        Text(
-                                          'Your rating: ${s.deliveryRating}/5',
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                        ),
-                                      if (s.deliveryNote != null && s.deliveryNote!.trim().isNotEmpty)
-                                        Padding(
-                                          padding: const EdgeInsets.only(top: 4),
-                                          child: Text(
-                                            'Your note: ${s.deliveryNote}',
-                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                  color: AppConfig.subtitleColor,
-                                                ),
-                                          ),
-                                        ),
-                                    ],
-                                    const SizedBox(height: AppSpacing.sm),
-                                    Text(
-                                      'Items (${s.items.length})',
-                                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    for (final it in s.items)
-                                      _ShipmentItemCollapsible(
-                                        it: it,
-                                        resolveUrl: _resolveUrl,
-                                      ),
-                                  ],
-                                ),
-                              ),
+                            return _OutboundShipmentExpansionCard(
+                              s: s,
+                              resolveUrl: _resolveUrl,
+                              packedBoxSummary: _packedBoxSummary(s),
+                              onConfirmDelivery: () => _promptConfirmDelivery(context, ref, s),
+                              onExtraFeeInfo: () => showWarehouseExtraFeeDialog(context),
                             );
                           },
                         ),
@@ -452,6 +282,231 @@ class _ShipmentsTrackingScreenState extends ConsumerState<ShipmentsTrackingScree
         onSelected: (_) => setState(() => _filter = value),
         selectedColor: AppConfig.primaryColor.withValues(alpha: 0.2),
         checkmarkColor: AppConfig.primaryColor,
+      ),
+    );
+  }
+}
+
+/// Top-level shipment row: compact collapsed summary; details + items inside [ExpansionTile].
+class _OutboundShipmentExpansionCard extends StatelessWidget {
+  const _OutboundShipmentExpansionCard({
+    required this.s,
+    required this.resolveUrl,
+    required this.packedBoxSummary,
+    required this.onConfirmDelivery,
+    required this.onExtraFeeInfo,
+  });
+
+  final OutboundShipmentApi s;
+  final String Function(String?) resolveUrl;
+  final String? packedBoxSummary;
+  final VoidCallback onConfirmDelivery;
+  final VoidCallback onExtraFeeInfo;
+
+  @override
+  Widget build(BuildContext context) {
+    final boxUrl = s.finalBoxImage != null && s.finalBoxImage!.isNotEmpty
+        ? (s.finalBoxImage!.startsWith('http')
+            ? s.finalBoxImage!
+            : '${ApiClient.safeBaseUrl ?? ''}${s.finalBoxImage}')
+        : '';
+    final st = s.status.toLowerCase();
+    final isShipped = st == 'shipped';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      clipBehavior: Clip.antiAlias,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          key: PageStorageKey<String>('shipment_${s.id}'),
+          tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 0),
+          childrenPadding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
+          initiallyExpanded: false,
+          title: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  'Shipment #${s.id}',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+              Chip(
+                label: Text(s.status),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (s.paymentStatus != null && s.paymentStatus!.isNotEmpty)
+                  Text(
+                    'Payment: ${s.paymentStatus}',
+                    style: TextStyle(color: AppConfig.subtitleColor, fontSize: 12),
+                  ),
+                const SizedBox(height: 4),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Total: \$${s.totalShippingPayment.toStringAsFixed(2)} ${s.currency} · '
+                        '${s.items.length} item${s.items.length == 1 ? '' : 's'}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    if (s.additionalFeesTotal > 0.0001)
+                      Tooltip(
+                        message: kExtraFeeTooltipShort,
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                          icon: Icon(Icons.info_outline, size: 18, color: AppConfig.primaryColor),
+                          onPressed: onExtraFeeInfo,
+                        ),
+                      ),
+                  ],
+                ),
+                if (isShipped) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: FilledButton.tonal(
+                      onPressed: onConfirmDelivery,
+                      style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      child: const Text('I received my package'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          children: [
+            if (s.destinationSummary != null && s.destinationSummary!.trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.location_on_outlined, size: 18, color: AppConfig.subtitleColor),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text('To: ${s.destinationSummary}', style: Theme.of(context).textTheme.bodySmall)),
+                  ],
+                ),
+              ),
+            if (s.carrier != null && s.carrier!.isNotEmpty)
+              Text('Carrier: ${s.carrier}', style: TextStyle(color: AppConfig.subtitleColor, fontSize: 13)),
+            if (s.trackingNumber != null && s.trackingNumber!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('Tracking: ${s.trackingNumber}', style: TextStyle(color: AppConfig.subtitleColor, fontSize: 13)),
+              ),
+            if (boxUrl.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.sm),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: TappableNetworkImage(
+                  imageUrl: boxUrl,
+                  height: 140,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  borderRadius: BorderRadius.circular(8),
+                  errorWidget: (_, _, _) => const SizedBox.shrink(),
+                ),
+              ),
+            ],
+            if (packedBoxSummary != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.sm,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppConfig.successGreen.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: Text(
+                  packedBoxSummary!,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        height: 1.35,
+                      ),
+                ),
+              ),
+            ],
+            if (isShipped)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: Text(
+                  'Package on the way — confirm receipt with the button in the summary above, or expand for full details.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppConfig.subtitleColor,
+                        height: 1.35,
+                      ),
+                ),
+              ),
+            if (st == 'delivered') ...[
+              const SizedBox(height: AppSpacing.sm),
+              if (s.deliveryRating != null)
+                Text(
+                  'Your rating: ${s.deliveryRating}/5',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              if (s.deliveryNote != null && s.deliveryNote!.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Your note: ${s.deliveryNote}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppConfig.subtitleColor,
+                        ),
+                  ),
+                ),
+            ],
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: 6),
+              child: Text(
+                'Line totals',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppConfig.subtitleColor),
+              ),
+            ),
+            Text(
+              'Shipping: \$${s.shippingCost.toStringAsFixed(2)} · Fees: \$${s.additionalFeesTotal.toStringAsFixed(2)} · '
+              'Total: \$${s.totalShippingPayment.toStringAsFixed(2)} ${s.currency}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Items (${s.items.length})',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 6),
+            for (final it in s.items)
+              _ShipmentItemCollapsible(
+                it: it,
+                resolveUrl: resolveUrl,
+              ),
+          ],
+        ),
       ),
     );
   }
