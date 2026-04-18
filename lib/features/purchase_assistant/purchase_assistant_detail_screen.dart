@@ -10,6 +10,7 @@ import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/ui/rounded_card.dart';
 import '../checkout/payment_webview_screen.dart';
+import '../wallet/providers/wallet_providers.dart';
 import '../wallet/wallet_feedback.dart';
 import 'models/purchase_assistant_request_model.dart';
 import 'purchase_assistant_providers.dart';
@@ -114,6 +115,29 @@ class _PurchaseAssistantDetailScreenState
     return ok == true;
   }
 
+  Future<void> _openWalletTopUp(double shortage) async {
+    if (shortage <= 0) return;
+    await context.push<double?>(
+      AppRoutes.topUpWallet,
+      extra: shortage,
+    );
+    if (!mounted) return;
+    ref.invalidate(walletBalanceProvider);
+  }
+
+  bool _isInsufficientWalletPayload(Object? data) {
+    if (data is! Map) return false;
+    final code = data['error_code']?.toString() ?? data['error_key']?.toString() ?? '';
+    return code == 'insufficient_wallet_balance';
+  }
+
+  double? _requiredTopUpFromError(Object? data) {
+    if (data is! Map) return null;
+    final r = data['required_top_up_amount'] ?? data['suggested_top_up_amount'];
+    if (r is num) return r.toDouble();
+    return null;
+  }
+
   Future<String?> _pickPaymentMethod(BuildContext context) async {
     return showModalBottomSheet<String>(
       context: context,
@@ -162,16 +186,21 @@ class _PurchaseAssistantDetailScreenState
               ?.map((e) => e.toString())
               .toList() ??
           <String>['gateway'];
+
+      final amountDue = (opts['amount_due_now'] as num?)?.toDouble() ??
+          (r.totalPayable ?? 0);
+      final currency = (opts['currency'] ?? r.currency ?? 'USD').toString();
+      final walletBalance = (opts['wallet_balance'] as num?)?.toDouble() ?? 0;
+      final walletCanPay = opts['wallet_can_pay_now'] == true;
+      final shortfall = (opts['required_top_up_amount'] as num?)?.toDouble() ??
+          (opts['wallet_shortfall'] as num?)?.toDouble() ??
+          (amountDue > walletBalance ? amountDue - walletBalance : 0.0);
+
       final topUp = opts['top_up_required'] == true;
       if (topUp &&
           allowed.contains('wallet') &&
           !allowed.contains('gateway')) {
-        await walletShowError(
-          context,
-          title: 'Wallet only',
-          message:
-              'Add funds to your wallet to pay — checkout is set to wallet only.',
-        );
+        await _openWalletTopUp(shortfall > 0 ? shortfall : amountDue);
         return;
       }
 
@@ -184,10 +213,10 @@ class _PurchaseAssistantDetailScreenState
         method = picked ?? 'gateway';
       }
 
-      final amountDue = (opts['amount_due_now'] as num?)?.toDouble() ??
-          (r.totalPayable ?? 0);
-      final currency = (opts['currency'] ?? r.currency ?? 'USD').toString();
-      final walletBalance = (opts['wallet_balance'] as num?)?.toDouble() ?? 0;
+      if (method == 'wallet' && !walletCanPay && shortfall > 0) {
+        await _openWalletTopUp(shortfall);
+        return;
+      }
 
       if (method == 'wallet') {
         final confirmed = await _confirmWalletPayment(
@@ -236,8 +265,23 @@ class _PurchaseAssistantDetailScreenState
       );
     } on DioException catch (e) {
       if (!mounted) return;
-      final msg = e.response?.data is Map
-          ? (e.response!.data['message']?.toString() ?? 'Payment failed')
+      final raw = e.response?.data;
+      if (_isInsufficientWalletPayload(raw)) {
+        final need = _requiredTopUpFromError(raw);
+        if (need != null && need > 0) {
+          await _openWalletTopUp(need);
+        } else {
+          await walletShowError(
+            context,
+            title: 'Insufficient balance',
+            message:
+                'Add funds to your wallet, then try paying again.',
+          );
+        }
+        return;
+      }
+      final msg = raw is Map
+          ? (raw['message']?.toString() ?? 'Payment failed')
           : 'Payment failed';
       await walletShowError(context, message: msg);
     }
