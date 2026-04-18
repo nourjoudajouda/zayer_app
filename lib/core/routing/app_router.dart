@@ -68,6 +68,7 @@ import '../../features/purchase_assistant/purchase_assistant_detail_screen.dart'
 import '../../features/purchase_assistant/purchase_assistant_list_screen.dart';
 import '../../features/purchase_assistant/purchase_assistant_submit_screen.dart';
 import '../../features/purchase_assistant/models/purchase_assistant_prefill.dart';
+import 'wallet_top_up_route_extra.dart';
 
 /// App route paths.
 class AppRoutes {
@@ -462,10 +463,20 @@ GoRouter _createAppRouter() {
         path: AppRoutes.paymentMethods,
         builder: (context, state) {
           final extra = state.extra;
-          final initial = extra is double
-              ? extra
-              : (extra is num ? extra.toDouble() : null);
-          return SavedCardsWalletScreen(initialTopUpAmount: initial);
+          double? initial;
+          String? returnPa;
+          if (extra is WalletTopUpRouteExtra) {
+            initial = extra.initialAmount;
+            returnPa = extra.returnPurchaseAssistantRequestId;
+          } else if (extra is double) {
+            initial = extra;
+          } else if (extra is num) {
+            initial = extra.toDouble();
+          }
+          return SavedCardsWalletScreen(
+            initialTopUpAmount: initial,
+            returnPurchaseAssistantRequestId: returnPa,
+          );
         },
       ),
       GoRoute(
@@ -523,10 +534,20 @@ GoRouter _createAppRouter() {
         path: AppRoutes.topUpWallet,
         builder: (context, state) {
           final extra = state.extra;
-          final initial = extra is double
-              ? extra
-              : (extra is num ? extra.toDouble() : null);
-          return AddFundsHubScreen(initialAmount: initial);
+          double? initial;
+          String? returnPa;
+          if (extra is WalletTopUpRouteExtra) {
+            initial = extra.initialAmount;
+            returnPa = extra.returnPurchaseAssistantRequestId;
+          } else if (extra is double) {
+            initial = extra;
+          } else if (extra is num) {
+            initial = extra.toDouble();
+          }
+          return AddFundsHubScreen(
+            initialAmount: initial,
+            returnPurchaseAssistantRequestId: returnPa,
+          );
         },
       ),
       GoRoute(
@@ -545,10 +566,20 @@ GoRouter _createAppRouter() {
         path: AppRoutes.walletSavedCards,
         builder: (context, state) {
           final extra = state.extra;
-          final d = extra is double
-              ? extra
-              : (extra is num ? extra.toDouble() : null);
-          return SavedCardsWalletScreen(initialTopUpAmount: d);
+          double? d;
+          String? returnPa;
+          if (extra is WalletTopUpRouteExtra) {
+            d = extra.initialAmount;
+            returnPa = extra.returnPurchaseAssistantRequestId;
+          } else if (extra is double) {
+            d = extra;
+          } else if (extra is num) {
+            d = extra.toDouble();
+          }
+          return SavedCardsWalletScreen(
+            initialTopUpAmount: d,
+            returnPurchaseAssistantRequestId: returnPa,
+          );
         },
       ),
       GoRoute(

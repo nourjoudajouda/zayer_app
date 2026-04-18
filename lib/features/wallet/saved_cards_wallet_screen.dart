@@ -8,6 +8,7 @@ import '../../core/config/app_config_provider.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_error_message.dart' show userFacingApiMessage;
 import '../../core/routing/app_router.dart';
+import '../../core/routing/wallet_top_up_route_extra.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'add_saved_card_screen.dart';
@@ -23,11 +24,15 @@ class SavedCardsWalletScreen extends ConsumerStatefulWidget {
     super.key,
     this.initialTopUpAmount,
     this.appBarTitle,
+    this.returnPurchaseAssistantRequestId,
   });
 
   final double? initialTopUpAmount;
   /// When null, uses [AppLocalizations.paymentMethods].
   final String? appBarTitle;
+
+  /// See [WalletTopUpRouteExtra.returnPurchaseAssistantRequestId].
+  final String? returnPurchaseAssistantRequestId;
 
   @override
   ConsumerState<SavedCardsWalletScreen> createState() =>
@@ -342,6 +347,9 @@ class _SavedCardsWalletScreenState extends ConsumerState<SavedCardsWalletScreen>
       ref.invalidate(walletBalanceProvider);
       ref.invalidate(walletTransactionsProvider);
       ref.invalidate(walletStripeTopUpsProvider);
+      if (widget.returnPurchaseAssistantRequestId != null && mounted) {
+        context.pop(true);
+      }
     } on StripeException catch (e) {
       if (!mounted) return;
       await walletShowError(

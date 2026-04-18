@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/config/app_config.dart';
 import '../../core/network/api_config.dart';
 import '../../core/routing/app_router.dart';
+import '../../core/routing/wallet_top_up_route_extra.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/ui/rounded_card.dart';
 import '../checkout/payment_webview_screen.dart';
@@ -117,12 +118,22 @@ class _PurchaseAssistantDetailScreenState
 
   Future<void> _openWalletTopUp(double shortage) async {
     if (shortage <= 0) return;
-    await context.push<double?>(
+    final toppedUp = await context.push<bool>(
       AppRoutes.topUpWallet,
-      extra: shortage,
+      extra: WalletTopUpRouteExtra(
+        initialAmount: shortage,
+        returnPurchaseAssistantRequestId: widget.requestId,
+      ),
     );
     if (!mounted) return;
     ref.invalidate(walletBalanceProvider);
+    if (toppedUp == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Wallet updated — tap Pay again to continue.'),
+        ),
+      );
+    }
   }
 
   bool _isInsufficientWalletPayload(Object? data) {

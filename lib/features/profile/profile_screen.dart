@@ -1,9 +1,11 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'dart:typed_data';
+import 'dart:ui' show FontFeature;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -18,6 +20,8 @@ import '../../core/localization/app_locale.dart';
 import '../../core/localization/locale_provider.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
+import 'package:intl/intl.dart';
+import '../security/account_activity_provider.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../notifications/providers/unread_notifications_count_provider.dart';
 import 'models/user_profile_model.dart';
@@ -209,6 +213,7 @@ class _ProfileContent extends ConsumerWidget {
       onRefresh: () async {
         ref.invalidate(userProfileProvider);
         ref.invalidate(complianceStatusProvider);
+        ref.invalidate(accountActivitiesPreviewProvider);
         await ref.read(userProfileProvider.future);
       },
       child: SingleChildScrollView(
@@ -240,16 +245,6 @@ class _ProfileContent extends ConsumerWidget {
           ),
           ProfileSectionHeader(title: 'PERSONAL INFO'),
           const SizedBox(height: AppSpacing.sm),
-          if (profile.customerCode != null && profile.customerCode!.trim().isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: ZayerTile(
-                icon: Icons.badge_outlined,
-                title: 'Customer code',
-                value: profile.customerCode!,
-                onTap: () {},
-              ),
-            ),
           ZayerTile(
             icon: Icons.person_outline,
             title: l10n.fullLegalName,
@@ -293,6 +288,85 @@ class _ProfileContent extends ConsumerWidget {
                     color: AppConfig.primaryColor,
                   ),
             ),
+          ),
+          ProfileSectionHeader(title: 'RECENT ACTIVITY'),
+          const SizedBox(height: AppSpacing.sm),
+          Consumer(
+            builder: (context, ref, _) {
+              final async = ref.watch(accountActivitiesPreviewProvider);
+              return async.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Center(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                ),
+                error: (_, __) => const SizedBox.shrink(),
+                data: (items) {
+                  if (items.isEmpty) {
+                    return Text(
+                      'No recent activity yet.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppConfig.subtitleColor,
+                          ),
+                    );
+                  }
+                  String fmt(String raw) {
+                    final d = DateTime.tryParse(raw);
+                    if (d == null) return raw;
+                    return DateFormat.MMMd().add_jm().format(d.toLocal());
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final a in items.take(4))
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.circle,
+                                size: 8,
+                                color: AppConfig.primaryColor,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      a.title,
+                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                    Text(
+                                      fmt(a.createdAtIso),
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            color: AppConfig.subtitleColor,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      TextButton(
+                        onPressed: () => context.push(AppRoutes.recentActivity),
+                        child: const Text('View all activity'),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
           ),
           ProfileSectionHeader(title: 'SECURITY & ACCESS'),
           const SizedBox(height: AppSpacing.sm),
@@ -493,6 +567,39 @@ class _ProfileHeader extends StatelessWidget {
                   color: AppConfig.textColor,
                 ),
           ),
+          if (profile.customerCode != null && profile.customerCode!.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    'Customer ID: ${profile.customerCode}',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppConfig.subtitleColor,
+                          fontWeight: FontWeight.w500,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Copy Customer ID',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  icon: Icon(Icons.copy, size: 18, color: AppConfig.primaryColor),
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: profile.customerCode!));
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Customer ID copied')),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: AppSpacing.sm),
           if (profile.verified)
             BadgePill(

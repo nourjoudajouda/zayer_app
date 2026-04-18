@@ -8,12 +8,16 @@ import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
 import 'stripe_wallet_helpers.dart';
 import 'top_up_wallet_screen.dart';
+import '../../core/routing/wallet_top_up_route_extra.dart';
 
 /// Entry for Add Funds: card (saved + browser), wire transfer, Zelle.
 class AddFundsHubScreen extends ConsumerStatefulWidget {
-  const AddFundsHubScreen({super.key, this.initialAmount});
+  const AddFundsHubScreen({super.key, this.initialAmount, this.returnPurchaseAssistantRequestId});
 
   final double? initialAmount;
+
+  /// When set, a successful saved-card top-up pops this route with `true` for callers (e.g. Purchase Assistant).
+  final String? returnPurchaseAssistantRequestId;
 
   @override
   ConsumerState<AddFundsHubScreen> createState() => _AddFundsHubScreenState();
@@ -69,10 +73,21 @@ class _AddFundsHubScreenState extends ConsumerState<AddFundsHubScreen> {
                 ? 'Save a card with Stripe, verify a small charge, then top up from saved cards. Or pay in your browser.'
                 : 'Stripe is not enabled for this app build.',
             onTap: stripeOn
-                ? () => context.push(
+                ? () async {
+                    final ok = await context.push<bool>(
                       AppRoutes.paymentMethods,
-                      extra: widget.initialAmount,
-                    )
+                      extra: WalletTopUpRouteExtra(
+                        initialAmount: widget.initialAmount,
+                        returnPurchaseAssistantRequestId:
+                            widget.returnPurchaseAssistantRequestId,
+                      ),
+                    );
+                    if (ok == true &&
+                        mounted &&
+                        widget.returnPurchaseAssistantRequestId != null) {
+                      context.pop(true);
+                    }
+                  }
                 : null,
             trailing: stripeOn
                 ? TextButton(
