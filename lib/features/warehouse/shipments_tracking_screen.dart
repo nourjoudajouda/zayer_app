@@ -415,32 +415,18 @@ class _ShipmentsTrackingScreenState extends ConsumerState<ShipmentsTrackingScree
                                         ),
                                     ],
                                     const SizedBox(height: AppSpacing.sm),
-                                    Theme(
-                                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                                      child: ExpansionTile(
-                                        tilePadding: EdgeInsets.zero,
-                                        initiallyExpanded: false,
-                                        title: Text(
-                                          'Items (${s.items.length})',
-                                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                        ),
-                                        subtitle: Text(
-                                          'Expand for photos, weight, size, notes',
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                color: AppConfig.subtitleColor,
-                                              ),
-                                        ),
-                                        children: [
-                                          for (final it in s.items)
-                                            _ShipmentItemDetail(
-                                              it: it,
-                                              resolveUrl: _resolveUrl,
-                                            ),
-                                        ],
-                                      ),
+                                    Text(
+                                      'Items (${s.items.length})',
+                                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
                                     ),
+                                    const SizedBox(height: 6),
+                                    for (final it in s.items)
+                                      _ShipmentItemCollapsible(
+                                        it: it,
+                                        resolveUrl: _resolveUrl,
+                                      ),
                                   ],
                                 ),
                               ),
@@ -471,8 +457,9 @@ class _ShipmentsTrackingScreenState extends ConsumerState<ShipmentsTrackingScree
   }
 }
 
-class _ShipmentItemDetail extends StatelessWidget {
-  const _ShipmentItemDetail({
+/// One shipment line: compact [ExpansionTile] (same idea as [MyWarehouseScreen]).
+class _ShipmentItemCollapsible extends StatelessWidget {
+  const _ShipmentItemCollapsible({
     required this.it,
     required this.resolveUrl,
   });
@@ -489,22 +476,60 @@ class _ShipmentItemDetail extends StatelessWidget {
       receiptWeightLb: r?.receivedWeight,
       catalogWeightKg: it.weightKg,
     );
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF9FAFB),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppConfig.borderColor),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      clipBehavior: Clip.antiAlias,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+          childrenPadding: const EdgeInsets.fromLTRB(AppSpacing.sm, 0, AppSpacing.sm, AppSpacing.sm),
+          initiallyExpanded: false,
+          title: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: TappableNetworkImage(
+                  imageUrl: u,
+                  width: 48,
+                  height: 48,
+                  fit: BoxFit.cover,
+                  borderRadius: BorderRadius.circular(8),
+                  errorWidget: (_, _, _) => const SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: Icon(Icons.image_outlined, size: 22),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  it.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(left: 4, top: 4),
+            child: Text(
+              'Qty ${it.quantity} · tap to expand',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppConfig.subtitleColor,
+                  ),
+            ),
+          ),
           children: [
             Text(
               '${it.name} × ${it.quantity}',
-              style: const TextStyle(fontWeight: FontWeight.w700),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    height: 1.3,
+                  ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Row(
