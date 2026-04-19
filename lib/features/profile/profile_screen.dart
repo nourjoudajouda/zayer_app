@@ -20,7 +20,7 @@ import '../../core/localization/app_locale.dart';
 import '../../core/localization/locale_provider.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_spacing.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import '../security/account_activity_provider.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../notifications/providers/unread_notifications_count_provider.dart';
